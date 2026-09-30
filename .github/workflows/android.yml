@@ -1,0 +1,125 @@
+# main에 올라오면 검사(타입·린트·유닛) → 실서버용 APK 빌드 → GitHub Release에 첨부.
+# PR은 검사 + 빌드만 (Release 없음). 수동 실행: Actions 탭 › Android APK › Run workflow
+#
+# 필요한 Secrets (Settings › Secrets and variables › Actions):
+#   API_BASE_URL, KAKAO_NATIVE_APP_KEY, GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID,
+#   GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_ANDROID_API_KEY
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    name: 검사 (tsc · eslint · jest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx eslint src App.tsx --quiet
+      - run: npx jest --ci
+
+  apk:
+    name: APK 빌드
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      VERSION_NAME: 1.0.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: npm ci
+
+      - name: Android SDK 구성요소
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;37.0.0" "ndk;27.1.12297006" > /dev/null
+
+      - name: .env 만들기 (Secrets → 실서버 설정)
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          KAKAO_NATIVE_APP_KEY: ${{ secrets.KAKAO_NATIVE_APP_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+        run: |
+          {
+            echo "API_BASE_URL=$API_BASE_URL"
+            echo "USE_MOCK=false"
+            echo "KAKAO_NATIVE_APP_KEY=$KAKAO_NATIVE_APP_KEY"
+            echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID"
+            echo "GOOGLE_IOS_CLIENT_ID=$GOOGLE_IOS_CLIENT_ID"
+            echo "GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY"
+            echo "GOOGLE_MAPS_ANDROID_API_KEY=$GOOGLE_MAPS_ANDROID_API_KEY"
+          } > .env
+          node scripts/sync-native-env.js
+
+      - name: 빌드 (release · arm64)
+        working-directory: android
+        run: >
+          ./gradlew assembleRelease --no-daemon
+          -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
+          -PreactNativeArchitectures=arm64-v8a
+          -PpadoVersionCode=${{ github.run_number }}
+          -PpadoVersionName=$VERSION_NAME
+
+      - name: 실서버 설정인지 확인 (목 모드면 실패)
+        run: grep -q 'USE_MOCK = "false"' android/app/build/generated/source/buildConfig/release/com/pado/app/BuildConfig.java
+
+      - name: 파일 이름 붙이기
+        id: name
+        run: |
+          FILE="PADO-$VERSION_NAME-${GITHUB_SHA::7}.apk"
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.file }}
+          path: dist/*.apk
+          retention-days: 30
+
+      - name: GitHub Release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "main \`${GITHUB_SHA::7}\` 빌드 · 실서버 · arm64"
+            echo
+            git log -1 --pretty=%B
+          } > notes.md
+          gh release create "build-${{ github.run_number }}" "dist/${{ steps.name.outputs.file }}" \
+            --target "$GITHUB_SHA" \
+            --title "PADO $VERSION_NAME (${GITHUB_SHA::7})" \
+            --notes-file notes.md \
+            --latest
