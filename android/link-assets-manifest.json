@@ -1,0 +1,37 @@
+{
+  "migIndex": 1,
+  "data": [
+    {
+      "path": "src/assets/fonts/GowunBatang-Regular.ttf",
+      "sha1": "0dfcd389096503bf5282afad2a0a9cb6681cea08"
+    },
+    {
+      "path": "src/assets/fonts/SpaceGrotesk-Bold.ttf",
+      "sha1": "a9c030e3ebcd8ce7284f8382da8590609f1803c4"
+    },
+    {
+      "path": "src/assets/fonts/SpaceGrotesk-Medium.ttf",
+      "sha1": "cf888825e5dc27fb90422350958924f6048381b5"
+    },
+    {
+      "path": "src/assets/fonts/SpaceGrotesk-Regular.ttf",
+      "sha1": "a9f73f295d771a183ab23260d4406b7f33b53b18"
+    },
+    {
+      "path": "src/assets/fonts/SUIT-Bold.otf",
+      "sha1": "39f201d0359ddfd30dd02eb188083cade906190f"
+    },
+    {
+      "path": "src/assets/fonts/SUIT-Medium.otf",
+      "sha1": "3f4c10fe9129e1006500041c6f8562e7132c3409"
+    },
+    {
+      "path": "src/assets/fonts/SUIT-Regular.otf",
+      "sha1": "9fae25a0a5c0797eadf7a37150ac215bce4b65df"
+    },
+    {
+      "path": "src/assets/fonts/SUIT-SemiBold.otf",
+      "sha1": "fa455d860e23b3ac2ec682538ff2ec9ad7a60e65"
+    }
+  ]
+}

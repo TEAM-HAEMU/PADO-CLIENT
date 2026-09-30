@@ -1,0 +1,76 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <!-- 미리듣기 백그라운드 재생 + 알림 컨트롤 (react-native-video 미디어 재생 서비스) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <!-- 외부 음악 앱·소셜 앱 열기 가능 여부 확인 (Android 11+ 패키지 가시성) -->
+    <queries>
+      <package android:name="com.spotify.music" />
+      <package android:name="com.google.android.apps.youtube.music" />
+      <package android:name="com.apple.android.music" />
+      <package android:name="com.kakao.talk" />
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="https" />
+      </intent>
+    </queries>
+
+    <application
+      android:name=".MainApplication"
+      android:label="@string/app_name"
+      android:icon="@mipmap/ic_launcher"
+      android:roundIcon="@mipmap/ic_launcher_round"
+      android:allowBackup="false"
+      android:theme="@style/AppTheme"
+      android:usesCleartextTraffic="${usesCleartextTraffic}"
+      android:supportsRtl="true">
+      <!-- Google Maps (.env GOOGLE_MAPS_API_KEY → npm run env:sync) -->
+      <meta-data android:name="com.google.android.geo.API_KEY" android:value="@string/google_maps_api_key" />
+
+      <!-- 카카오 로그인 리다이렉트 -->
+      <activity
+        android:name="com.kakao.sdk.auth.AuthCodeHandlerActivity"
+        android:exported="true">
+        <intent-filter>
+          <action android:name="android.intent.action.VIEW" />
+          <category android:name="android.intent.category.DEFAULT" />
+          <category android:name="android.intent.category.BROWSABLE" />
+          <data android:host="oauth" android:scheme="${kakaoScheme}" />
+        </intent-filter>
+      </activity>
+
+      <activity
+        android:name=".MainActivity"
+        android:screenOrientation="portrait"
+        android:label="@string/app_name"
+        android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+        android:launchMode="singleTask"
+        android:windowSoftInputMode="adjustResize"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+        <!-- pado:// 딥링크 -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="pado" />
+        </intent-filter>
+      </activity>
+      <service
+        android:name="com.brentvatne.exoplayer.VideoPlaybackService"
+        android:exported="false"
+        android:foregroundServiceType="mediaPlayback">
+        <intent-filter>
+          <action android:name="androidx.media3.session.MediaSessionService" />
+        </intent-filter>
+      </service>
+    </application>
+</manifest>

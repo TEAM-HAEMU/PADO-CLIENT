@@ -1,0 +1,20 @@
+diff --git a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
+index d729954..ca7ed1e 100644
+--- a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
++++ b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
+@@ -156,6 +156,15 @@ CGRect unionRect(CGRect a, CGRect b) {
+         _realMarker.iconView = _iconView;
+     }
+     [_iconView insertSubview:subview atIndex:atIndex];
++    // New Architecture: 자식의 layout metrics는 마운트 뒤에 적용되므로 다음 런루프에서
++    // 아이콘 크기를 다시 계산하고 마커 아이콘을 갱신한다 (안 하면 0x0 → 커스텀 마커가 안 보임)
++    __weak AIRGoogleMapMarker *weakSelf = self;
++    dispatch_async(dispatch_get_main_queue(), ^{
++        AIRGoogleMapMarker *strongSelf = weakSelf;
++        if (!strongSelf) return;
++        [strongSelf layoutSubviews];
++        [strongSelf redraw];
++    });
+ }
+ 
+ - (void)insertReactSubview:(id<RCTComponent>)subview atIndex:(NSInteger)atIndex {
