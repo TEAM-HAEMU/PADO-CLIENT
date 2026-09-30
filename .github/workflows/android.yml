@@ -32,7 +32,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
-      - run: npx eslint src App.tsx --quiet
+      - run: npx eslint src --quiet
       - run: npx jest --ci
 
   apk:

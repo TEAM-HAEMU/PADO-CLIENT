@@ -1,7 +1,7 @@
 /** PADO · B Deep 디자인 토큰 (Figma MVP 페이지 B 섹션 기준) */
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./App.tsx', './src/**/*.{ts,tsx}'],
+  content: ['./src/**/*.{ts,tsx}'],
   presets: [require('nativewind/preset')],
   theme: {
     extend: {

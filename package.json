@@ -74,5 +74,26 @@
   },
   "engines": {
     "node": ">= 22.11.0"
+  },
+  "jest": {
+    "preset": "@react-native/jest-preset",
+    "setupFiles": [
+      "<rootDir>/__tests__/setup/jest.setup.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/ios/",
+      "/android/",
+      "/__tests__/setup/"
+    ]
+  },
+  "prettier": {
+    "arrowParens": "avoid",
+    "singleQuote": true,
+    "trailingComma": "all"
+  },
+  "eslintConfig": {
+    "root": true,
+    "extends": "@react-native"
   }
 }
