@@ -10,6 +10,7 @@ import { useMyPlaylists } from '@/hooks/api';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
+import { track } from '@/services/analytics';
 
 export default function PlaylistPickerScreen({ navigation, route }: RootScreen<'PlaylistPicker'>) {
   const { song, excludeId } = route.params;
@@ -23,6 +24,7 @@ export default function PlaylistPickerScreen({ navigation, route }: RootScreen<'
     setBusy(id);
     try {
       await playlistApi.addSongs(id, [song.id]);
+      track('playlist_songs_added', { playlist_id: id, count: 1, source: 'track_menu', song_id: song.id });
       qc.invalidateQueries({ queryKey: ['playlist', id] });
       qc.invalidateQueries({ queryKey: ['playlists'] });
       toast(`'${name}'에 담았어요.`, 'success');

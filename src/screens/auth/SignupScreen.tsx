@@ -63,11 +63,11 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
     try {
       if (social) {
         const pair = await authApi.socialSignup({ signupToken: social.signupToken, username: username.trim(), ...(providerEmail ? {} : { email: email.trim() }), birthDate: birth, gender: gender!, agreements });
-        await signIn(pair);
+        await signIn(pair, { method: social.provider.toLowerCase(), signup: true });
       } else {
         await authApi.register({ username: username.trim(), password, email: email.trim(), birthDate: birth, gender: gender!, agreements });
         try {
-          await signIn(await authApi.login(email.trim(), password));
+          await signIn(await authApi.login(email.trim(), password), { method: 'email', signup: true });
         } catch {
           // 가입은 됐는데 자동 로그인만 실패 — 폼에 남겨두면 재시도 시 U4가 나므로 로그인 화면으로
           toast('가입이 완료됐어요. 로그인해주세요.', 'success');
@@ -81,7 +81,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
         try {
           const r = await authApi.social(social.provider, await getProviderToken(social.provider));
           if (!r.signupRequired && r.accessToken && r.refreshToken) {
-            await signIn({ accessToken: r.accessToken, refreshToken: r.refreshToken, accessTokenExpiresIn: r.accessTokenExpiresIn ?? 0, refreshTokenExpiresIn: r.refreshTokenExpiresIn ?? 0 });
+            await signIn({ accessToken: r.accessToken, refreshToken: r.refreshToken, accessTokenExpiresIn: r.accessTokenExpiresIn ?? 0, refreshTokenExpiresIn: r.refreshTokenExpiresIn ?? 0 }, { method: social.provider.toLowerCase() });
             return;
           }
         } catch {}

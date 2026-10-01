@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, glow } from '@/theme/tokens';
 import { Icon, type IconName } from './Icon';
 import { artUrl } from '@/utils/artUrl';
+import { trackTap } from '@/services/analytics';
 
 // ── Typography
 const ls = (size: number, pct: number) => (size * pct) / 100;
@@ -54,12 +55,25 @@ export function Screen({ children, style, edges = ['top'], ...rest }: ViewProps 
 }
 
 // ── Pressables
+/** 버튼 안 글자 (분석 라벨용) */
+function textOf(node: React.ReactNode): string {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textOf).filter(Boolean).join(' ');
+  if (React.isValidElement(node)) return textOf((node.props as { children?: React.ReactNode }).children);
+  return '';
+}
+
 // NativeWind 인터롭이 함수형 style을 버리므로 눌림 상태를 직접 들고 정적 style을 넘긴다
-export function Press({ style, children, onPressIn, onPressOut, accessibilityRole = 'button', ...rest }: Omit<PressableProps, 'style' | 'children'> & { style?: StyleProp<ViewStyle>; children?: React.ReactNode }) {
+export function Press({ style, children, onPressIn, onPressOut, onPress, onLongPress, accessibilityRole = 'button', ...rest }: Omit<PressableProps, 'style' | 'children'> & { style?: StyleProp<ViewStyle>; children?: React.ReactNode }) {
   const [pressed, setPressed] = React.useState(false);
+  // 분석: 모든 버튼 탭을 자동 기록 (라벨 → 접근성 라벨, 없으면 버튼 안 글자)
+  const label = () => rest.accessibilityLabel || rest.testID || textOf(children).slice(0, 60);
   return (
     <Pressable
       {...rest}
+      onPress={onPress ? e => { trackTap(label(), { kind: 'press' }); onPress(e); } : undefined}
+      onLongPress={onLongPress ? e => { trackTap(label(), { kind: 'long_press' }); onLongPress(e); } : undefined}
       accessibilityRole={accessibilityRole}
       onPressIn={e => { setPressed(true); onPressIn?.(e); }}
       onPressOut={e => { setPressed(false); onPressOut?.(e); }}

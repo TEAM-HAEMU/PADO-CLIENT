@@ -10,6 +10,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
+import { track } from '@/services/analytics';
 
 const REASONS: [ReportReason, string][] = [['SPAM', '스팸·광고'], ['ABUSE', '욕설·괴롭힘'], ['SEXUAL', '음란물'], ['HATE', '혐오 표현'], ['PRIVACY', '개인정보 노출'], ['ETC', '기타']];
 
@@ -30,6 +31,7 @@ export default function ReportScreen({ navigation, route }: RootScreen<'Report'>
       try { await safetyApi.report(targetType, targetId, reason, detail.trim() || undefined); }
       catch (e) { if ((e as { code?: string }).code === 'R3' && block) alreadyReported = true; else throw e; }
       if (block && userId) { await safetyApi.block(userId); qc.invalidateQueries({ queryKey: ['nearby'] }); qc.invalidateQueries({ queryKey: ['comments'] }); qc.invalidateQueries({ queryKey: ['commentCount'] }); qc.invalidateQueries({ queryKey: ['blocks'] }); }
+      track('report_submitted', { target_type: targetType, reason, has_detail: !!detail.trim(), block: !!(block && userId) });
       toast(block ? (alreadyReported ? '이미 신고한 대상이라 차단만 했어요.' : '신고하고 차단했어요.') : '신고가 접수됐어요. 운영자가 확인할게요.', 'success');
       navigation.goBack();
     } catch (e) { toast(errorMessage(e), 'error'); }

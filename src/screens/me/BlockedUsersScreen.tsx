@@ -11,13 +11,14 @@ import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
 import { formatRelative } from '@/utils/format';
+import { track } from '@/services/analytics';
 
 export default function BlockedUsersScreen({ navigation }: RootScreen<'BlockedUsers'>) {
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const { data = [], isLoading, isError, refetch } = useBlocks();
   const [pending, setPending] = React.useState<string | null>(null);
-  const unblock = (id: string) => { if (pending) return; setPending(id); safetyApi.unblock(id).finally(() => setPending(null)).then(() => { qc.invalidateQueries({ queryKey: ['blocks'] }); qc.invalidateQueries({ queryKey: ['nearby'] }); qc.invalidateQueries({ queryKey: ['comments'] }); qc.invalidateQueries({ queryKey: ['commentCount'] }); toast('차단을 해제했어요.'); }).catch(e => toast(errorMessage(e), 'error')); };
+  const unblock = (id: string) => { if (pending) return; setPending(id); track('user_unblocked'); safetyApi.unblock(id).finally(() => setPending(null)).then(() => { qc.invalidateQueries({ queryKey: ['blocks'] }); qc.invalidateQueries({ queryKey: ['nearby'] }); qc.invalidateQueries({ queryKey: ['comments'] }); qc.invalidateQueries({ queryKey: ['commentCount'] }); toast('차단을 해제했어요.'); }).catch(e => toast(errorMessage(e), 'error')); };
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16 }}>

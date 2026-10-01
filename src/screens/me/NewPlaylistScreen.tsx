@@ -9,6 +9,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors, fonts, glow } from '@/theme/tokens';
+import { track } from '@/services/analytics';
 
 const TAGS = ['퇴근길', '산책', '드라이브', '새벽'];
 
@@ -34,6 +35,7 @@ export default function NewPlaylistScreen({ navigation, route }: RootScreen<'New
       const prior = await playlistApi.mine().catch(() => null);
       const before = prior ? new Set(prior.map(p => p.id)) : null;
       await playlistApi.create(name.trim());
+      track('playlist_created', { name_length: name.trim().length });
       const list = await playlistApi.mine();
       qc.setQueryData(['playlists'], list);
       const created = (before && list.find(p => !before.has(p.id))) || list.find(p => p.name === name.trim());

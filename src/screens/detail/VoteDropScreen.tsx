@@ -17,6 +17,7 @@ import { toast } from '@/store/toast';
 import { useDropMenu } from '@/hooks/useDropMenu';
 import { colors, glow } from '@/theme/tokens';
 import { expiryLabel, formatRelative } from '@/utils/format';
+import { track } from '@/services/analytics';
 
 export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDrop'>) {
   const { dropId } = route.params;
@@ -37,8 +38,8 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
     if (!authed) return toast('로그인이 필요해요.');
     voting.current = true;
     try {
-      if (d.userVotedOption === songId) await dropApi.unvote(dropId);
-      else await dropApi.vote(dropId, songId);
+      if (d.userVotedOption === songId) { await dropApi.unvote(dropId); track('vote_cancelled', { drop_id: dropId, song_id: songId }); }
+      else { await dropApi.vote(dropId, songId); track('vote_cast', { drop_id: dropId, song_id: songId, changed: !!d.userVotedOption }); }
       await qc.invalidateQueries({ queryKey: qk.drop(dropId) });
     } catch (e) { toast(errorMessage(e), 'error'); } finally { voting.current = false; }
   };

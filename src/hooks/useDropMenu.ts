@@ -38,8 +38,8 @@ export function useDropMenu(dropId: UUID | undefined, ownerId: UUID | undefined,
     if (!dropId) return;
     dialog.menu(title, [
       mine
-        ? { text: '드랍 삭제', style: 'destructive', onPress: remove }
-        : { text: '신고하기', onPress: () => navigation.navigate('Report', { targetType: 'DROPPING', targetId: dropId, userId: ownerId, label: '이 드랍' }) },
+        ? { text: '드랍 삭제', style: 'destructive', icon: 'trash', onPress: remove }
+        : { text: '신고하기', style: 'destructive', icon: 'flag', onPress: () => navigation.navigate('Report', { targetType: 'DROPPING', targetId: dropId, userId: ownerId, label: '이 드랍' }) },
       { text: '취소', style: 'cancel' },
     ]);
   };

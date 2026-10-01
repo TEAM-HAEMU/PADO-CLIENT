@@ -13,6 +13,7 @@ import { usePreviewStore } from '@/services/preview';
 import { draftArt, useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
 import { colors, dropShadow, fonts } from '@/theme/tokens';
+import { track } from '@/services/analytics';
 
 const MAX = 255; // 명세: content 최대 255자
 const SUGGEST = ['퇴근길에 딱', '여기 풍경이랑 잘 어울려요', '비 오는 날 추천', '여기서 처음 들었어요'];
@@ -53,7 +54,9 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
     else if (draft.playlist?.kind === 'new') body = { ...base, type: 'PLAYLIST', playlistName: draft.playlist.name, songIds: draft.playlist.songs.map(s => s.id) };
     else return toast('드랍할 곡을 먼저 골라주세요.', 'error');
     create.mutate(body, {
-      onSuccess: () => { draft.reset(); navigation.reset({ index: 1, routes: [{ name: 'Tabs' }, { name: 'DropSuccess', params: { art, content: body.content } }] }); },
+      onSuccess: () => {
+        track('drop_created', { type: body.type, note_length: body.content.length, song_id: 'songId' in body ? body.songId : undefined, option_count: 'options' in body ? body.options.length : undefined, playlist_new: 'playlistName' in body, address: body.address, lat: body.latitude, lng: body.longitude });
+        draft.reset(); navigation.reset({ index: 1, routes: [{ name: 'Tabs' }, { name: 'DropSuccess', params: { art, content: body.content } }] }); },
       onError: e => toast(errorMessage(e), 'error'),
     });
   };

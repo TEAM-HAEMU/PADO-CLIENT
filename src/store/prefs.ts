@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { kv } from './storage';
+import { setAnalyticsOptOut, setUserProps, track } from '@/services/analytics';
 
 export type ServiceId = 'spotify' | 'youtubeMusic' | 'appleMusic';
 export type DistanceMode = 'plain' | 'radius' | 'gradient';
@@ -14,6 +15,9 @@ interface Prefs {
   /** 알림 설정 — 서버에 개별 설정 API가 없어 기기 로컬 (인앱 SSE 표시 여부) */
   notify: { like: boolean; comment: boolean; nearby: boolean };
   locationPrompted: boolean;
+  /** 설정 › 이용 데이터 분석 (Amplitude). 끄면 이벤트를 보내지 않음 */
+  analytics: boolean;
+  setAnalytics: (v: boolean) => void;
   /** null = 매번 선택 */
   setService: (s: ServiceId | null, remember?: boolean) => void;
   setDistanceMode: (m: DistanceMode) => void;
@@ -26,8 +30,12 @@ const saved = kv.get<Partial<Prefs>>('prefs', {});
 
 export const usePrefs = create<Prefs>((set, get) => {
   const persist = () => {
-    const { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted } = get();
-    kv.set('prefs', { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted });
+    const { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted, analytics } = get();
+    kv.set('prefs', { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted, analytics });
+  };
+  const changed = (key: string, value: string | boolean | null) => {
+    track('setting_changed', { key, value });
+    if (value !== null) setUserProps({ [`pref_${key}`]: value });
   };
   return {
     service: saved.service ?? null,
@@ -36,10 +44,18 @@ export const usePrefs = create<Prefs>((set, get) => {
     autoplayNearby: saved.autoplayNearby ?? true,
     notify: saved.notify ?? { like: true, comment: true, nearby: false },
     locationPrompted: saved.locationPrompted ?? false,
-    setService: (service, remember = true) => { set({ service: remember ? service : get().service, rememberService: remember }); persist(); },
-    setDistanceMode: distanceMode => { set({ distanceMode }); persist(); },
-    setAutoplayNearby: autoplayNearby => { set({ autoplayNearby }); persist(); },
-    setNotify: (k, v) => { set({ notify: { ...get().notify, [k]: v } }); persist(); },
+    analytics: saved.analytics ?? true,
+    setService: (service, remember = true) => { set({ service: remember ? service : get().service, rememberService: remember }); persist(); changed('service', service); },
+    setDistanceMode: distanceMode => { set({ distanceMode }); persist(); changed('distance_mode', distanceMode); },
+    setAutoplayNearby: autoplayNearby => { set({ autoplayNearby }); persist(); changed('autoplay_nearby', autoplayNearby); },
+    setNotify: (k, v) => { set({ notify: { ...get().notify, [k]: v } }); persist(); changed(`notify_${k}`, v); },
+    setAnalytics: analytics => {
+      // 끄기 직전 한 번 기록하고 끈다 / 켤 때는 켠 뒤 기록
+      if (!analytics) changed('analytics', false);
+      setAnalyticsOptOut(!analytics);
+      if (analytics) changed('analytics', true);
+      set({ analytics }); persist();
+    },
     setLocationPrompted: () => { set({ locationPrompted: true }); persist(); },
   };
 });

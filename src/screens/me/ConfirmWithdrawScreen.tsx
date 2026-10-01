@@ -9,6 +9,7 @@ import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { colors, dropShadow } from '@/theme/tokens';
+import { track } from '@/services/analytics';
 
 export default function ConfirmWithdrawScreen({ navigation }: RootScreen<'ConfirmWithdraw'>) {
   const n = useMyDrops().data?.length ?? 0;
@@ -16,7 +17,7 @@ export default function ConfirmWithdrawScreen({ navigation }: RootScreen<'Confir
   const [busy, setBusy] = useState(false);
   const go = async () => {
     setBusy(true);
-    try { await userApi.withdraw(); await signOut({ callServer: false }); toast('탈퇴했어요. 90일 안에 다시 로그인하면 계정이 복구돼요.'); }
+    try { await userApi.withdraw(); track('account_withdrawn', { drops: n }); await signOut({ callServer: false }); toast('탈퇴했어요. 90일 안에 다시 로그인하면 계정이 복구돼요.'); }
     catch (e) { toast(errorMessage(e), 'error'); setBusy(false); }
   };
   return (

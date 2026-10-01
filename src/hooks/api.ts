@@ -5,6 +5,7 @@ import type { CreateDropBody, UUID } from '@/api/types';
 import { NEARBY_RADIUS_KM } from '@/config';
 import { useAuth } from '@/store/auth';
 import type { Coords } from '@/services/location';
+import { track } from '@/services/analytics';
 
 const authed = () => useAuth.getState().status === 'authed';
 
@@ -50,6 +51,7 @@ export function useToggleLike(dropId: UUID) {
   return useMutation({
     mutationFn: () => likeApi.toggle(dropId),
     onSuccess: ({ liked }) => {
+      track(liked ? 'drop_liked' : 'drop_unliked', { drop_id: dropId });
       // 이미 받아둔 수가 있을 때만 즉시 반영하고, 서버 값으로 다시 맞춘다
       qc.setQueryData<number>(qk.likeCount(dropId), n => (n === undefined ? n : Math.max(0, n + (liked ? 1 : -1))));
       qc.invalidateQueries({ queryKey: qk.likeCount(dropId) });

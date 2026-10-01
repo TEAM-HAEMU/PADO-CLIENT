@@ -29,7 +29,7 @@ export default function EmailLoginScreen({ navigation, route }: RootScreen<'Emai
     if (busy) return;
     if (!email.trim() || !password) return setError('이메일과 비밀번호를 입력해주세요.');
     setBusy(true); setError(null);
-    try { await signIn(await authApi.login(email.trim(), password)); }
+    try { await signIn(await authApi.login(email.trim(), password), { method: 'email' }); }
     catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   };

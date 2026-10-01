@@ -19,3 +19,20 @@ jest.mock('react-native-keychain', () => ({
   resetGenericPassword: jest.fn(async () => true),
   ACCESSIBLE: { AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'AccessibleAfterFirstUnlockThisDeviceOnly' },
 }));
+
+/* Amplitude — 네이티브 없이 호출만 기록 */
+jest.mock('@amplitude/analytics-react-native', () => {
+  class Identify { constructor() { this.props = {}; } set(k, v) { this.props[k] = v; return this; } }
+  return {
+    init: jest.fn(() => ({ promise: Promise.resolve() })),
+    add: jest.fn(() => ({ promise: Promise.resolve() })),
+    track: jest.fn(),
+    setUserId: jest.fn(),
+    identify: jest.fn(),
+    reset: jest.fn(),
+    setOptOut: jest.fn(),
+    Identify,
+    Types: { LogLevel: { None: 0, Warn: 2 } },
+  };
+});
+jest.mock('@amplitude/plugin-session-replay-react-native', () => ({ SessionReplayPlugin: function SessionReplayPlugin() {} }));

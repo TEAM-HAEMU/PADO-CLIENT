@@ -18,6 +18,7 @@ import type { RootScreen } from '@/navigation/types';
 import { useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
 import { colors, fonts, glow } from '@/theme/tokens';
+import { track } from '@/services/analytics';
 
 type Tab = 'search' | 'nearby' | 'liked';
 const asSong = (id: string, title: string, artist: string, art: string | null): Song => ({ id, title, artist, duration: 0, albumImagePath: art, links: { spotify: null, youtubeMusic: null } });
@@ -73,6 +74,7 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
           if (rest.length) await playlistApi.addSongs(playlistId, rest.map(x => x.id));
         }
         qc.invalidateQueries({ queryKey: ['playlist', playlistId] }); qc.invalidateQueries({ queryKey: ['playlists'] });
+        track('playlist_songs_added', { playlist_id: playlistId, count: picked.length, source: 'add_songs' });
         toast(`${picked.length}곡을 담았어요.`, 'success');
         navigation.goBack();
       } catch (e) { toast(errorMessage(e), 'error'); } finally { setBusy(false); submitting.current = false; }

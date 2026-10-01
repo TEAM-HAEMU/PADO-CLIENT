@@ -2,7 +2,8 @@ import { Platform } from 'react-native';
 import * as Keychain from 'react-native-keychain';
 import { create } from 'zustand';
 import { setTokenBridge } from '@/api/client';
-import { authApi } from '@/api/endpoints';
+import { authApi, userApi } from '@/api/endpoints';
+import { identifyUser, resetUser, track, userIdFromToken } from '@/services/analytics';
 import type { TokenPair } from '@/api/types';
 import { queryClient } from '@/hooks/queryClient';
 import { kv } from './storage';
@@ -18,7 +19,8 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   bootstrap: () => Promise<void>;
-  signIn: (pair: TokenPair) => Promise<void>;
+  /** meta: 분석용 로그인 방식 (email · kakao · google), signup이면 가입 완료 */
+  signIn: (pair: TokenPair, meta?: { method: string; signup?: boolean }) => Promise<void>;
   signOut: (opts?: { callServer?: boolean }) => Promise<void>;
 }
 
@@ -38,13 +40,16 @@ export const useAuth = create<AuthState>((set, get) => ({
       if (cred) {
         const { accessToken, refreshToken } = JSON.parse(cred.password);
         set({ accessToken, refreshToken, status: 'authed' });
+        identifyCurrentUser(accessToken);
         return;
       }
     } catch {}
     set({ status: 'guest' });
   },
-  signIn: async pair => {
+  signIn: async (pair, meta) => {
     set({ accessToken: pair.accessToken, refreshToken: pair.refreshToken, status: 'authed' });
+    identifyCurrentUser(pair.accessToken);
+    if (meta) track(meta.signup ? 'sign_up_completed' : 'login_completed', { method: meta.method });
     // 키체인 저장 실패는 이번 실행의 로그인을 깨뜨리지 않는다 (재시작 시 다시 로그인)
     await Keychain.setGenericPassword('pado', JSON.stringify({ accessToken: pair.accessToken, refreshToken: pair.refreshToken }), {
       service: SERVICE,
@@ -54,6 +59,8 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
   signOut: async ({ callServer = true } = {}) => {
     const { refreshToken } = get();
+    track('logout', { by: callServer ? 'user' : 'session_end' });
+    resetUser();
     set({ accessToken: null, refreshToken: null, status: 'guest' });
     if (callServer && refreshToken) authApi.logout(refreshToken).catch(() => {});
     // 다음 사용자에게 이전 사용자의 흔적이 남지 않게
@@ -71,3 +78,10 @@ setTokenBridge({
   set: pair => useAuth.getState().signIn(pair),
   onExpired: () => { if (useAuth.getState().status === 'authed') useAuth.getState().signOut({ callServer: false }); },
 });
+
+/** 분석 사용자 식별 — 토큰의 sub(사용자 ID), 없으면 닉네임 기반 */
+function identifyCurrentUser(token: string) {
+  userApi.me()
+    .then(me => identifyUser(userIdFromToken(token) ?? `u:${me.username}`, me))
+    .catch(() => {});
+}

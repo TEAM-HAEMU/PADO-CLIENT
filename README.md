@@ -30,9 +30,14 @@ git update-index --skip-worktree ios/PADO/Info.plist android/app/src/main/res/va
 
 `.github/workflows/android.yml` — `main`에 푸시되면 검사(tsc · eslint · jest) → 실서버용 release APK(arm64) 빌드 → **Releases**에 `PADO 1.0.<실행 번호>`로 올라간다 (가장 최신은 Latest). PR은 검사와 빌드만 한다.
 
-- Secrets: `API_BASE_URL`, `KAKAO_NATIVE_APP_KEY`, `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_ANDROID_API_KEY`
+- Secrets: `API_BASE_URL`, `KAKAO_NATIVE_APP_KEY`, `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_ANDROID_API_KEY`, `AMPLITUDE_API_KEY`
 - 버전 코드 = 실행 번호라서 새 APK는 기존 설치본 위에 업데이트로 설치된다.
 - 서명: `android/app/debug.keystore` (RN 기본 키). Google 로그인·지도·카카오에 이 키의 SHA-1이 등록돼 있다. 스토어 배포 전에는 업로드 키를 만들어 release 서명을 바꾸고 새 SHA-1을 각 콘솔에 추가해야 한다.
+
+## 분석 (Amplitude)
+
+`src/services/analytics.ts` — 화면 조회 · 모든 버튼 탭(`Press`) · 핵심 행동(가입·로그인, 미리듣기, 전체 듣기, 드랍·좋아요·댓글·투표, 플리, 신고, 설정 변경, API 오류) + 정밀 위치 + 세션 리플레이(입력칸 가림, 세션 30% 샘플링).
+실서버 빌드에서 `AMPLITUDE_API_KEY`가 있을 때만 보내고, 사용자는 설정 › 이용 데이터 분석에서 끌 수 있다.
 
 ## 테스트
 

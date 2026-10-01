@@ -15,6 +15,7 @@ import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
 import { formatDuration } from '@/utils/format';
+import { track } from '@/services/analytics';
 
 export default function TrackMenuScreen({ navigation, route }: RootScreen<'TrackMenu'>) {
   const { playlistId, song } = route.params;
@@ -27,7 +28,7 @@ export default function TrackMenuScreen({ navigation, route }: RootScreen<'Track
     ['external', `${service ? SERVICES[service].label : '음악 앱'}에서 열기`, async () => { if (!service) return navigation.replace('ServicePicker', { song }); close(); if (!(await openInService(service, song))) toast(`${SERVICES[service].label}을(를) 열 수 없어요.`, 'error'); }],
     ['plus', '다른 플리에 담기', () => navigation.replace('PlaylistPicker', { song, excludeId: playlistId })],
     ['pin', '이 곡 여기에 드랍하기', () => { useDraft.getState().start('MUSIC'); useDraft.getState().set({ song }); navigation.replace('Note'); }, true],
-    ['share', '공유하기', () => Share.share({ message: `${song.title} — ${song.artist}${song.links.spotify ? `\n${song.links.spotify}` : ''}` })],
+    ['share', '공유하기', () => { track('share_opened', { kind: 'song', song_id: song.id }); return Share.share({ message: `${song.title} — ${song.artist}${song.links.spotify ? `\n${song.links.spotify}` : ''}` }) }],
   ];
 
   const removing = React.useRef(false);
@@ -36,6 +37,7 @@ export default function TrackMenuScreen({ navigation, route }: RootScreen<'Track
     removing.current = true;
     try {
       await playlistApi.removeSong(playlistId, song.id);
+      track('playlist_song_removed', { playlist_id: playlistId, song_id: song.id });
       qc.invalidateQueries({ queryKey: ['playlist', playlistId] }); qc.invalidateQueries({ queryKey: ['playlists'] });
       close();
       toast('플레이리스트에서 뺐어요.');

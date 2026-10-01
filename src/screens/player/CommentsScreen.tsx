@@ -12,6 +12,7 @@ import { qk, useComments, useMe } from '@/hooks/api';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
+import { track } from '@/services/analytics';
 
 export default function CommentsScreen({ navigation, route }: RootScreen<'Comments'>) {
   const { dropId } = route.params;
@@ -28,8 +29,8 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
     if (!content || busy) return;
     setBusy(true);
     try {
-      if (editing) await commentApi.update(editing.id, content);
-      else await commentApi.create(dropId, content);
+      if (editing) { await commentApi.update(editing.id, content); track('comment_edited', { drop_id: dropId, length: content.length }); }
+      else { await commentApi.create(dropId, content); track('comment_created', { drop_id: dropId, length: content.length }); }
       setText(''); setEditing(null); refresh();
     } catch (e) { toast(errorMessage(e), 'error'); }
     finally { setBusy(false); }
@@ -39,23 +40,25 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
     const mine = !!me && c.username === me.username;
     dialog.menu(mine ? '내 댓글' : '댓글', mine ? [
       { text: '취소', style: 'cancel' },
-      { text: '수정', onPress: () => { setEditing(c); setText(c.content); } },
+      { text: '수정', icon: 'edit', onPress: () => { setEditing(c); setText(c.content); } },
       {
         text: '삭제',
         style: 'destructive',
+        icon: 'trash',
         onPress: () => dialog.alert('댓글을 삭제할까요?', undefined, [
           { text: '취소', style: 'cancel' },
           {
             text: '삭제',
             style: 'destructive',
             onPress: () => commentApi.remove(c.id)
+              .then(r => { track('comment_deleted', { drop_id: dropId }); return r; })
               .then(() => { if (editing?.id === c.id) { setEditing(null); setText(''); } refresh(); })
               .catch(e => toast(errorMessage(e), 'error')),
           },
         ]),
       },
     ] : [
-      { text: '신고하기', onPress: () => navigation.navigate('Report', { targetType: 'COMMENT', targetId: c.id, label: '이 댓글' }) },
+      { text: '신고하기', style: 'destructive', icon: 'flag', onPress: () => navigation.navigate('Report', { targetType: 'COMMENT', targetId: c.id, label: '이 댓글' }) },
       { text: '취소', style: 'cancel' },
     ]);
   };

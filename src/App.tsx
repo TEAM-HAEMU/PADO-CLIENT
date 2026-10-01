@@ -10,7 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DarkTheme, NavigationContainer } from '@react-navigation/native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ToastHost } from '@/components/ui/Toast';
-import { DialogHost } from '@/components/ui/Dialog';
+import { DialogHost, touchTracker } from '@/components/ui/Dialog';
 import { linking } from '@/navigation/linking';
 import { navigationRef } from '@/navigation/ref';
 import { queryClient } from '@/hooks/queryClient';
@@ -18,6 +18,8 @@ import { RootNavigator, Splash } from '@/navigation/RootNavigator';
 import { PreviewHost } from '@/services/preview';
 import { MiniDisc } from '@/components/music/MiniDisc';
 import { useAuth } from '@/store/auth';
+import { usePrefs } from '@/store/prefs';
+import { initAnalytics, trackScreen } from '@/services/analytics';
 import { colors } from '@/theme/tokens';
 
 const theme = { ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.page, card: colors.card, text: colors.ink, border: colors.line, primary: colors.primary } };
@@ -27,12 +29,16 @@ LogBox.ignoreLogs(['ImageBackground is deprecated']);
 
 export default function App() {
   const bootstrap = useAuth(s => s.bootstrap);
-  useEffect(() => { bootstrap(); }, [bootstrap]);
+  useEffect(() => {
+    // 분석을 먼저 켜야 자동 로그인(bootstrap)의 사용자 식별이 기록된다
+    initAnalytics({ optOut: !usePrefs.getState().analytics }).finally(() => bootstrap());
+  }, [bootstrap]);
+  const onNavState = () => { const r = navigationRef.getCurrentRoute(); trackScreen(r?.name, r?.params as object | undefined); };
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.page }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.page }} {...touchTracker}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <NavigationContainer ref={navigationRef} theme={theme} linking={linking} fallback={<Splash />}>
+          <NavigationContainer ref={navigationRef} theme={theme} linking={linking} fallback={<Splash />} onReady={onNavState} onStateChange={onNavState}>
             <StatusBar barStyle="light-content" />
             <RootNavigator />
           </NavigationContainer>

@@ -1,5 +1,33 @@
 PODS:
   - Alamofire (5.9.1)
+  - amplitude-plugin-session-replay-react-native (0.5.6):
+    - AmplitudeSessionReplay (>= 0.11.1)
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-bridging
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+  - amplitude-react-native (1.11.0):
+    - React-Core
+  - AmplitudeCore (1.5.4)
+  - AmplitudeSessionReplay (0.12.8):
+    - AmplitudeCore (< 2.0.0, >= 1.4.2)
   - AppAuth (2.1.0):
     - AppAuth/Core (= 2.1.0)
     - AppAuth/ExternalUserAgent (= 2.1.0)
@@ -2042,6 +2070,28 @@ PODS:
     - ReactNativeDependencies
   - ReactNativeDependencies (0.87.1)
   - RecaptchaInterop (101.0.0)
+  - RNCAsyncStorage (1.24.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-bridging
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - RNGestureHandler (3.3.0):
     - hermes-engine
     - RCTRequired
@@ -2400,6 +2450,8 @@ PODS:
     - React-Core-prebuilt
 
 DEPENDENCIES:
+  - "amplitude-plugin-session-replay-react-native (from `../node_modules/@amplitude/plugin-session-replay-react-native`)"
+  - "amplitude-react-native (from `../node_modules/@amplitude/analytics-react-native`)"
   - boost (from `build/rndeps-facades/boost`)
   - BVLinearGradient (from `../node_modules/react-native-linear-gradient`)
   - DoubleConversion (from `build/rndeps-facades/DoubleConversion`)
@@ -2498,6 +2550,7 @@ DEPENDENCIES:
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
   - RecaptchaInterop
+  - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
   - "RNGoogleSignin (from `../node_modules/@react-native-google-signin/google-signin`)"
   - RNKeychain (from `../node_modules/react-native-keychain`)
@@ -2512,6 +2565,8 @@ DEPENDENCIES:
 SPEC REPOS:
   trunk:
     - Alamofire
+    - AmplitudeCore
+    - AmplitudeSessionReplay
     - AppAuth
     - AppCheckCore
     - Google-Maps-iOS-Utils
@@ -2529,6 +2584,10 @@ SPEC REPOS:
     - RecaptchaInterop
 
 EXTERNAL SOURCES:
+  amplitude-plugin-session-replay-react-native:
+    :path: "../node_modules/@amplitude/plugin-session-replay-react-native"
+  amplitude-react-native:
+    :path: "../node_modules/@amplitude/analytics-react-native"
   boost:
     :path: build/rndeps-facades/boost
   BVLinearGradient:
@@ -2718,6 +2777,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   ReactNativeDependencies:
     :podspec: "../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
+  RNCAsyncStorage:
+    :path: "../node_modules/@react-native-async-storage/async-storage"
   RNGestureHandler:
     :path: "../node_modules/react-native-gesture-handler"
   RNGoogleSignin:
@@ -2741,6 +2802,10 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Alamofire: f36a35757af4587d8e4f4bfa223ad10be2422b8c
+  amplitude-plugin-session-replay-react-native: bc5e451ba0346917499e25258c3a1e0f01d2f017
+  amplitude-react-native: ec3c5e5c76f36e171bb79a9a1619037146456d87
+  AmplitudeCore: 4a2e0e9104665a3ecf90f0c7ee1af6e06ff294a4
+  AmplitudeSessionReplay: 60ab6e69b8202deecadd9152db04806186aa3aef
   AppAuth: ef4da5a3fc2e10b90c09a0a94a9baeaedc0341d5
   AppCheckCore: be8fce5469f68d7f6a29aa94b25f097409ff7fdc
   boost: 8502bfdc46e2804408af2e163049ece181009af4
@@ -2850,6 +2915,7 @@ SPEC CHECKSUMS:
   ReactCommon: 749169e12aa3461a3df3656a00e48dbe0456b2d6
   ReactNativeDependencies: 94c922c39e0e6150ee9ad05e2ca1946e0ef55783
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
+  RNCAsyncStorage: 99450212af3bc116509b52fd2a299d602fa12ea8
   RNGestureHandler: eb4c031b22e791851742d29384ddcad30f3ee49d
   RNGoogleSignin: f98d6e730364a34b6551f2cbb7749c4d84ec7ab1
   RNKeychain: 551d42b0ef53426f82551a0cc961cfa10ad33afa

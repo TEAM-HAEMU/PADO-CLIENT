@@ -61,7 +61,7 @@ export default function ProfileScreen() {
   }, [drops]);
 
   const openDrop = (d: DropSummary) => nav.navigate(d.type === 'VOTE' ? 'VoteDrop' : d.type === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: d.droppingId });
-  const removeDrop = (d: DropSummary) => dialog.alert('드랍을 삭제할까요?', dropTitle(d), [
+  const removeDrop = (d: DropSummary) => dialog.alert('드랍을 삭제할까요?', `'${dropTitle(d)}' 드랍이 지도에서 사라지고 되돌릴 수 없어요.`, [
     { text: '취소', style: 'cancel' },
     { text: '삭제', style: 'destructive', onPress: () => dropApi.remove(d.droppingId).then(() => { qc.invalidateQueries({ queryKey: ['myDrops'] }); qc.invalidateQueries({ queryKey: ['nearby'] }); toast('드랍을 삭제했어요.'); }).catch(e => toast(errorMessage(e), 'error')) },
   ]);

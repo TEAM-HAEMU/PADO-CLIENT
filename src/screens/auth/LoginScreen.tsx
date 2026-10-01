@@ -28,7 +28,7 @@ export default function LoginScreen({ navigation }: RootScreen<'Login'>) {
       const token = await getProviderToken(provider);
       const r = await authApi.social(provider, token);
       if (!r.signupRequired && r.accessToken && r.refreshToken) {
-        await signIn({ accessToken: r.accessToken, refreshToken: r.refreshToken, accessTokenExpiresIn: r.accessTokenExpiresIn ?? 0, refreshTokenExpiresIn: r.refreshTokenExpiresIn ?? 0 });
+        await signIn({ accessToken: r.accessToken, refreshToken: r.refreshToken, accessTokenExpiresIn: r.accessTokenExpiresIn ?? 0, refreshTokenExpiresIn: r.refreshTokenExpiresIn ?? 0 }, { method: provider.toLowerCase() });
       } else if (r.signupToken) {
         navigation.navigate('Signup', { mode: 'social', provider, signupToken: r.signupToken, profile: r.profile });
       }

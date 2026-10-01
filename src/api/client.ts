@@ -1,6 +1,7 @@
 import { env } from '@/config';
 import { ApiError } from './errors';
 import type { TokenPair } from './types';
+import { track } from '@/services/analytics';
 
 export type AuthMode = 'required' | 'optional' | 'none';
 
@@ -113,6 +114,7 @@ export async function request<T = void>(method: string, path: string, opts: Requ
   }
   const data = parse(res.text);
   if (res.status >= 200 && res.status < 300) return data as T;
+  track('api_error', { method, path: path.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ':id'), status: res.status, code: (data as { code?: string } | undefined)?.code ?? null });
   throw new ApiError(res.status, typeof data === 'object' ? (data as never) : null);
 }
 

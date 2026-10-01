@@ -15,6 +15,7 @@ import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
 import { formatDuration, formatTotal } from '@/utils/format';
 import { shuffled } from '@/utils/shuffle';
+import { track } from '@/services/analytics';
 
 export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'PlaylistDetail'>) {
   const { playlistId } = route.params;
@@ -36,10 +37,10 @@ export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'
   const rename = () => navigation.navigate('NewPlaylist', { rename: { id: playlistId, name: p.name } });
   const more = () => dialog.menu(p.name, [
     { text: '취소', style: 'cancel' },
-    { text: '이름 변경', onPress: rename },
-    { text: '플레이리스트 삭제', style: 'destructive', onPress: () => dialog.alert('플레이리스트를 삭제할까요?', '담긴 곡 목록이 사라져요.', [
+    { text: '이름 변경', icon: 'edit', onPress: rename },
+    { text: '플레이리스트 삭제', style: 'destructive', icon: 'trash', onPress: () => dialog.alert('플레이리스트를 삭제할까요?', '담긴 곡 목록이 사라져요.', [
       { text: '취소', style: 'cancel' },
-      { text: '삭제', style: 'destructive', onPress: () => playlistApi.remove(playlistId).then(() => { qc.invalidateQueries({ queryKey: ['playlists'] }); navigation.goBack(); }).catch(e => toast(errorMessage(e), 'error')) },
+      { text: '삭제', style: 'destructive', onPress: () => playlistApi.remove(playlistId).then(() => { track('playlist_deleted', { playlist_id: playlistId }); qc.invalidateQueries({ queryKey: ['playlists'] }); navigation.goBack(); }).catch(e => toast(errorMessage(e), 'error')) },
     ]) },
   ]);
 

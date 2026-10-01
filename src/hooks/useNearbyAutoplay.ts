@@ -10,6 +10,7 @@ import type { MusicDropSummary } from '@/api/types';
 import { findItunes } from '@/services/itunes';
 import { startPreview, usePreviewStore } from '@/services/preview';
 import { usePrefs } from '@/store/prefs';
+import { track } from '@/services/analytics';
 
 export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
   const enabled = usePrefs(s => s.autoplayNearby);
@@ -34,6 +35,7 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
     let alive = true;
     let skip: ReturnType<typeof setTimeout> | undefined;
     ours.current = current.songId;
+    track('nearby_autoplay_play', { drop_id: current.droppingId, song_id: current.songId, index: idx % drops.length, nearby_count: drops.length });
     startPreview({ id: current.songId, title: current.title, artist: current.artist, albumImagePath: current.albumImageUrl }).then(r => {
       if (!alive) return;
       if (r === 'none') skip = setTimeout(() => setIdx(i => i + 1), 800);
@@ -81,6 +83,7 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
     },
     /** 다음 주변 곡 — 지금 무엇이 나오든 멈추고 다음 차례로 */
     next: () => {
+      track('nearby_autoplay_next', { from_song_id: usePreviewStore.getState().key });
       setHeld(false);
       setIdx(i => i + 1);
       const st = usePreviewStore.getState();

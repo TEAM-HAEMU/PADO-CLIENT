@@ -3,7 +3,7 @@
 #
 # 필요한 Secrets (Settings › Secrets and variables › Actions):
 #   API_BASE_URL, KAKAO_NATIVE_APP_KEY, GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID,
-#   GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_ANDROID_API_KEY
+#   GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_ANDROID_API_KEY, AMPLITUDE_API_KEY
 name: Android APK
 
 on:
@@ -70,6 +70,7 @@ jobs:
           GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
+          AMPLITUDE_API_KEY: ${{ secrets.AMPLITUDE_API_KEY }}
         run: |
           {
             echo "API_BASE_URL=$API_BASE_URL"
@@ -79,6 +80,7 @@ jobs:
             echo "GOOGLE_IOS_CLIENT_ID=$GOOGLE_IOS_CLIENT_ID"
             echo "GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY"
             echo "GOOGLE_MAPS_ANDROID_API_KEY=$GOOGLE_MAPS_ANDROID_API_KEY"
+            echo "AMPLITUDE_API_KEY=$AMPLITUDE_API_KEY"
           } > .env
           node scripts/sync-native-env.js
 

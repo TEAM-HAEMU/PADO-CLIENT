@@ -2,6 +2,7 @@ import Geolocation from '@react-native-community/geolocation';
 import { Platform } from 'react-native';
 import { check, PERMISSIONS, request, RESULTS } from 'react-native-permissions';
 import { create } from 'zustand';
+import { setAnalyticsLocation, track } from '@/services/analytics';
 
 export interface Coords { latitude: number; longitude: number }
 
@@ -69,11 +70,14 @@ export const useLocation = create<LocationState>((set, get) => ({
     return p;
   },
   start: () => {
-    const got = (pos: { coords: Coords }) => set({ coords: { latitude: pos.coords.latitude, longitude: pos.coords.longitude }, fix: 'ok', reason: null });
+    const got = (pos: { coords: Coords }) => {
+      setAnalyticsLocation(pos.coords.latitude, pos.coords.longitude);
+      set({ coords: { latitude: pos.coords.latitude, longitude: pos.coords.longitude }, fix: 'ok', reason: null });
+    };
     const giveUp = async (e?: { code?: number }) => {
       if (get().coords) return;
       const reason = await reasonOf(e);
-      if (!get().coords) set({ fix: 'unavailable', reason });
+      if (!get().coords) { set({ fix: 'unavailable', reason }); track('location_unavailable', { reason }); }
     };
     // 1) 정밀 GPS (8초) → 2) 못 잡으면 대략 위치(와이파이·기지국, 최근 5분 이내 값도 허용)로 한 번 더 — 실내에서도 지도·주변 드랍은 보이게
     const coarse = (e?: { code?: number }) => {

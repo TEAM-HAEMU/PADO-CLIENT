@@ -7,6 +7,7 @@ import { Art, PrimaryButton, SecondaryButton, T } from '@/components/ui';
 import type { RootScreen } from '@/navigation/types';
 import { useLocation } from '@/services/location';
 import { colors, glow } from '@/theme/tokens';
+import { track } from '@/services/analytics';
 
 export default function DropSuccessScreen({ navigation, route }: RootScreen<'DropSuccess'>) {
   const insets = useSafeAreaInsets();
@@ -38,7 +39,7 @@ export default function DropSuccessScreen({ navigation, route }: RootScreen<'Dro
       <View style={{ flex: 1 }} />
       <View style={{ alignSelf: 'stretch', paddingHorizontal: 20, paddingBottom: insets.bottom + 16, paddingTop: 16, gap: 10 }}>
         <PrimaryButton label="지도에서 보기" icon="map" onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Tabs', params: { screen: 'Map' } }] })} />
-        <SecondaryButton label="친구에게 공유" icon="share" onPress={() => Share.share({ message: `PADO — ${label || '이곳'}에 음악을 남겼어요. ${content ? `“${content}”` : ''}` })} />
+        <SecondaryButton label="친구에게 공유" icon="share" onPress={() => (track('share_opened', { kind: 'drop' }), Share.share({ message: `PADO — ${label || '이곳'}에 음악을 남겼어요. ${content ? `“${content}”` : ''}` }))} />
       </View>
     </View>
   );

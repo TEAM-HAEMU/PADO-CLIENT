@@ -140,7 +140,8 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
           <Row icon="mail" tone={colors.warning} title="마케팅 정보 수신" sub="이벤트·새 기능 소식" last right={<Toggle label="마케팅 정보 수신" value={marketing} onChange={setMarketing} />} />
         </Group>
 
-        <Group title="안전">
+        <Group title="안전 · 개인정보">
+          <Row icon="eye" tone={colors.ink2} title="이용 데이터 분석" sub="사용 기록·위치로 서비스를 개선해요 (Amplitude)" right={<Toggle label="이용 데이터 분석" value={prefs.analytics} onChange={prefs.setAnalytics} />} />
           <Row icon="block" tone={colors.ink2} title="차단한 사용자" onPress={() => navigation.navigate('BlockedUsers')} last right={<Icon name="chevronRight" size={16} color={colors.ink3} />} />
         </Group>
 

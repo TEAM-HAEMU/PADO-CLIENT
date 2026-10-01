@@ -9,6 +9,7 @@ import Video from 'react-native-video';
 import { create } from 'zustand';
 import { toast } from '@/store/toast';
 import { findItunes } from './itunes';
+import { track } from '@/services/analytics';
 
 /** 잠금화면·알림에 보일 곡 정보 */
 export interface PreviewMeta { title: string; artist: string; image?: string | null }
@@ -47,12 +48,13 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
   duration: 30,
   play: (key, url, meta) => {
     if (intentKey !== key) cancelIntent(); // 다른 곡의 대기 중인 재생 요청은 버린다
+    if (get().key !== key) track('preview_started', { song_id: key, title: meta?.title, artist: meta?.artist });
     set(get().key === key ? { paused: false, endedKey: null } : { key, url, meta: meta ?? null, paused: false, position: 0, duration: 30, endedKey: null });
   },
-  toggle: () => set({ paused: !get().paused }),
+  toggle: () => { const paused = !get().paused; track(paused ? 'preview_paused' : 'preview_resumed', { song_id: get().key, position: Math.round(get().position) }); set({ paused }); },
   stop: () => { cancelIntent(); set({ ...IDLE, endedKey: null }); },
   _progress: (position, duration) => set({ position, duration: duration || 30 }),
-  _ended: () => set({ ...IDLE, endedKey: get().key }),
+  _ended: () => { track('preview_completed', { song_id: get().key }); set({ ...IDLE, endedKey: get().key }); },
 }));
 
 // UI 테스트는 `-PADO_MUTE YES` 실행 인자를 넘긴다 → 미리듣기를 무음으로 (화면 동작은 그대로)
