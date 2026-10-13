@@ -123,7 +123,7 @@ export function IconButton({ name, onPress, size = 44, color = colors.ink, badge
 
 export function Chip({ label, active, onPress, icon }: { label: string; active?: boolean; onPress?: () => void; icon?: IconName }) {
   return (
-    <Press onPress={onPress} style={[s.chip, active ? { backgroundColor: colors.primarySoft, borderColor: 'rgba(79,209,255,0.6)' } : null] as ViewStyle[]}>
+    <Press onPress={onPress} style={[s.chip, active ? { backgroundColor: colors.primarySoft, borderColor: 'rgba(79,151,242,0.5)' } : null] as ViewStyle[]}>
       {icon && <Icon name={icon} size={14} color={active ? colors.primary : colors.ink2} />}
       <T v="captionStrong" c={active ? 'primary' : 'ink2'}>{label}</T>
     </Press>
@@ -137,7 +137,7 @@ export function Art({ uri, size, radius = 12, round, style, dim }: { uri?: strin
     <View style={[{ width: size, height: size, borderRadius: r, backgroundColor: colors.card2, opacity: dim ? 0.55 : 1 }, style]}>
       {/* Image에도 radius — Android 지도 마커 스냅샷은 부모 overflow 클리핑을 못 그린다 */}
       {uri ? <Image source={{ uri: artUrl(uri, size)! }} style={{ width: size, height: size, borderRadius: r }} /> : (
-        <LinearGradient colors={['#0E2A5A', '#111B3F']} style={{ flex: 1, borderRadius: r, alignItems: 'center', justifyContent: 'center' }}>
+        <LinearGradient colors={['#E3EEFD', '#F3F8FF']} style={{ flex: 1, borderRadius: r, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="music" size={size * 0.38} color={colors.ink3} />
         </LinearGradient>
       )}
@@ -149,7 +149,7 @@ export function Avatar({ uri, name, size = 36 }: { uri?: string | null; name?: s
   if (uri) return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.card2 }} />;
   const initial = (name ?? '?').trim().charAt(0) || '?';
   return (
-    <LinearGradient colors={['#1B5BA8', '#0B1330']} style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }}>
+    <LinearGradient colors={['#BFE0FF', '#E8F2FE']} style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }}>
       <T v={size > 48 ? 'title' : 'captionStrong'} style={{ fontSize: size * 0.4, lineHeight: size * 0.5 }}>{initial}</T>
     </LinearGradient>
   );

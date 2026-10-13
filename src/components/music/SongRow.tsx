@@ -17,7 +17,7 @@ export function SongRow({ song, selected, onPress, right, showPreview = true, in
       <View>
         <Art uri={song.albumImagePath} size={index !== undefined ? 44 : 56} radius={12} />
         {selected ? (
-          <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: 12, backgroundColor: 'rgba(5,9,22,0.45)', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: 12, backgroundColor: 'rgba(15,27,56,0.35)', alignItems: 'center', justifyContent: 'center' }}>
             <View style={[{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, glow(0.6, 10)]}>
               <Icon name="check" size={16} color={colors.onPrimary} strokeWidth={2.4} />
             </View>

@@ -41,7 +41,7 @@ export default function ReportScreen({ navigation, route }: RootScreen<'Report'>
   return (
     <Sheet>
       <View style={{ gap: 4, paddingHorizontal: 4, marginBottom: 12 }}>
-        <T v="title">{label ?? '이 콘텐츠'}를 신고할까요?</T>
+        <T v="title">{withObjectParticle(label ?? '이 콘텐츠')} 신고할까요?</T>
         <T v="caption" c="ink2">신고 내용은 운영자만 확인해요. 같은 대상은 한 번만 신고할 수 있어요.</T>
       </View>
       <View style={{ borderRadius: 20, backgroundColor: colors.page, overflow: 'hidden' }}>
@@ -64,4 +64,11 @@ export default function ReportScreen({ navigation, route }: RootScreen<'Report'>
       <PrimaryButton label="신고하기" onPress={submit} loading={busy} disabled={!reason} />
     </Sheet>
   );
+}
+
+/** 목적격 조사 — 받침이 있으면 '을', 없으면 '를' (예: 하윤님을, 이 드랍을, 이 댓글을) */
+function withObjectParticle(word: string) {
+  const c = word.charCodeAt(word.length - 1);
+  const hasBatchim = c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0;
+  return word + (hasBatchim ? '을' : '를');
 }

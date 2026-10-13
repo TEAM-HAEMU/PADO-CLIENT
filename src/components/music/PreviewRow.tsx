@@ -3,6 +3,8 @@ import React, { useMemo } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import type { Song } from '@/api/types';
 import { Icon, Press, T } from '@/components/ui';
+import { ServiceGlyph } from '@/components/ui/Brand';
+import { openInService } from '@/services/musicLinks';
 import { usePreview, usePreviewProgress } from '@/services/preview';
 import { colors, glow } from '@/theme/tokens';
 import { formatDuration } from '@/utils/format';
@@ -42,5 +44,15 @@ function Waveform({ songId, playing, available, idle }: { songId: string; playin
         {available ? formatDuration(playing || position ? position : idle) : '—'}
       </T>
     </>
+  );
+}
+
+/** 미리듣기 출처 표기 — iTunes 미리듣기 이용 조건(출처 표시 + Apple Music 링크) */
+export function PreviewCredit({ song }: { song: { title: string; artist: string } }) {
+  return (
+    <Press onPress={() => { void openInService('appleMusic', song); }} hitSlop={8} accessibilityRole="link" accessibilityLabel="미리듣기 제공 Apple Music, Apple Music에서 열기" style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+      <ServiceGlyph service="appleMusic" size={12} />
+      <T v="micro" c="ink3">미리듣기 제공 · Apple Music</T>
+    </Press>
   );
 }

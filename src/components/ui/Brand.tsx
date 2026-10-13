@@ -50,6 +50,12 @@ export const GoogleSymbol = ({ size = 20 }: { size?: number }) => (
   </Svg>
 );
 
+export const AppleSymbol = ({ size = 20, color = '#000' }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Path fill={color} d="M16.37 1.43c0 1.14-.49 2.27-1.18 3.08-.74.9-1.99 1.57-2.99 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.57-2.27 1.21-2.98.8-.94 2.14-1.64 3.25-1.68.03.13.05.28.05.43zm4.56 15.71c-.03.07-.46 1.58-1.52 3.12-.94 1.34-1.94 2.71-3.43 2.71-1.52 0-1.9-.88-3.63-.88-1.7 0-2.3.91-3.67.91-1.38 0-2.33-1.26-3.43-2.8-1.29-1.82-2.32-4.63-2.32-7.28 0-4.28 2.8-6.55 5.55-6.55 1.45 0 2.68.95 3.6.95.87 0 2.22-1.01 3.9-1.01.61 0 2.89.06 4.37 2.19-.13.09-2.38 1.37-2.38 4.19 0 3.26 2.85 4.42 2.96 4.45z" />
+  </Svg>
+);
+
 /** B · Deep 심볼 — 원 안에서 흩어지는 파티클 파도 */
 export function PadoSymbol({ size = 48 }: { size?: number }) {
   const dots: React.ReactNode[] = [];
@@ -58,18 +64,18 @@ export function PadoSymbol({ size = 48 }: { size?: number }) {
       const x = 10 + i * 3.1;
       const y = 34 + r * 3.6 + 7 * Math.sin((i / 14) * Math.PI * 1.6 + r * 0.4) - r * 1.2;
       const o = Math.max(0.15, (1 - r * 0.17) * (0.55 + 0.45 * Math.sin(i * 0.9 + r)));
-      dots.push(<Circle key={`${r}-${i}`} cx={x} cy={y} r={1.5 - r * 0.18} fill="#7FE3FF" opacity={o} />);
+      dots.push(<Circle key={`${r}-${i}`} cx={x} cy={y} r={1.5 - r * 0.18} fill="#4F97F2" opacity={o} />);
     }
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64">
       <Defs>
         <RadialGradient id="ps" cx="0.5" cy="0.7" r="0.7">
-          <Stop offset="0" stopColor="#0E2A5A" />
-          <Stop offset="1" stopColor="#030816" />
+          <Stop offset="0" stopColor="#F3F8FF" />
+          <Stop offset="1" stopColor="#DDEBFD" />
         </RadialGradient>
       </Defs>
       <Circle cx="32" cy="32" r="32" fill="url(#ps)" />
-      <Circle cx="32" cy="32" r="31.5" fill="none" stroke="#4FD1FF" strokeOpacity={0.35} />
+      <Circle cx="32" cy="32" r="31.5" fill="none" stroke="#4F97F2" strokeOpacity={0.35} />
       {dots}
     </Svg>
   );

@@ -9,6 +9,7 @@ import type { Comment } from '@/api/types';
 import { Avatar, Empty, Icon, Press, SecondaryButton, T } from '@/components/ui';
 import { Sheet } from '@/components/ui/Sheet';
 import { qk, useComments, useMe } from '@/hooks/api';
+import { useBlockUser } from '@/hooks/useBlockUser';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
@@ -17,6 +18,7 @@ import { track } from '@/services/analytics';
 export default function CommentsScreen({ navigation, route }: RootScreen<'Comments'>) {
   const { dropId } = route.params;
   const qc = useQueryClient();
+  const blockUser = useBlockUser();
   const me = useMe().data;
   const { data: list = [], isLoading, isError, refetch } = useComments(dropId);
   const [text, setText] = useState('');
@@ -58,7 +60,8 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
         ]),
       },
     ] : [
-      { text: '신고하기', style: 'destructive', icon: 'flag', onPress: () => navigation.navigate('Report', { targetType: 'COMMENT', targetId: c.id, label: '이 댓글' }) },
+      { text: '신고하기', style: 'destructive', icon: 'flag', onPress: () => navigation.navigate('Report', { targetType: 'COMMENT', targetId: c.id, userId: c.userId, label: '이 댓글' }) },
+      ...(c.userId ? [{ text: '차단하기', style: 'destructive' as const, icon: 'block' as const, onPress: () => blockUser(c.userId!, { name: c.username, source: 'comment' }) }] : []),
       { text: '취소', style: 'cancel' },
     ]);
   };

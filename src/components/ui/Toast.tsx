@@ -13,7 +13,7 @@ export function ToastHost() {
   if (!t) return null;
   return (
     <View pointerEvents="none" style={{ position: 'absolute', top: insets.top + 8, left: 16, right: 16, alignItems: 'center' }}>
-      <Animated.View key={t.id} accessibilityLiveRegion="polite" accessibilityRole="alert" entering={FadeInUp.duration(200)} exiting={FadeOutUp} style={[{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, backgroundColor: 'rgba(17,27,63,0.96)', borderWidth: 1, borderColor: t.tone === 'error' ? 'rgba(251,146,60,0.5)' : colors.line, maxWidth: 370 }, dropShadow]}>
+      <Animated.View key={t.id} accessibilityLiveRegion="polite" accessibilityRole="alert" entering={FadeInUp.duration(200)} exiting={FadeOutUp} style={[{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.98)', borderWidth: 1, borderColor: t.tone === 'error' ? 'rgba(226,104,58,0.4)' : colors.line, maxWidth: 370 }, dropShadow]}>
         <Icon name={t.tone === 'error' ? 'alert' : t.tone === 'success' ? 'check' : 'wave'} size={18} color={t.tone === 'error' ? colors.caution : colors.primary} />
         <T v="captionStrong" style={{ flexShrink: 1 }}>{t.text}</T>
       </Animated.View>

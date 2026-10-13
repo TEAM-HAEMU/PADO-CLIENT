@@ -71,7 +71,7 @@ export function MiniDisc() {
           </Spin>
         </View>
         {/* 가운데 구멍 (레코드) · 일시정지면 재생 아이콘 */}
-        <View pointerEvents="none" style={{ position: 'absolute', width: paused ? 24 : 12, height: paused ? 24 : 12, borderRadius: 12, backgroundColor: paused ? 'rgba(5,9,22,0.75)' : colors.page, borderWidth: paused ? 0 : 1.5, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+        <View pointerEvents="none" style={{ position: 'absolute', width: paused ? 24 : 12, height: paused ? 24 : 12, borderRadius: 12, backgroundColor: paused ? 'rgba(255,255,255,0.94)' : colors.page, borderWidth: paused ? 0 : 1.5, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
           {paused ? <Icon name="play" size={12} color={colors.primary} /> : null}
         </View>
       </Press>

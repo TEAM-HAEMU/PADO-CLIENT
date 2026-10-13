@@ -38,7 +38,7 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
   const liked = qc.getQueryData<boolean>(['liked', dropId]) ?? !!myLikes?.some(x => x.droppingId === dropId);
   const toggleLike = useToggleLike(dropId);
   const authed = useAuth(s => s.status === 'authed');
-  const menu = useDropMenu(dropId, drop.data?.userId, '플레이리스트 드랍');
+  const menu = useDropMenu(dropId, drop.data?.userId, '플레이리스트 드랍', drop.data && 'username' in drop.data ? drop.data.username : undefined);
 
   if (!d) return <ScreenState title="플리 드랍" error={drop.error} onRetry={() => drop.refetch()} />;
 

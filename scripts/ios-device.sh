@@ -32,10 +32,11 @@ echo "▶ iPhone $UDID · 팀 $TEAM_ID"
 node scripts/sync-native-env.js
 xcodebuild -workspace ios/PADO.xcworkspace -scheme PADO -configuration Release \
   -destination "id=$UDID" -derivedDataPath ios/build/device \
-  -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
+  -allowProvisioningUpdates -allowProvisioningDeviceRegistration DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
   build | grep -E "error:|warning: .*[Ss]ign|\*\* BUILD" || true
 
 APP="ios/build/device/Build/Products/Release-iphoneos/PADO.app"
 [ -d "$APP" ] || { echo "빌드 실패 — 위 오류를 확인하세요." >&2; exit 1; }
 xcrun devicectl device install app --device "$UDID" "$APP"
-xcrun devicectl device process launch --device "$UDID" com.pado.app || echo "설치됨 — 실행이 막히면 iPhone에서 개발자 앱을 신뢰하세요 (설정 › 일반 › VPN 및 기기 관리)."
+BUNDLE_ID="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")"
+xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" || echo "설치됨 — 실행이 막히면 iPhone에서 개발자 앱을 신뢰하세요 (설정 › 일반 › VPN 및 기기 관리)."

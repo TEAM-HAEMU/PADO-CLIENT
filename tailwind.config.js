@@ -1,4 +1,4 @@
-/** PADO · B Deep 디자인 토큰 (Figma MVP 페이지 B 섹션 기준) */
+/** PADO · J 스카이 퓨어 디자인 토큰 (Figma 'UI · 최신' 페이지 › 7 화이트 오션 시안 J) */
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./src/**/*.{ts,tsx}'],
@@ -6,22 +6,22 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        page: '#050916',
-        card: '#0B1330',
-        'card-2': '#111B3F',
-        ink: '#EAF1FF',
-        'ink-2': '#8D9BC4',
-        'ink-3': '#7482AE',
-        line: '#19234D',
-        deep: '#02050F',
-        primary: '#4FD1FF',
-        'primary-soft': '#0E2A4A',
-        'on-primary': '#03101F',
-        accent: '#3B6BFF',
-        'accent-2': '#9BE7FF',
-        positive: '#34D399',
-        warning: '#FBBF24',
-        caution: '#FB923C',
+        page: '#FFFFFF',
+        card: '#F6FAFF',
+        'card-2': '#EDF4FE',
+        ink: '#1B2B4F',
+        'ink-2': '#56688A',
+        'ink-3': '#647493',
+        line: '#E3EDF9',
+        deep: '#EDF4FE',
+        primary: '#4F97F2',
+        'primary-soft': '#E8F2FE',
+        'on-primary': '#FFFFFF',
+        accent: '#3A63B8',
+        'accent-2': '#A9D1FB',
+        positive: '#12A37A',
+        warning: '#C58A12',
+        caution: '#E2683A',
         kakao: '#FEE500',
       },
       fontFamily: {

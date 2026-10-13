@@ -77,8 +77,8 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
       <Svg width={box.w} height={box.h} style={{ position: 'absolute' }}>
         <Defs>
           <LinearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#9BE7FF" />
-            <Stop offset="1" stopColor="#3B6BFF" />
+            <Stop offset="0" stopColor="#BFE0FF" />
+            <Stop offset="1" stopColor="#4F97F2" />
           </LinearGradient>
         </Defs>
         {animated ? null : active ? <Ripple cx={box.tipX} cy={box.tipY} sizes={[66, 44, 24]} ops={[0.15, 0.35, 0.7]} /> : <Ripple cx={box.tipX} cy={box.tipY} sizes={[44, 24]} ops={[0.25, 0.6]} />}
@@ -105,7 +105,7 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
         </View>
       ) : null}
       {active && title ? (
-        <View style={{ position: 'absolute', left: 70, top: 14, paddingLeft: 12, paddingRight: 14, paddingVertical: 7, borderRadius: 14, backgroundColor: 'rgba(11,19,48,0.9)', borderWidth: 1, borderColor: colors.line, maxWidth: 118 }}>
+        <View style={{ position: 'absolute', left: 70, top: 14, paddingLeft: 12, paddingRight: 14, paddingVertical: 7, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.96)', borderWidth: 1, borderColor: colors.line, maxWidth: 118 }}>
           <T v="captionStrong" numberOfLines={1}>{title}</T>
           {subtitle ? <T v="micro" c="ink2" numberOfLines={1}>{subtitle}</T> : null}
         </View>

@@ -26,8 +26,13 @@ export interface RegisterBody {
   agreements: Agreements;
 }
 
-/** 명세엔 naver도 있지만 앱은 카카오·Google만 쓴다 */
-export type SocialProvider = 'kakao' | 'google';
+/** 명세엔 naver도 있지만 앱은 카카오·Google·Apple(iOS)만 쓴다 */
+export type SocialProvider = 'kakao' | 'google' | 'apple';
+
+/** /oauth2/{provider} 요청 본문 — 카카오·Google은 제공자 액세스 토큰, Apple은 identity token + authorization code */
+export type SocialLoginBody =
+  | { accessToken: string }
+  | { identityToken: string; authorizationCode: string; name?: string };
 
 export interface SocialProfile {
   username: string | null;
@@ -231,6 +236,8 @@ export interface Comment {
   content: string;
   droppingId: UUID;
   username: string;
+  /** 작성자 ID — 백엔드가 주면 댓글 메뉴에 '차단하기'가 보임 (현재 CommentResponse엔 없음) */
+  userId?: UUID;
 }
 
 // ── 알림

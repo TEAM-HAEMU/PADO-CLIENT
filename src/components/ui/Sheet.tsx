@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { colors } from '@/theme/tokens';
+import { DialogHost } from './Dialog';
 
 const OPEN = { duration: 280, easing: Easing.out(Easing.cubic) };
 const CLOSE = { duration: 220, easing: Easing.in(Easing.cubic) };
@@ -69,7 +70,7 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
 
   return (
     <KeyboardAvoidingView behavior="padding" pointerEvents={closingNow ? 'none' : 'auto'} style={{ flex: 1, justifyContent: 'flex-end' }}>
-      <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: `rgba(5,9,22,${dim})` }, backdrop]}>
+      <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: `rgba(15,27,56,${dim * 0.7})` }, backdrop]}>
         <Pressable style={{ flex: 1 }} onPress={dismissible ? close : undefined} accessible={dismissible} accessibilityLabel="닫기" />
       </Animated.View>
       {/* maxHeight 같은 %값은 화면 기준이어야 하므로 래퍼에, 카드는 그 안에서 줄어든다 */}
@@ -81,6 +82,8 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
           {children}
         </View>
       </Animated.View>
+      {/* 이 시트 위에서 여는 확인창·메뉴 (iOS는 시트 위에 루트 Modal을 띄울 수 없음) */}
+      <DialogHost scope="sheet" />
     </KeyboardAvoidingView>
   );
 }

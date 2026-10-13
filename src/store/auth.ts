@@ -10,6 +10,7 @@ import { kv } from './storage';
 import { usePreviewStore } from '@/services/preview';
 import { signOutProviders } from '@/services/socialAuth';
 import { useDraft } from './draft';
+import { setOnAnalyticsEnabled } from './prefs';
 
 const SERVICE = 'pado.session';
 
@@ -85,3 +86,6 @@ function identifyCurrentUser(token: string) {
     .then(me => identifyUser(userIdFromToken(token) ?? `u:${me.username}`, me))
     .catch(() => {});
 }
+
+// 로그인한 뒤에 분석에 동의하면 그때 사용자 식별
+setOnAnalyticsEnabled(() => { const t = useAuth.getState().accessToken; if (t) identifyCurrentUser(t); });

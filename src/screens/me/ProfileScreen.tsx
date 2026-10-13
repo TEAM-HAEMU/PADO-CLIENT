@@ -103,14 +103,14 @@ export default function ProfileScreen() {
           <View style={{ paddingHorizontal: 20, marginTop: 16, gap: 6 }}>
             {region ? (
               <View style={{ height: 130, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, marginBottom: 8 }}>
-                <MapView style={{ flex: 1 }} provider={useGoogle ? PROVIDER_GOOGLE : PROVIDER_DEFAULT} customMapStyle={useGoogle ? googleMapStyle : undefined} userInterfaceStyle="dark" initialRegion={region} scrollEnabled={false} zoomEnabled={false} rotateEnabled={false} pitchEnabled={false}>
+                <MapView style={{ flex: 1 }} provider={useGoogle ? PROVIDER_GOOGLE : PROVIDER_DEFAULT} customMapStyle={useGoogle ? googleMapStyle : undefined} userInterfaceStyle="light" initialRegion={region} scrollEnabled={false} zoomEnabled={false} rotateEnabled={false} pitchEnabled={false}>
                   {drops.map(d => (
                     <Marker key={`${d.droppingId}:${artEpoch}`} coordinate={d} tracksViewChanges={tracks} anchor={{ x: 0.5, y: 0.5 }}>
                       <View style={[{ width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, Platform.OS === 'ios' ? glow(0.6, 10) : null]}><Art uri={dropArt(d)} size={26} round /></View>
                     </Marker>
                   ))}
                 </MapView>
-                <View style={{ position: 'absolute', left: 10, top: 10, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(5,9,22,0.8)' }}>
+                <View style={{ position: 'absolute', left: 10, top: 10, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.92)' }}>
                   <Icon name="map" size={12} color={colors.primary} />
                   <T v="micro">내 드랍 지도</T>
                 </View>

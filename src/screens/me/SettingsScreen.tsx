@@ -117,8 +117,8 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
                 return (
                   <Press key={m.k} onPress={() => prefs.setDistanceMode(m.k)} style={[{ flex: 1, alignItems: 'center', gap: 8, paddingTop: 8, paddingBottom: 10, borderRadius: 16, backgroundColor: colors.page, borderWidth: on ? 1.5 : 1, borderColor: on ? colors.primary : colors.line }, on ? glow(0.3, 12) : {}]}>
                     <View style={{ width: 92, height: 50, borderRadius: 10, backgroundColor: colors.card2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-                      {m.k === 'radius' ? <View style={{ position: 'absolute', width: 56, height: 56, borderRadius: 28, borderWidth: 1, borderColor: colors.primary, borderStyle: 'dashed', backgroundColor: 'rgba(79,209,255,0.1)' }} /> : null}
-                      {m.k === 'gradient' ? <View style={{ position: 'absolute', width: 70, height: 70, borderRadius: 35, backgroundColor: 'rgba(79,209,255,0.18)' }} /> : null}
+                      {m.k === 'radius' ? <View style={{ position: 'absolute', width: 56, height: 56, borderRadius: 28, borderWidth: 1, borderColor: colors.primary, borderStyle: 'dashed', backgroundColor: 'rgba(79,151,242,0.1)' }} /> : null}
+                      {m.k === 'gradient' ? <View style={{ position: 'absolute', width: 70, height: 70, borderRadius: 35, backgroundColor: 'rgba(79,151,242,0.16)' }} /> : null}
                       {[[-28, -12, 1], [22, 12, m.k === 'gradient' ? 0.35 : 1], [26, -14, m.k === 'gradient' ? 0.35 : 1], [-20, 14, 1]].map(([x, y, o], i) => <View key={i} style={{ position: 'absolute', left: 46 + x - 3, top: 25 + y - 3, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary, opacity: o }} />)}
                       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.ink }} />
                     </View>
@@ -141,7 +141,7 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
         </Group>
 
         <Group title="안전 · 개인정보">
-          <Row icon="eye" tone={colors.ink2} title="이용 데이터 분석" sub="사용 기록·위치로 서비스를 개선해요 (Amplitude)" right={<Toggle label="이용 데이터 분석" value={prefs.analytics} onChange={prefs.setAnalytics} />} />
+          <Row icon="eye" tone={colors.ink2} title="이용 데이터 분석" sub="동의하면 사용 기록·위치로 서비스를 개선해요 (선택, Amplitude)" right={<Toggle label="이용 데이터 분석" value={prefs.analytics} onChange={prefs.setAnalytics} />} />
           <Row icon="block" tone={colors.ink2} title="차단한 사용자" onPress={() => navigation.navigate('BlockedUsers')} last right={<Icon name="chevronRight" size={16} color={colors.ink3} />} />
         </Group>
 

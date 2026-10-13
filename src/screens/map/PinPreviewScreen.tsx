@@ -10,7 +10,7 @@ import { isMusicDetail, isPlaylistDetail, isVoteDetail } from '@/api/types';
 import { Art, Avatar, Icon, Loading, Press, T } from '@/components/ui';
 import { ServiceGlyph } from '@/components/ui/Brand';
 import { Sheet } from '@/components/ui/Sheet';
-import { PreviewRow } from '@/components/music/PreviewRow';
+import { PreviewCredit, PreviewRow } from '@/components/music/PreviewRow';
 import { useCommentCount, useDrop, useDropAddress, useLikeCount, useMyLikes, useSong, useToggleLike } from '@/hooks/api';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
@@ -45,7 +45,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const toggleLike = useToggleLike(dropId);
   const authed = useAuth(s => s.status === 'authed');
   const service = usePrefs(s => s.service);
-  const menu = useDropMenu(dropId, d?.userId, '드랍');
+  const menu = useDropMenu(dropId, d?.userId, '드랍', d && 'username' in d ? d.username : undefined);
   const address = useDropAddress(dropId);
 
   React.useEffect(() => {
@@ -77,7 +77,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
         </Press>
       }
     >
-      <Press onPress={more} hitSlop={10} style={{ position: 'absolute', top: 14, right: 18 }} accessibilityLabel="더보기">
+      <Press onPress={more} hitSlop={10} style={{ position: 'absolute', top: 14, right: 18, zIndex: 10 }} accessibilityLabel="더보기">
         <Icon name="more" size={22} color={colors.ink2} />
       </Press>
 
@@ -109,6 +109,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
           </View>
         ) : null}
         {song.data ? <PreviewRow song={song.data} /> : null}
+        {song.data ? <PreviewCredit song={song.data} /> : null}
         <View style={{ alignSelf: 'stretch', flexDirection: 'row', gap: 10 }}>
           <Press
             accessibilityLabel="좋아요"

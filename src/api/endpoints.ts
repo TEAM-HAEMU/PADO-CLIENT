@@ -4,7 +4,7 @@
 import { api } from './client';
 import type {
   AppNotification, BlockedUser, Comment, CreateDropBody, DropDetail, DropSummary, LikedDrop, MyProfile,
-  PlaylistDetail, PlaylistSummary, RegisterBody, ReportReason, ReportTarget, SocialLoginResponse, SocialProvider,
+  PlaylistDetail, PlaylistSummary, RegisterBody, ReportReason, ReportTarget, SocialLoginBody, SocialLoginResponse, SocialProvider,
   SocialSignupBody, Song, Term, TokenPair, UpdateProfileBody, UserAgreement, UUID,
 } from './types';
 
@@ -16,8 +16,8 @@ export const authApi = {
   register: (body: RegisterBody) => api.post('/auth/register', body, { auth: 'none' }),
   login: (email: string, password: string) => api.post<TokenPair>('/auth/login', { email, password }, { auth: 'none' }),
   logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }, { auth: 'none' }),
-  social: (provider: SocialProvider, accessToken: string) =>
-    api.post<SocialLoginResponse>(`/oauth2/${provider}`, { accessToken }, { auth: 'none' }),
+  social: (provider: SocialProvider, body: SocialLoginBody) =>
+    api.post<SocialLoginResponse>(`/oauth2/${provider}`, body, { auth: 'none' }),
   socialSignup: (body: SocialSignupBody) => api.post<TokenPair>('/oauth2/signup', body, { auth: 'none' }),
   terms: () => api.get<Term[]>('/terms', { auth: 'none' }),
 };

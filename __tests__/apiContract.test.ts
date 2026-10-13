@@ -14,7 +14,7 @@ jest.mock('@/config', () => {
   const e = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
   return {
   env: {
-    apiBaseUrl: e.PADO_LIVE ? e.API_BASE_URL || 'https://d3o34y31tdp6bd.cloudfront.net/api/v1' : 'https://api.test/api/v1',
+    apiBaseUrl: e.PADO_LIVE ? e.API_BASE_URL || 'https://api.paado.app/api/v1' : 'https://api.test/api/v1',
     useMock: !e.PADO_LIVE,
     googleMapsKey: '', kakaoAppKey: '', google: {},
   },
@@ -127,7 +127,8 @@ describe(`공개 API (${LIVE ? '실서버' : '목 서버'})`, () => {
 
   test('인증·소셜 토큰 오류 코드 (계정 생성 없이 잘못된 입력만)', async () => {
     await expectApiError(api.post('/auth/refresh', { refreshToken: 'invalid' }, { auth: 'none' }), 401, 'U9');
-    for (const provider of ['kakao', 'google'] as const) await expectApiError(authApi.social(provider, 'invalid'), 401, 'U17');
+    for (const provider of ['kakao', 'google'] as const) await expectApiError(authApi.social(provider, { accessToken: 'invalid' }), 401, 'U17');
+    await expectApiError(authApi.social('apple', { identityToken: 'invalid', authorizationCode: 'invalid' }), 401, 'U17');
     await expectApiError(authApi.socialSignup({ signupToken: 'invalid', username: 'x', birthDate: '2000-01-01', gender: true, agreements: { SERVICE: true, PRIVACY: true, LOCATION: true, MARKETING: false } }), 401, 'U13');
     // 비밀번호 규칙 위반 → 검증 오류 (가입되지 않음)
     await expectApiError(authApi.register({ username: 'a', password: 'short', email: 'not-an-email', birthDate: '2000-01-01', gender: true, agreements: { SERVICE: true, PRIVACY: true, LOCATION: true, MARKETING: false } }), 400, 'S1');

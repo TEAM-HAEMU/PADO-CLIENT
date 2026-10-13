@@ -1,9 +1,11 @@
-# main에 올라오면 검사(타입·린트·유닛) → 실서버용 APK 빌드 → GitHub Release에 첨부.
+# main에 올라오면 검사(타입·린트·유닛) → 실서버용 APK(친구 배포, arm64) + Play용 AAB(업로드 키 서명) 빌드 → GitHub Release에 첨부.
 # PR은 검사 + 빌드만 (Release 없음). 수동 실행: Actions 탭 › Android APK › Run workflow
 #
 # 필요한 Secrets (Settings › Secrets and variables › Actions):
 #   API_BASE_URL, KAKAO_NATIVE_APP_KEY, GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID,
 #   GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_ANDROID_API_KEY, AMPLITUDE_API_KEY
+#   (Play AAB) ANDROID_UPLOAD_KEYSTORE_BASE64, ANDROID_UPLOAD_STORE_PASSWORD, ANDROID_UPLOAD_KEY_ALIAS, ANDROID_UPLOAD_KEY_PASSWORD
+#   업로드 키 Secret이 없으면 AAB 단계는 건너뜀
 name: Android APK
 
 on:
@@ -96,18 +98,40 @@ jobs:
       - name: 실서버 설정인지 확인 (목 모드면 실패)
         run: grep -q 'USE_MOCK = "false"' android/app/build/generated/source/buildConfig/release/com/pado/app/BuildConfig.java
 
+      - name: Play용 AAB (업로드 키 서명 · 전체 아키텍처)
+        id: aab
+        if: github.event_name != 'pull_request'
+        working-directory: android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          PADO_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          PADO_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          PADO_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "업로드 키 Secret 없음 — AAB 건너뜀"; exit 0; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          export PADO_UPLOAD_STORE_FILE="$RUNNER_TEMP/upload.jks"
+          ./gradlew bundleRelease --no-daemon \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" \
+            -PpadoSigning=upload \
+            -PpadoVersionCode=${{ github.run_number }} \
+            -PpadoVersionName=$VERSION_NAME
+          rm -f "$RUNNER_TEMP/upload.jks"
+          echo "built=true" >> "$GITHUB_OUTPUT"
+
       - name: 파일 이름 붙이기
         id: name
         run: |
           FILE="PADO-$VERSION_NAME-${GITHUB_SHA::7}.apk"
           mkdir -p dist
           cp android/app/build/outputs/apk/release/app-release.apk "dist/$FILE"
+          if [ "${{ steps.aab.outputs.built }}" = "true" ]; then cp android/app/build/outputs/bundle/release/app-release.aab "dist/PADO-$VERSION_NAME-${GITHUB_SHA::7}.aab"; fi
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.name.outputs.file }}
-          path: dist/*.apk
+          path: dist/*
           retention-days: 30
 
       - name: GitHub Release
@@ -120,7 +144,7 @@ jobs:
             echo
             git log -1 --pretty=%B
           } > notes.md
-          gh release create "build-${{ github.run_number }}" "dist/${{ steps.name.outputs.file }}" \
+          gh release create "build-${{ github.run_number }}" dist/* \
             --target "$GITHUB_SHA" \
             --title "PADO $VERSION_NAME (${GITHUB_SHA::7})" \
             --notes-file notes.md \

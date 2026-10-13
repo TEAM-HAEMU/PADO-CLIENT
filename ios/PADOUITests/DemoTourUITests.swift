@@ -55,6 +55,63 @@ final class DemoTourUITests: XCTestCase {
     app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.07)).tap()
   }
 
+  /// Apple 로그인 (목 모드: SDK 대신 가짜 자격 증명) → 처음이면 가입 화면, Apple이 준 이름이 닉네임 기본값
+  func testAppleLogin() {
+    app.launch()
+    pause(3)
+    if !any("이메일로 계속하기").waitForExistence(timeout: 4) {
+      tap(dockTab("프로필")); pause(1.5)
+      tap(any("설정")); pause(1.5)
+      app.swipeUp(); app.swipeUp(); pause(1)
+      confirmLogout(); pause(2.5)
+    }
+    let apple = any("Apple로 계속하기")
+    XCTAssertTrue(apple.waitForExistence(timeout: 8), "Apple 로그인 버튼이 없음")
+    saveShot("apple_login")
+    apple.tap(); pause(2.5)
+    XCTAssertTrue(containing("거의 다 됐어요").waitForExistence(timeout: 8), "가입 화면으로 넘어가지 않음")
+    XCTAssertTrue(app.textFields.matching(NSPredicate(format: "value == %@", "파도타기")).firstMatch.exists, "Apple 이름이 닉네임 기본값으로 안 들어감")
+    // 가입 화면에서 듣는 앱 고르기 (설정에서 나중에 바꿀 수 있음 안내)
+    XCTAssertTrue(containing("추후에 설정에서 변경할 수 있어요").exists, "듣는 앱 안내 문구가 없음")
+    let appleMusic = any("Apple Music")
+    if !appleMusic.isHittable { app.swipeUp(); pause(0.8) }
+    XCTAssertTrue(tap(appleMusic, timeout: 4), "듣는 앱 선택지가 없음"); pause(0.6)
+    saveShot("apple_signup")
+  }
+
+  /// 드랍 ⋯ 메뉴 → 차단하기 → 확인 → 차단됨 (목 모드)
+  func testBlockFromDropMenu() {
+    app.launch()
+    pause(3)
+    if tap(any("이메일로 계속하기"), timeout: 4) { pause(1); tap(any("로그인")); pause(2.5) }
+    if any("위치 허용하기").waitForExistence(timeout: 3) { tap(any("위치 허용하기")); pause(2) }
+    pause(5)
+    // 다른 사람(하윤)의 드랍 — '파도'는 목 계정 본인 드랍이라 삭제 메뉴가 뜸
+    let pin = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "난춘")).firstMatch
+    XCTAssertTrue(tap(pin, timeout: 10), "드랍 핀을 못 찾음"); pause(3.5)
+    saveShot("block_pin")
+    // 시트 안의 ⋯ (화면 아래쪽 절반에 있는 '더보기')
+    let mores = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "더보기")).allElementsBoundByIndex
+    if let more = mores.first(where: { $0.frame.minY > app.frame.height * 0.35 }) {
+      more.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    } else {
+      app.coordinate(withNormalizedOffset: CGVector(dx: 0.925, dy: 0.466)).tap()
+    }
+    pause(1.5)
+    saveShot("block_menu")
+    XCTAssertTrue(dialogButton("신고하기").exists, "신고하기 메뉴 없음")
+    XCTAssertTrue(tap(dialogButton("차단하기"), timeout: 3), "차단하기 메뉴 없음"); pause(1.2)
+    saveShot("block_confirm")
+    XCTAssertTrue(tap(dialogButton("차단"), timeout: 3), "차단 확인 버튼 없음"); pause(0.8)
+    XCTAssertTrue(containing("차단했어요").waitForExistence(timeout: 4), "차단 완료 안내가 없음")
+  }
+
+  /// 스크린샷을 테스트 결과에 첨부 (xcresult에서 꺼내 봄)
+  private func saveShot(_ name: String) {
+    let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+    a.name = name; a.lifetime = .keepAlways; add(a)
+  }
+
   /// 녹화 전 준비: 로그인돼 있으면 설정 → 로그아웃 (녹화 대상 아님)
   func testPrepareSignedOut() {
     app.launch()

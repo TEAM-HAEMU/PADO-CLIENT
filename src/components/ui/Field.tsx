@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { TextInput, type TextInputProps, View } from 'react-native';
 import { colors, fonts, glow } from '@/theme/tokens';
+import { SERVICES } from '@/services/musicLinks';
+import type { ServiceId } from '@/store/prefs';
+import { ServiceGlyph } from './Brand';
 import { Icon } from './Icon';
 import { Press, T } from './index';
 
@@ -56,6 +59,29 @@ export function GenderSelect({ value, onChange }: { value: boolean | null; onCha
           );
         })}
       </View>
+    </View>
+  );
+}
+
+const LISTEN_APPS: ServiceId[] = ['spotify', 'appleMusic', 'youtubeMusic'];
+
+/** 가입 화면 '듣는 앱' — 전체 듣기를 열 앱 (선택, 설정에서 언제든 변경) */
+export function ListenAppSelect({ value, onChange }: { value: ServiceId | null; onChange: (v: ServiceId) => void }) {
+  return (
+    <View style={{ gap: 6 }}>
+      <T v="captionStrong" c="ink2">듣는 앱 <T v="caption" c="ink3">(선택)</T></T>
+      <View style={{ flexDirection: 'row', gap: 8 }} accessibilityRole="radiogroup">
+        {LISTEN_APPS.map(s => {
+          const on = value === s;
+          return (
+            <Press key={s} onPress={() => onChange(s)} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={SERVICES[s].label} style={{ flex: 1, height: 76, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: on ? colors.primarySoft : colors.card, borderWidth: on ? 1.5 : 1, borderColor: on ? colors.primary : colors.line }}>
+              <ServiceGlyph service={s} size={26} />
+              <T v="captionStrong" c={on ? 'primary' : 'ink2'} numberOfLines={1}>{SERVICES[s].label}</T>
+            </Press>
+          );
+        })}
+      </View>
+      <T v="micro" c="ink3">전체 듣기를 누르면 이 앱으로 열려요. 추후에 설정에서 변경할 수 있어요.</T>
     </View>
   );
 }

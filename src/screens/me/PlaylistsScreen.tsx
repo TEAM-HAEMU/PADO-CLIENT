@@ -47,7 +47,7 @@ export default function PlaylistsScreen() {
             <Empty icon="playlist" title="아직 플레이리스트가 없어요" desc="좋아하는 곡을 모아 두면 지금 있는 곳에 플리째 드랍할 수 있어요." action={<PrimaryButton label="첫 플레이리스트 만들기" icon="plus" onPress={() => nav.navigate('NewPlaylist')} style={{ alignSelf: 'stretch', marginTop: 8 }} />} />
           ) : (
             <>
-              <Press onPress={() => nav.navigate('PlaylistDetail', { playlistId: first.id })} style={{ flexDirection: 'row', gap: 18, padding: 20, borderRadius: 26, backgroundColor: '#0E2A5A', borderWidth: 1, borderColor: colors.line, overflow: 'hidden' }}>
+              <Press onPress={() => nav.navigate('PlaylistDetail', { playlistId: first.id })} style={{ flexDirection: 'row', gap: 18, padding: 20, borderRadius: 26, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' }}>
                 <View style={glow(0.35, 24)}><Collage images={firstD?.songs.map(s => s.albumImagePath) ?? [first.albumImageUrl]} size={130} radius={18} /></View>
                 <View style={{ flex: 1, justifyContent: 'space-between', paddingVertical: 4 }}>
                   <View style={{ gap: 4 }}>

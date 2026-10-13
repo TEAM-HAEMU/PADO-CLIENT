@@ -37,7 +37,7 @@ export default function LocationPermissionScreen({ navigation }: RootScreen<'Loc
         <View style={{ position: 'absolute', top: 60, right: 58 }}><DropPin type="VOTE" /></View>
         <View style={{ position: 'absolute', top: 190, left: 110 }}><DropPin type="PLAYLIST" count={8} /></View>
       </View>
-      <LinearGradient colors={['rgba(5,9,22,0)', colors.page]} locations={[0, 0.5]} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 480 }} />
+      <LinearGradient colors={['rgba(255,255,255,0)', colors.page]} locations={[0, 0.5]} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 480 }} />
       <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 20, gap: 20 }}>
         <View style={{ gap: 10 }}>
           <T v="titleLarge">{'지금 있는 곳의 음악을\n들으려면 위치가 필요해요'}</T>

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { kv } from './storage';
-import { setAnalyticsOptOut, setUserProps, track } from '@/services/analytics';
+import { initAnalytics, setAnalyticsOptOut, setUserProps, track } from '@/services/analytics';
 
 export type ServiceId = 'spotify' | 'youtubeMusic' | 'appleMusic';
 export type DistanceMode = 'plain' | 'radius' | 'gradient';
@@ -15,8 +15,10 @@ interface Prefs {
   /** 알림 설정 — 서버에 개별 설정 API가 없어 기기 로컬 (인앱 SSE 표시 여부) */
   notify: { like: boolean; comment: boolean; nearby: boolean };
   locationPrompted: boolean;
-  /** 설정 › 이용 데이터 분석 (Amplitude). 끄면 이벤트를 보내지 않음 */
+  /** 설정 › 이용 데이터 분석 (Amplitude). 선택 동의 — 동의한 경우에만 켜짐 (기본 꺼짐) */
   analytics: boolean;
+  /** 분석 동의를 한 번이라도 물어봤는지 (첫 실행 안내 1회) */
+  analyticsAsked: boolean;
   setAnalytics: (v: boolean) => void;
   /** null = 매번 선택 */
   setService: (s: ServiceId | null, remember?: boolean) => void;
@@ -28,10 +30,14 @@ interface Prefs {
 
 const saved = kv.get<Partial<Prefs>>('prefs', {});
 
+/** 분석을 켠 직후 할 일 (로그인돼 있으면 사용자 식별) — auth 스토어가 등록 (순환 import 방지) */
+let onAnalyticsEnabled: (() => void) | undefined;
+export const setOnAnalyticsEnabled = (fn: () => void) => { onAnalyticsEnabled = fn; };
+
 export const usePrefs = create<Prefs>((set, get) => {
   const persist = () => {
-    const { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted, analytics } = get();
-    kv.set('prefs', { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted, analytics });
+    const { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted, analytics, analyticsAsked } = get();
+    kv.set('prefs', { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted, analytics, analyticsAsked });
   };
   const changed = (key: string, value: string | boolean | null) => {
     track('setting_changed', { key, value });
@@ -44,17 +50,18 @@ export const usePrefs = create<Prefs>((set, get) => {
     autoplayNearby: saved.autoplayNearby ?? true,
     notify: saved.notify ?? { like: true, comment: true, nearby: false },
     locationPrompted: saved.locationPrompted ?? false,
-    analytics: saved.analytics ?? true,
+    // 예전 버전은 기본 켜짐이었음 → 직접 고른 적이 없으면(analyticsAsked 없음) 꺼진 것으로 보고 다시 묻는다
+    analytics: saved.analyticsAsked ? saved.analytics ?? false : false,
+    analyticsAsked: saved.analyticsAsked ?? false,
     setService: (service, remember = true) => { set({ service: remember ? service : get().service, rememberService: remember }); persist(); changed('service', service); },
     setDistanceMode: distanceMode => { set({ distanceMode }); persist(); changed('distance_mode', distanceMode); },
     setAutoplayNearby: autoplayNearby => { set({ autoplayNearby }); persist(); changed('autoplay_nearby', autoplayNearby); },
     setNotify: (k, v) => { set({ notify: { ...get().notify, [k]: v } }); persist(); changed(`notify_${k}`, v); },
     setAnalytics: analytics => {
-      // 끄기 직전 한 번 기록하고 끈다 / 켤 때는 켠 뒤 기록
-      if (!analytics) changed('analytics', false);
-      setAnalyticsOptOut(!analytics);
-      if (analytics) changed('analytics', true);
-      set({ analytics }); persist();
+      set({ analytics, analyticsAsked: true }); persist();
+      if (!analytics) { changed('analytics', false); setAnalyticsOptOut(true); return; }  // 끄기 직전 한 번 기록하고 끈다
+      // 동의한 뒤에야 SDK를 시작한다 (동의 전엔 아무것도 보내지 않음)
+      initAnalytics({ optOut: false }).then(() => { setAnalyticsOptOut(false); changed('analytics', true); onAnalyticsEnabled?.(); });
     },
     setLocationPrompted: () => { set({ locationPrompted: true }); persist(); },
   };

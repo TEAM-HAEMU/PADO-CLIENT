@@ -11,6 +11,7 @@ import { errorMessage } from '@/api/errors';
 import { isMusicDetail } from '@/api/types';
 import { BreathingRing, DotProgress, ParticleWave, Spin } from '@/components/anim';
 import { ServiceGlyph } from '@/components/ui/Brand';
+import { PreviewCredit } from '@/components/music/PreviewRow';
 import { Art, Avatar, Icon, IconButton, Press, T } from '@/components/ui';
 import { useDropMenu } from '@/hooks/useDropMenu';
 import { useCommentCount, useDrop, useDropAddress, useLikeCount, useMyLikes, useSong, useToggleLike } from '@/hooks/api';
@@ -39,7 +40,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const drop = useDrop(dropId).data;
   const music = drop && isMusicDetail(drop) ? drop : null;
   const preview = usePreview(song);
-  const menu = useDropMenu(dropId, drop?.userId, '드랍');
+  const menu = useDropMenu(dropId, drop?.userId, '드랍', drop && 'username' in drop ? drop.username : undefined);
   const likeCount = useLikeCount(dropId).data;
   const commentCount = useCommentCount(dropId).data;
   const myLikes = useMyLikes().data;
@@ -82,8 +83,8 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
       <Svg width="100%" height={460} style={{ position: 'absolute', top: 60 }}>
         <Defs>
           <RadialGradient id="pg" cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor="#0E3A7A" stopOpacity={0.9} />
-            <Stop offset="1" stopColor="#050916" stopOpacity={0} />
+            <Stop offset="0" stopColor="#A9D1FB" stopOpacity={0.9} />
+            <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
           </RadialGradient>
         </Defs>
         <Ellipse cx="50%" cy="230" rx="260" ry="210" fill="url(#pg)" />
@@ -120,7 +121,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
         <T v="body" c="ink2" numberOfLines={1}>{song.artist}</T>
       </View>
       {music?.content ? (
-        <View style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: compact ? 8 : 14, paddingLeft: 10, paddingRight: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(11,19,48,0.8)', borderWidth: 1, borderColor: colors.line, maxWidth: width - 48 }}>
+        <View style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: compact ? 8 : 14, paddingLeft: 10, paddingRight: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.92)', borderWidth: 1, borderColor: colors.line, maxWidth: width - 48 }}>
           <Avatar name={music.username} size={22} />
           <T v="caption" c="ink2" numberOfLines={1} style={{ flexShrink: 1 }}>{music.username} · {music.content}</T>
         </View>
@@ -128,7 +129,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
 
       {/* progress */}
       <View style={{ marginTop: compact ? 14 : 22, paddingHorizontal: 28, gap: 8 }}>
-        <PlayerProgress songId={song.id} width={width - 56} dots={compact ? 36 : 44} available={preview.available} fullDuration={song.duration} />
+        <PlayerProgress songId={song.id} width={width - 56} dots={compact ? 36 : 44} available={preview.available} fullDuration={song.duration} song={song} />
       </View>
 
       {/* controls */}
@@ -160,7 +161,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
 
       {/* handoff pill */}
       <View style={{ flex: 1, minHeight: 12 }} />
-      <View style={{ marginBottom: insets.bottom + (compact ? 10 : 18), alignSelf: 'center', flexDirection: 'row', alignItems: 'center', borderRadius: 20, backgroundColor: 'rgba(11,19,48,0.6)', borderWidth: 1, borderColor: colors.line }}>
+      <View style={{ marginBottom: insets.bottom + (compact ? 10 : 18), alignSelf: 'center', flexDirection: 'row', alignItems: 'center', borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: colors.line }}>
         <Press onPress={listen} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 12, paddingRight: 10, paddingVertical: 9 }}>
           <ServiceGlyph service={service} size={16} />
           <T v="captionStrong" c="ink2">{listenLabel(service)}</T>
@@ -176,7 +177,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
 }
 
 /** 진행 바 + 시간 — 250ms마다 이 부분만 다시 그린다 */
-function PlayerProgress({ songId, width, dots, available, fullDuration }: { songId: string; width: number; dots: number; available: boolean; fullDuration: number }) {
+function PlayerProgress({ songId, width, dots, available, fullDuration, song }: { songId: string; width: number; dots: number; available: boolean; fullDuration: number; song: { title: string; artist: string } }) {
   const { position, duration } = usePreviewProgress(songId);
   return (
     <>
@@ -185,6 +186,7 @@ function PlayerProgress({ songId, width, dots, available, fullDuration }: { song
         <T v="number" c="primary">{formatDuration(position)}</T>
         <T v="number" c="ink3">{available ? formatDuration(duration) : formatDuration(fullDuration)}</T>
       </View>
+      {available ? <PreviewCredit song={song} /> : null}
     </>
   );
 }

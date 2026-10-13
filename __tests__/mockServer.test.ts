@@ -65,3 +65,9 @@ test('(개발용) 시드 드랍 ID 출력', async () => {
   if (process.env.PRINT_IDS) console.log(pls.map((p: { id: string; name: string }) => `PL ${p.id} ${p.name}`).join('\n'));
 });
 
+
+test('Apple 로그인: identity token + authorization code → 가입 필요, 이름은 첫 로그인 때 받은 값', async () => {
+  expect((await call('POST', '/oauth2/apple', { identityToken: 't' })).data.code).toBe('S1');
+  const r = await call('POST', '/oauth2/apple', { identityToken: 'mock-apple-token', authorizationCode: 'c', name: '정현' });
+  expect(r.data).toMatchObject({ signupRequired: true, signupToken: 'mock.signup.apple', profile: { username: '정현', birthDate: null } });
+});

@@ -13,8 +13,8 @@ export function PlaylistGlow() {
     <Svg width="100%" height={420} style={{ position: 'absolute', top: -60 }}>
       <Defs>
         <RadialGradient id="plg" cx="50%" cy="50%" r="50%">
-          <Stop offset="0" stopColor="#0E3A7A" stopOpacity={0.85} />
-          <Stop offset="1" stopColor="#050916" stopOpacity={0} />
+          <Stop offset="0" stopColor="#A9D1FB" stopOpacity={0.85} />
+          <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
         </RadialGradient>
       </Defs>
       <Ellipse cx="50%" cy="210" rx="260" ry="210" fill="url(#plg)" />

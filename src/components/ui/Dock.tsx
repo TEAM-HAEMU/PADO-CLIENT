@@ -34,8 +34,8 @@ export function Dock({ state, navigation }: BottomTabBarProps) {
     <View pointerEvents="box-none" style={{ position: 'absolute', left: 16, right: 16, bottom: Math.max(insets.bottom - 6, 12) }}>
       <View style={{ height: 68, borderRadius: 34, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
         {/* Android 실시간 블러는 아래 지도가 다시 그려질 때마다 비용이 커서 반투명 배경으로 대신 */}
-        {Platform.OS === 'ios' ? <BlurView blurType="dark" blurAmount={24} reducedTransparencyFallbackColor={colors.card} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} /> : null}
-        <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: Platform.OS === 'ios' ? 'rgba(11,19,48,0.72)' : 'rgba(11,19,48,0.94)' }} />
+        {Platform.OS === 'ios' ? <BlurView blurType="xlight" blurAmount={24} reducedTransparencyFallbackColor={colors.card} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} /> : null}
+        <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: Platform.OS === 'ios' ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.96)' }} />
         {item(0)}
         {item(1)}
         <View style={{ flex: 1, alignItems: 'center' }}>

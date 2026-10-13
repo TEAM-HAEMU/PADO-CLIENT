@@ -3,7 +3,9 @@
  *  - dialog.alert(title, message?, buttons?)  가운데 작은 카드, 버튼은 아래 가로 칸 (iOS 알림처럼 간결)
  *  - dialog.menu(title, buttons)               누른 자리(⋯ 버튼) 옆에 펼쳐지는 메뉴. 위험한 동작은 아래 따로 묶음
  * Alert.alert와 같은 버튼 형식({ text, style: 'cancel' | 'destructive', onPress }) + 메뉴용 icon.
- * RN Modal로 띄워서 네이티브 모달(댓글 시트 등) 위에서도 보인다. 버튼 동작은 창이 닫힌 뒤 실행 → 이어서 다른 창·화면을 열어도 안전.
+ * RN Modal로 띄운다. iOS는 이미 다른 화면을 띄운(transparentModal 시트) 루트 위에 Modal을 또 띄울 수 없어서,
+ * 시트(components/ui/Sheet)가 열려 있으면 그 시트 안의 DialogHost가 대신 띄운다 (가장 위 시트 하나만 그림).
+ * 버튼 동작은 창이 닫힌 뒤 실행 → 이어서 다른 창·화면을 열어도 안전.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, View, useWindowDimensions, type GestureResponderEvent } from 'react-native';
@@ -29,7 +31,7 @@ interface DialogReq {
 }
 
 /** 카드 안 칸막이 — card2 위에서 보이는 선 */
-const DIVIDER = '#22306A';
+const DIVIDER = '#D8E4F4';
 
 // ── 마지막 터치 위치 — 메뉴를 누른 자리 옆에 펼치기 위해 앱 루트에서 기록 (터치를 가로채지 않음)
 let lastTouch: { x: number; y: number } | undefined;
@@ -42,6 +44,9 @@ export const touchTracker = {
 
 let seq = 0;
 const useDialogStore = create<{ current: DialogReq | null; queue: DialogReq[] }>(() => ({ current: null, queue: [] }));
+/** 열려 있는 시트 안 호스트들 (마지막 = 가장 위) — 비어 있으면 앱 루트 호스트가 그린다 */
+let hostSeq = 0;
+const useHostStack = create<{ sheets: number[] }>(() => ({ sheets: [] }));
 
 function push(req: Omit<DialogReq, 'id'>) {
   const r = { ...req, id: ++seq };
@@ -64,8 +69,16 @@ const OPEN = { duration: 180, easing: Easing.out(Easing.cubic) };
 const CLOSE = { duration: 140, easing: Easing.in(Easing.cubic) };
 const MENU_W = 220;
 
-export function DialogHost() {
-  const current = useDialogStore(s => s.current);
+/** scope='sheet'은 시트 화면 안에서 쓰는 호스트 — 열려 있는 동안 루트 대신 이 호스트가 그린다 */
+export function DialogHost({ scope = 'root' }: { scope?: 'root' | 'sheet' }) {
+  const [hostId] = useState(() => ++hostSeq);
+  useEffect(() => {
+    if (scope !== 'sheet') return;
+    useHostStack.setState(st => ({ sheets: [...st.sheets, hostId] }));
+    return () => useHostStack.setState(st => ({ sheets: st.sheets.filter(x => x !== hostId) }));
+  }, [scope, hostId]);
+  const active = useHostStack(st => (scope === 'root' ? st.sheets.length === 0 : st.sheets[st.sheets.length - 1] === hostId));
+  const current = useDialogStore(s => (active ? s.current : null));
   const [shown, setShown] = useState<DialogReq | null>(null);
   const [menuH, setMenuH] = useState(0);
   const progress = useSharedValue(0);
@@ -128,7 +141,7 @@ export function DialogHost() {
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={cancel}>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} accessibilityViewIsModal>
-        <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: shown.kind === 'alert' ? 'rgba(3,6,16,0.62)' : 'rgba(3,6,16,0.35)' }, backdrop]}>
+        <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: shown.kind === 'alert' ? 'rgba(15,27,56,0.42)' : 'rgba(15,27,56,0.16)' }, backdrop]}>
           <Pressable style={{ flex: 1 }} onPress={cancel} accessible={shown.dismissible} accessibilityLabel="닫기" />
         </Animated.View>
 

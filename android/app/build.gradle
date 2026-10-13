@@ -106,6 +106,16 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // Google Play 업로드 키 — 키·비밀번호는 레포 밖(환경변수/CI Secrets). -PpadoSigning=upload 일 때만 사용
+        def uploadStore = System.getenv('PADO_UPLOAD_STORE_FILE')
+        if (uploadStore) {
+            upload {
+                storeFile file(uploadStore)
+                storePassword System.getenv('PADO_UPLOAD_STORE_PASSWORD')
+                keyAlias System.getenv('PADO_UPLOAD_KEY_ALIAS')
+                keyPassword System.getenv('PADO_UPLOAD_KEY_PASSWORD')
+            }
+        }
     }
     // 네이티브 라이브러리를 APK 안에서 압축 — 파일 크기 절반 가까이 줄어 메신저·클라우드로 보내기 쉬움 (설치 후 동작은 동일)
     packagingOptions {
@@ -118,9 +128,14 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // 기본은 debug 키 (친구용 APK가 기존 설치본 위에 업데이트되도록 유지).
+            // Play 업로드용 AAB는 -PpadoSigning=upload 로 업로드 키 서명 (Play 앱 서명이 최종 키를 관리)
+            if (project.findProperty('padoSigning') == 'upload') {
+                if (!signingConfigs.findByName('upload')) throw new GradleException('PADO_UPLOAD_STORE_FILE 등 업로드 키 환경변수가 필요해요')
+                signingConfig signingConfigs.upload
+            } else {
+                signingConfig signingConfigs.debug
+            }
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }

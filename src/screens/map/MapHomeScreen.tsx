@@ -166,7 +166,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         style={{ flex: 1 }}
         provider={useGoogle ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         customMapStyle={useGoogle ? googleMapStyle : undefined}
-        userInterfaceStyle="dark"
+        userInterfaceStyle="light"
         initialRegion={region}
         showsPointsOfInterests={false}
         showsCompass={false}
@@ -174,7 +174,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         toolbarEnabled={false}
         pitchEnabled={false}
       >
-        {distanceMode === 'radius' && coords && <Circle center={coords} radius={NEARBY_RADIUS_KM * 1000} strokeColor="rgba(79,209,255,0.7)" fillColor="rgba(79,209,255,0.08)" lineDashPattern={[6, 6]} />}
+        {distanceMode === 'radius' && coords && <Circle center={coords} radius={NEARBY_RADIUS_KM * 1000} strokeColor="rgba(79,151,242,0.7)" fillColor="rgba(79,151,242,0.08)" lineDashPattern={[6, 6]} />}
         {coords ? (
           <Marker coordinate={coords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={tracks}>
             <MeMarker />
@@ -201,27 +201,27 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       </MapView>
 
       {/* 상단 페이드 + 현재 위치 */}
-      <LinearGradient pointerEvents="none" colors={['rgba(4,9,22,0.98)', 'rgba(4,9,22,0.7)', 'rgba(4,9,22,0)']} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 110 }} />
+      <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.98)', 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0)']} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 110 }} />
       <Press onPress={() => mapRef.current?.animateToRegion(region, 500)} style={{ position: 'absolute', top: insets.top + 14, left: 20, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         <T v="title">{coords ? label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
         <Icon name="chevronDown" size={18} color={colors.ink2} />
       </Press>
 
       {/* 하단 페이드 + 가까운 드랍 */}
-      <LinearGradient pointerEvents="none" colors={['rgba(4,9,22,0)', 'rgba(4,9,22,0.88)', 'rgba(4,9,22,0.98)']} locations={[0, 0.42, 1]} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 380 }} />
+      <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.88)', 'rgba(255,255,255,0.98)']} locations={[0, 0.42, 1]} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 380 }} />
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + 86 + 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, marginBottom: 12 }}>
           <T v="captionStrong">가까운 드랍</T>
           <T v="number" c="primary">{drops.length}</T>
         </View>
         {!coords ? (
-          <Press onPress={fix === 'unavailable' ? retryLocation : undefined} style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(11,19,48,0.85)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Press onPress={fix === 'unavailable' ? retryLocation : undefined} style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Icon name="pin" size={22} color={colors.primary} />
             <T v="caption" c="ink2" style={{ flex: 1 }}>{locationHelp}</T>
             {fix === 'unavailable' ? <Icon name="chevronRight" size={16} color={colors.ink3} /> : null}
           </Press>
         ) : nearby.isError && !sorted.length ? (
-          <Press onPress={() => nearby.refetch()} style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(11,19,48,0.85)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Press onPress={() => nearby.refetch()} style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Icon name="alert" size={22} color={colors.warning} />
             <T v="caption" c="ink2" style={{ flex: 1 }}>주변 드랍을 불러오지 못했어요. 눌러서 다시 시도</T>
           </Press>
@@ -247,12 +247,12 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
             })}
           </ScrollView>
         ) : nearby.isLoading ? (
-          <View style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(11,19,48,0.85)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Icon name="wave" size={22} color={colors.primary} />
             <T v="caption" c="ink2" style={{ flex: 1 }}>주변 드랍을 찾고 있어요…</T>
           </View>
         ) : (
-          <Press onPress={() => navigation.getParent()?.navigate('DropType')} accessibilityLabel="첫 드랍 남기기" style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(11,19,48,0.85)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Press onPress={() => navigation.getParent()?.navigate('DropType')} accessibilityLabel="첫 드랍 남기기" style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <Icon name="wave" size={22} color={colors.primary} />
             <View style={{ flex: 1, gap: 2 }}>
               <T v="captionStrong">이 근처엔 아직 드랍이 없어요</T>

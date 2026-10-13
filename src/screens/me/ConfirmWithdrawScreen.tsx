@@ -21,7 +21,7 @@ export default function ConfirmWithdrawScreen({ navigation }: RootScreen<'Confir
     catch (e) { toast(errorMessage(e), 'error'); setBusy(false); }
   };
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(5,9,22,0.62)' }}>
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15,27,56,0.42)' }}>
       <Pressable style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} onPress={navigation.goBack} accessibilityLabel="닫기" />
       <View style={[{ width: 330, borderRadius: 30, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 22, paddingTop: 26, paddingBottom: 20, alignItems: 'center', gap: 16 }, dropShadow]}>
         <View style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>

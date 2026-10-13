@@ -23,16 +23,16 @@ function Illustration({ type }: { type: DropType }) {
   if (type === 'MUSIC')
     return (
       <View style={{ width: 76, height: 64 }}>
-        {disc(56, ['#9BE7FF', '#3B6BFF'], [{ left: 10, top: 4, borderWidth: 2, borderColor: colors.primary }, glow(0.4, 12)])}
+        {disc(56, ['#BFE0FF', '#4F97F2'], [{ left: 10, top: 4, borderWidth: 2, borderColor: colors.primary }, glow(0.4, 12)])}
         <View style={{ position: 'absolute', left: 32, top: 26, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.page, borderWidth: 1.5, borderColor: colors.primary }} />
       </View>
     );
   if (type === 'VOTE')
     return (
       <View style={{ width: 76, height: 64 }}>
-        {disc(40, ['#3B6BFF', '#111B3F'], { left: 0, top: 12, opacity: 0.8 })}
-        {disc(40, ['#0E2A5A', '#4FD1FF'], { left: 36, top: 12, opacity: 0.8 })}
-        {disc(46, ['#9BE7FF', '#3B6BFF'], [{ left: 15, top: 6, borderWidth: 2, borderColor: colors.primary }])}
+        {disc(40, ['#4F97F2', '#E3EDF9'], { left: 0, top: 12, opacity: 0.8 })}
+        {disc(40, ['#D3E6FD', '#7DB5F7'], { left: 36, top: 12, opacity: 0.8 })}
+        {disc(46, ['#BFE0FF', '#4F97F2'], [{ left: 15, top: 6, borderWidth: 2, borderColor: colors.primary }])}
         <View style={{ position: 'absolute', left: 54, top: 0, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="vote" size={12} strokeWidth={2.4} />
         </View>
@@ -40,9 +40,9 @@ function Illustration({ type }: { type: DropType }) {
     );
   return (
     <View style={{ width: 76, height: 64 }}>
-      <LinearGradient colors={['#1B3170', '#0B1330']} style={{ position: 'absolute', left: 6, top: 14, width: 50, height: 50, borderRadius: 12, opacity: 0.6, transform: [{ rotate: '-10deg' }] }} />
+      <LinearGradient colors={['#C7DEFC', '#F6FAFF']} style={{ position: 'absolute', left: 6, top: 14, width: 50, height: 50, borderRadius: 12, opacity: 0.6, transform: [{ rotate: '-10deg' }] }} />
       <View style={{ position: 'absolute', left: 20, top: 6, width: 52, height: 52, borderRadius: 12, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: colors.line }}>
-        {[['#9BE7FF', '#3B6BFF'], ['#3B6BFF', '#0E2A5A'], ['#4FD1FF', '#111B3F'], ['#0E2A5A', '#9BE7FF']].map((c, i) => <LinearGradient key={i} colors={c} style={{ width: 26, height: 26 }} />)}
+        {[['#BFE0FF', '#4F97F2'], ['#4F97F2', '#D3E6FD'], ['#7DB5F7', '#E3EDF9'], ['#D3E6FD', '#BFE0FF']].map((c, i) => <LinearGradient key={i} colors={c} style={{ width: 26, height: 26 }} />)}
       </View>
     </View>
   );

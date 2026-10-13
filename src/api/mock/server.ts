@@ -160,11 +160,11 @@ export async function mockFetch(method: string, url: string, headers: Record<str
     return ok(issue(uidOf));
   }
   if (method === 'POST' && path === '/auth/logout') { refreshTokens.delete(String(b.refreshToken)); return ok(undefined, 204); }
-  if (method === 'POST' && (mm = m(/^\/oauth2\/(kakao|naver|google)$/))) {
-    if (!b.accessToken) return err(400, 'S1', 'accessToken 누락');
+  if (method === 'POST' && (mm = m(/^\/oauth2\/(kakao|naver|google|apple)$/))) {
+    if (mm[1] === 'apple' ? !b.identityToken || !b.authorizationCode : !b.accessToken) return err(400, 'S1', mm[1] === 'apple' ? 'identityToken·authorizationCode 누락' : 'accessToken 누락');
     // 실서버: 제공자가 거절한 토큰 → U17 (목에선 'invalid'가 들어간 토큰을 거절로 흉내)
-    if (String(b.accessToken).includes('invalid')) return err(401, 'U17', '유효하지 않거나 만료된 소셜 로그인 토큰입니다.');
-    return ok({ signupRequired: true, accessToken: null, refreshToken: null, accessTokenExpiresIn: null, refreshTokenExpiresIn: null, signupToken: `mock.signup.${mm[1]}`, profile: { username: '파도타기', email: mm[1] === 'kakao' ? null : `wave@${mm[1]}.com`, profileImageUrl: null, birthDate: mm[1] === 'google' ? null : '2000-01-01', gender: mm[1] === 'google' ? null : true } });
+    if (String(mm[1] === 'apple' ? b.identityToken : b.accessToken).includes('invalid')) return err(401, 'U17', '유효하지 않거나 만료된 소셜 로그인 토큰입니다.');
+    return ok({ signupRequired: true, accessToken: null, refreshToken: null, accessTokenExpiresIn: null, refreshTokenExpiresIn: null, signupToken: `mock.signup.${mm[1]}`, profile: { username: mm[1] === 'apple' ? (b.name ? String(b.name) : null) : '파도타기', email: mm[1] === 'kakao' ? null : mm[1] === 'apple' ? 'wave@privaterelay.appleid.com' : `wave@${mm[1]}.com`, profileImageUrl: null, birthDate: mm[1] === 'google' || mm[1] === 'apple' ? null : '2000-01-01', gender: mm[1] === 'google' || mm[1] === 'apple' ? null : true } });
   }
   if (method === 'POST' && path === '/oauth2/signup') {
     if (!String(b.signupToken ?? '').startsWith('mock.signup.')) return err(401, 'U13', '유효하지 않거나 만료된 가입 토큰입니다.');

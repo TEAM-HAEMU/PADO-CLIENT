@@ -1,6 +1,6 @@
 import Geolocation from '@react-native-community/geolocation';
 import { Platform } from 'react-native';
-import { check, PERMISSIONS, request, RESULTS } from 'react-native-permissions';
+import { check, PERMISSIONS, request, requestMultiple, RESULTS } from 'react-native-permissions';
 import { create } from 'zustand';
 import { setAnalyticsLocation, track } from '@/services/analytics';
 
@@ -58,14 +58,24 @@ export const useLocation = create<LocationState>((set, get) => ({
   address: '',
   setPlace: (label, address) => set({ label, address: address.slice(0, 200) }),
   refreshPermission: async () => {
-    const r = await check(PERM);
+    // Android에서 '대략적인 위치'만 허용했으면 정밀 위치는 거부로 나오므로 대략 위치도 본다
+    const coarse = Platform.OS === 'android' ? await check(PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION) : null;
+    const r = coarse === RESULTS.GRANTED ? RESULTS.GRANTED : await check(PERM);
     const p: PermState = r === RESULTS.GRANTED || r === RESULTS.LIMITED ? 'granted' : r === RESULTS.DENIED ? 'unknown' : 'denied';
     set({ permission: p });
     return p;
   },
   requestPermission: async () => {
-    const r = await request(PERM);
-    const p: PermState = r === RESULTS.GRANTED || r === RESULTS.LIMITED ? 'granted' : 'denied';
+    const ok = (r: string) => r === RESULTS.GRANTED || r === RESULTS.LIMITED;
+    let granted: boolean;
+    if (Platform.OS === 'android') {
+      // Android 12+는 정밀·대략 위치를 함께 요청해야 '대략적인 위치'만 고를 수도 있다 (정밀만 요청하면 정책 위반 소지)
+      const rs = await requestMultiple([PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION, PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION]);
+      granted = ok(rs[PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION]) || ok(rs[PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION]);
+    } else {
+      granted = ok(await request(PERM));
+    }
+    const p: PermState = granted ? 'granted' : 'denied';
     set({ permission: p });
     return p;
   },

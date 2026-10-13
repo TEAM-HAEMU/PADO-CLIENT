@@ -2,7 +2,7 @@ import Config from 'react-native-config';
 
 /** .env 값 (react-native-config). 키가 비면 해당 기능은 안내만 하고 앱은 계속 동작한다. */
 export const env = {
-  apiBaseUrl: Config.API_BASE_URL || 'https://d3o34y31tdp6bd.cloudfront.net/api/v1',
+  apiBaseUrl: Config.API_BASE_URL || 'https://api.paado.app/api/v1',
   useMock: (Config.USE_MOCK || '').toLowerCase() === 'true',
   googleMapsKey: Config.GOOGLE_MAPS_API_KEY || '',
   kakaoAppKey: Config.KAKAO_NATIVE_APP_KEY || '',

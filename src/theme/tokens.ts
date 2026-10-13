@@ -1,21 +1,21 @@
-/** PADO · B Deep 토큰 — tailwind.config.js와 같은 값 (JS에서 직접 필요한 곳용: SVG, 그림자, 지도) */
+/** PADO · J 스카이 퓨어 토큰 (흰 바탕 + 하늘빛 블루, Figma '7 화이트 오션 시안' J) — tailwind.config.js와 같은 값 (JS에서 직접 필요한 곳용: SVG, 그림자, 지도) */
 export const colors = {
-  page: '#050916',
-  card: '#0B1330',
-  card2: '#111B3F',
-  ink: '#EAF1FF',
-  ink2: '#8D9BC4',
-  ink3: '#7482AE', // 4.5:1 이상 (배경 #050916 대비) — 보조 텍스트도 읽히게
-  line: '#19234D',
-  deep: '#02050F',
-  primary: '#4FD1FF',
-  primarySoft: '#0E2A4A',
-  onPrimary: '#03101F',
-  accent: '#3B6BFF',
-  accent2: '#9BE7FF',
-  positive: '#34D399',
-  warning: '#FBBF24',
-  caution: '#FB923C',
+  page: '#FFFFFF',
+  card: '#F6FAFF',
+  card2: '#EDF4FE',
+  ink: '#1B2B4F',
+  ink2: '#56688A',
+  ink3: '#647493', // 4.5:1 이상 (흰 배경 대비) — 보조 텍스트도 읽히게
+  line: '#E3EDF9',
+  deep: '#EDF4FE',
+  primary: '#4F97F2',
+  primarySoft: '#E8F2FE',
+  onPrimary: '#FFFFFF',
+  accent: '#3A63B8',
+  accent2: '#A9D1FB',
+  positive: '#12A37A',
+  warning: '#C58A12',
+  caution: '#E2683A',
   kakao: '#FEE500',
 } as const;
 
@@ -30,19 +30,19 @@ export const fonts = {
   note: 'GowunBatang-Regular',
 } as const;
 
-/** 시안 글로우 (iOS shadow; Android는 elevation 대체) */
+/** 하늘빛 글로우 — 흰 바탕에선 은은하게 (iOS shadow; Android는 elevation 대체) */
 export const glow = (opacity = 0.5, radius = 16) => ({
   shadowColor: colors.primary,
-  shadowOpacity: opacity,
+  shadowOpacity: opacity * 0.45,
   shadowRadius: radius,
-  shadowOffset: { width: 0, height: 0 },
-  elevation: 8,
+  shadowOffset: { width: 0, height: 4 },
+  elevation: 4,
 });
 
 export const dropShadow = {
-  shadowColor: '#000',
-  shadowOpacity: 0.5,
+  shadowColor: colors.ink,
+  shadowOpacity: 0.12,
   shadowRadius: 24,
-  shadowOffset: { width: 0, height: 12 },
-  elevation: 12,
+  shadowOffset: { width: 0, height: 10 },
+  elevation: 6,
 };

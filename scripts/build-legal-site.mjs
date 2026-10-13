@@ -92,9 +92,31 @@ for (const p of PAGES) {
   const title = p.title ?? doc.title;
   fs.writeFileSync(path.join(out, p.file), layout(title, `<h1>${esc(title)}</h1>\n<p class="meta">시행일 ${doc.version}</p>\n${render(doc.body)}`, p.file));
 }
+// Google Play 계정 삭제 요구사항 — 앱을 지운 사람도 웹에서 삭제를 요청할 수 있는 페이지
+const deleteBody = `<h1>PADO 계정 삭제 요청</h1>
+<p class="meta">PADO(파도) 계정과 관련 데이터를 삭제하는 방법이에요.</p>
+<h2>앱에서 바로 삭제</h2>
+<ul>
+<li>PADO 앱 › 프로필 › 설정(톱니바퀴) › 회원 탈퇴 › '탈퇴하기'</li>
+<li>모든 기기에서 로그아웃되고, 90일 안에 다시 로그인하면 계정을 복구할 수 있어요.</li>
+</ul>
+<h2>앱 없이 요청</h2>
+<p>앱을 지웠거나 로그인할 수 없다면, 가입한 이메일 주소에서 <b>${esc(OPERATOR.email)}</b>로 '계정 삭제 요청'과 PADO 닉네임을 보내 주세요. 본인 확인 후 7일 안에 처리하고 결과를 메일로 알려 드려요.</p>
+<h2>삭제되는 정보</h2>
+<ul>
+<li>탈퇴 90일 뒤: 이메일, 비밀번호, 생년월일, 성별, 소셜 로그인 식별값, 프로필 사진, 플레이리스트, 알림, 차단 목록</li>
+<li>이용 분석 기록(Amplitude, 분석에 동의한 경우에만 수집): 탈퇴하면 앱에서 분석 연결을 끊고, 이미 보낸 기록은 수집일로부터 1년 뒤 자동 삭제. 바로 삭제를 원하면 아래 이메일로 요청하면 처리합니다.</li>
+</ul>
+<h2>남는 정보</h2>
+<ul>
+<li>남긴 드랍·댓글·좋아요는 작성자를 알 수 없도록 '탈퇴한 사용자'로 표시되어 남아요.</li>
+<li>관련 법령에 따라 보관해야 하는 정보: 서비스 접속 기록 3개월(통신비밀보호법), 위치정보 이용·제공사실 확인자료 6개월(위치정보법)</li>
+</ul>`;
+fs.writeFileSync(path.join(out, 'delete-account.html'), layout('계정 삭제 요청', deleteBody, 'delete-account.html'));
+
 fs.writeFileSync(path.join(out, 'index.html'), layout('PADO', `<h1>PADO(파도)</h1>
 <p>거리에 음악을 흘려두고, 누군가의 하루에 닿게.</p>
 <p>PADO는 지금 있는 곳에 좋아하는 음악을 남기고, 주변에 남겨진 음악을 발견하는 위치 기반 음악 공유 앱입니다.</p>
-<div class="links">${PAGES.map(p => `<a href="${p.file}">${p.nav}</a>`).join('')}</div>`, 'index.html'));
+<div class="links">${PAGES.map(p => `<a href="${p.file}">${p.nav}</a>`).join('')}<a href="delete-account.html">계정 삭제 요청</a></div>`, 'index.html'));
 fs.writeFileSync(path.join(out, '.nojekyll'), '');
-console.log(`[legal-site] ${PAGES.length + 1}개 페이지 → ${path.relative(root, out)}/`);
+console.log(`[legal-site] ${PAGES.length + 2}개 페이지 → ${path.relative(root, out)}/`);

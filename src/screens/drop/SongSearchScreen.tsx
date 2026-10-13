@@ -73,7 +73,7 @@ export default function SongSearchScreen({ navigation }: RootScreen<'SongSearch'
         />
       )}
       {picked ? (
-        <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 16, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 8, paddingLeft: 10, borderRadius: 28, backgroundColor: 'rgba(11,19,48,0.95)', borderWidth: 1, borderColor: colors.line }}>
+        <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 16, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 8, paddingLeft: 10, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.97)', borderWidth: 1, borderColor: colors.line }}>
           <View style={{ borderRadius: 22, borderWidth: 2, borderColor: colors.primary }}><Art uri={picked.albumImagePath} size={40} round /></View>
           <View style={{ flex: 1 }}>
             <T v="bodyStrong" numberOfLines={1}>{picked.title}</T>

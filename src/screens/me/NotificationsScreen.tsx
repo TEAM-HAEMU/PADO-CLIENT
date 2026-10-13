@@ -58,7 +58,7 @@ export default function NotificationsScreen() {
             const m = META[n.eventName] ?? META['dropping-created'];
             const unread = !n.readAt;
             return (
-              <Press onPress={() => open(n)} style={{ flexDirection: 'row', gap: 12, padding: 14, borderRadius: 18, backgroundColor: unread ? 'rgba(14,42,74,0.45)' : 'transparent', borderWidth: unread ? 1 : 0, borderColor: 'rgba(79,209,255,0.18)' }}>
+              <Press onPress={() => open(n)} style={{ flexDirection: 'row', gap: 12, padding: 14, borderRadius: 18, backgroundColor: unread ? 'rgba(79,151,242,0.08)' : 'transparent', borderWidth: unread ? 1 : 0, borderColor: 'rgba(79,209,255,0.18)' }}>
                 {unread ? <View style={[{ position: 'absolute', left: 5, top: 32, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }, glow(0.8, 6)]} /> : null}
                 <View>
                   <Avatar name={m.who(n.data)} size={44} />

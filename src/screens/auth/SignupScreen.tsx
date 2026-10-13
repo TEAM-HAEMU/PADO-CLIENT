@@ -9,11 +9,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import type { AgreementType, Agreements, Term } from '@/api/types';
-import { Field, formatBirth, GenderSelect, validBirth } from '@/components/ui/Field';
+import { Field, formatBirth, GenderSelect, ListenAppSelect, validBirth } from '@/components/ui/Field';
 import { Icon, IconButton, Press, PrimaryButton, T } from '@/components/ui';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
-import { getProviderToken } from '@/services/socialAuth';
+import { type ServiceId, usePrefs } from '@/store/prefs';
+import { getProviderCredential } from '@/services/socialAuth';
 import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
 
@@ -37,6 +38,8 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
   const [username, setUsername] = useState((social?.profile?.username ?? '').slice(0, 15));
   const [birth, setBirth] = useState(social?.profile?.birthDate ?? '');
   const [gender, setGender] = useState<boolean | null>(social?.profile?.gender ?? null);
+  // 전체 듣기 앱 — 기기에 이미 고른 앱이 있으면 그대로 보여줌. 가입 성공 후 저장
+  const [listenApp, setListenApp] = useState<ServiceId | null>(() => usePrefs.getState().service);
   const [agreed, setAgreed] = useState<Partial<Record<AgreementType, boolean>>>({});
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [busy, setBusy] = useState(false);
@@ -55,6 +58,11 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
     return Object.values(e).every(v => !v);
   };
 
+  /** 가입이 끝나면 고른 듣는 앱을 기본 재생 앱으로 (안 고르면 처음 전체 듣기 때 묻는 기존 흐름 그대로) */
+  const saveListenApp = () => {
+    if (listenApp && listenApp !== usePrefs.getState().service) usePrefs.getState().setService(listenApp);
+  };
+
   const submit = async () => {
     if (!validate()) return;
     if (!requiredOk) return toast('필수 약관에 동의해주세요.', 'error');
@@ -63,9 +71,11 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
     try {
       if (social) {
         const pair = await authApi.socialSignup({ signupToken: social.signupToken, username: username.trim(), ...(providerEmail ? {} : { email: email.trim() }), birthDate: birth, gender: gender!, agreements });
+        saveListenApp();
         await signIn(pair, { method: social.provider.toLowerCase(), signup: true });
       } else {
         await authApi.register({ username: username.trim(), password, email: email.trim(), birthDate: birth, gender: gender!, agreements });
+        saveListenApp();
         try {
           await signIn(await authApi.login(email.trim(), password), { method: 'email', signup: true });
         } catch {
@@ -79,7 +89,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
       if (code === 'U15' && social) {
         // 이미 가입된 계정 — 명세대로 소셜 로그인을 다시 호출하면 기존 회원으로 로그인된다
         try {
-          const r = await authApi.social(social.provider, await getProviderToken(social.provider));
+          const r = await authApi.social(social.provider, await getProviderCredential(social.provider));
           if (!r.signupRequired && r.accessToken && r.refreshToken) {
             await signIn({ accessToken: r.accessToken, refreshToken: r.refreshToken, accessTokenExpiresIn: r.accessTokenExpiresIn ?? 0, refreshTokenExpiresIn: r.refreshTokenExpiresIn ?? 0 }, { method: social.provider.toLowerCase() });
             return;
@@ -113,6 +123,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
         <Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={errors.birth} />
         <GenderSelect value={gender} onChange={setGender} />
         {errors.gender ? <T v="micro" c="caution">{errors.gender}</T> : null}
+        <ListenAppSelect value={listenApp} onChange={setListenApp} />
 
         <View style={{ marginTop: 8, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, overflow: 'hidden' }}>
           <Press onPress={() => setAgreed(allOn ? {} : Object.fromEntries(terms.map(t => [t.type, true])))} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderBottomWidth: 1, borderBottomColor: colors.line }}>

@@ -44,11 +44,32 @@ import SettingsScreen from '@/screens/me/SettingsScreen';
 import BlockedUsersScreen from '@/screens/me/BlockedUsersScreen';
 import ConfirmWithdrawScreen from '@/screens/me/ConfirmWithdrawScreen';
 import ReportScreen from '@/screens/me/ReportScreen';
+import { dialog } from '@/components/ui/Dialog';
+import { analyticsEnabled } from '@/services/analytics';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
+/** 첫 진입 시 이용 데이터 분석 동의를 한 번 묻는다 (선택 동의 — 분석 키가 없는 빌드·목 모드에선 묻지 않음) */
+function useAnalyticsConsentPrompt() {
+  useEffect(() => {
+    if (usePrefs.getState().analyticsAsked || !analyticsEnabled()) return;
+    const id = setTimeout(() => {
+      dialog.alert(
+        '이용 데이터 분석에 동의할까요?',
+        'PADO를 더 좋게 만들기 위해 본 화면·누른 버튼 같은 사용 기록, 화면 사용 흐름(입력한 내용은 가림), 앱 사용 중 위치를 Amplitude(미국)로 보내 분석해요.\n동의하지 않아도 모든 기능을 쓸 수 있고, 설정에서 언제든 바꿀 수 있어요.',
+        [
+          { text: '동의 안 함', style: 'cancel', onPress: () => usePrefs.getState().setAnalytics(false) },
+          { text: '동의', onPress: () => usePrefs.getState().setAnalytics(true) },
+        ],
+      );
+    }, 1200);
+    return () => clearTimeout(id);
+  }, []);
+}
+
 function Tabs() {
+  useAnalyticsConsentPrompt();
   return (
     <Tab.Navigator tabBar={props => <Dock {...props} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.page } }}>
       <Tab.Screen name="Map" component={MapHomeScreen} />
