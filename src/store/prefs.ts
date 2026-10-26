@@ -50,7 +50,7 @@ export const usePrefs = create<Prefs>((set, get) => {
     autoplayNearby: saved.autoplayNearby ?? true,
     notify: saved.notify ?? { like: true, comment: true, nearby: false },
     locationPrompted: saved.locationPrompted ?? false,
-    // 예전 버전은 기본 켜짐이었음 → 직접 고른 적이 없으면(analyticsAsked 없음) 꺼진 것으로 보고 다시 묻는다
+    // 예전 버전은 기본 켜짐이었음 → 직접 고른 적이 없으면(analyticsAsked 없음) 꺼진 것으로 본다 (설정에서 직접 켜야 수집)
     analytics: saved.analyticsAsked ? saved.analytics ?? false : false,
     analyticsAsked: saved.analyticsAsked ?? false,
     setService: (service, remember = true) => { set({ service: remember ? service : get().service, rememberService: remember }); persist(); changed('service', service); },

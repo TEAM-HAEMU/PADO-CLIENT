@@ -5,7 +5,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ripples } from '@/components/anim';
 import { DropPin, MeMarker } from '@/components/map/DropPin';
-import { Press, PrimaryButton, T } from '@/components/ui';
+import { PrimaryButton, T } from '@/components/ui';
 import type { RootScreen } from '@/navigation/types';
 import { useLocation } from '@/services/location';
 import { usePrefs } from '@/store/prefs';
@@ -43,10 +43,8 @@ export default function LocationPermissionScreen({ navigation }: RootScreen<'Loc
           <T v="titleLarge">{'지금 있는 곳의 음악을\n들으려면 위치가 필요해요'}</T>
           <T v="body" c="ink2">내 주변 1km에 남겨진 음악을 찾고, 지금 선 자리에 곡을 남길 때만 위치를 사용해요.</T>
         </View>
-        <View style={{ gap: 12, alignItems: 'center' }}>
-          <PrimaryButton label="위치 허용하기" icon="locate" style={{ alignSelf: 'stretch' }} onPress={allow} />
-          <Press onPress={finish} hitSlop={10}><T v="captionStrong" c="ink3">나중에 할게요</T></Press>
-        </View>
+        {/* 안내 다음엔 항상 시스템 권한 창으로 — 허용 유도 문구·건너뛰기 버튼 금지 (App Store 5.1.1(iv)) */}
+        <PrimaryButton label="계속" style={{ alignSelf: 'stretch' }} onPress={allow} />
       </View>
     </View>
   );

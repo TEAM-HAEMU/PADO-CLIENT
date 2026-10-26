@@ -7,11 +7,12 @@ import type {
   AppNotification, BlockedUser, Comment, DropSummary, MusicDropSummary, PlaylistDropSummary, Song, UUID, VoteDropSummary,
 } from '../types';
 import { env } from '@/config';
+import { MOCK_COVERS } from './covers';
 import { HOME, seedSongs, songByTitle, uid } from './data';
 import type { RawResponse } from '../client';
 
 type Json = Record<string, unknown>;
-interface User { id: UUID; username: string; email: string; password: string; profileImageUrl: string | null; gender: boolean; birth: string }
+interface User { id: UUID; username: string; email: string; password: string; profileImageUrl: string | null; gender: boolean | null; birth: string }
 
 const ME: User = { id: '0199a5e0-1111-7abc-8def-000000000001', username: '정현', email: 'hello@pado.fm', password: 'pado1234', profileImageUrl: null, gender: true, birth: '2000-01-01' };
 const others = ['하윤', '도윤', '서아', '민재', '지우'].map((n, i) => ({ id: `0199a5e0-1111-7abc-8def-00000000001${i}`, username: n }));
@@ -102,6 +103,8 @@ const haversine = (a: { latitude: number; longitude: number }, b: { latitude: nu
 declare const process: { env?: Record<string, string | undefined> } | undefined;
 const USE_REMOTE_SONGS = !(typeof process !== 'undefined' && process?.env?.JEST_WORKER_ID);
 const remoteSongs = new Map<UUID, Song>();
+/** 실서버 곡의 실제 앨범 아트는 가상 커버로 바꾼다 — 목 모드 화면이 스토어 스크린샷이 되기 때문 (App Store 5.2.1) */
+const withMockArt = (x: Song): Song => ({ ...x, albumImagePath: MOCK_COVERS[[...x.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % MOCK_COVERS.length] });
 const song = (id: UUID) => seedSongs.find(s => s.id === id) ?? remoteSongs.get(id);
 async function remote(path: string): Promise<RawResponse | null> {
   if (!USE_REMOTE_SONGS) return null;
@@ -150,7 +153,7 @@ export async function mockFetch(method: string, url: string, headers: Record<str
     if (String(b.password ?? '').length < 8 || String(b.password).length > 20) return err(400, 'S1', '비밀번호는 최소 8자 이상, 최대 20자 이하여야 합니다.');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(b.email ?? ''))) return err(400, 'S1', '이메일 형식이 올바르지 않습니다.');
     if (!ag.SERVICE || !ag.PRIVACY || !ag.LOCATION) return err(400, 'U20', '필수 약관 미동의');
-    users.push({ id: uid(), username: String(b.username), email: String(b.email), password: String(b.password), profileImageUrl: null, gender: !!b.gender, birth: String(b.birthDate) });
+    users.push({ id: uid(), username: String(b.username), email: String(b.email), password: String(b.password), profileImageUrl: null, gender: b.gender == null ? null : !!b.gender, birth: String(b.birthDate) });
     return ok(undefined, 201);
   }
   if (method === 'POST' && path === '/auth/refresh') {
@@ -168,7 +171,7 @@ export async function mockFetch(method: string, url: string, headers: Record<str
   }
   if (method === 'POST' && path === '/oauth2/signup') {
     if (!String(b.signupToken ?? '').startsWith('mock.signup.')) return err(401, 'U13', '유효하지 않거나 만료된 가입 토큰입니다.');
-    const user: User = { id: uid(), username: String(b.username), email: String(b.email ?? 'social@pado.fm'), password: '', profileImageUrl: null, gender: !!b.gender, birth: String(b.birthDate) };
+    const user: User = { id: uid(), username: String(b.username), email: String(b.email ?? 'social@pado.fm'), password: '', profileImageUrl: null, gender: b.gender == null ? null : !!b.gender, birth: String(b.birthDate) };
     users.push(user);
     return ok(issue(user.id), 201);
   }
@@ -204,8 +207,11 @@ export async function mockFetch(method: string, url: string, headers: Record<str
     if (!query) return err(400, 'S1', 'query는 필수');
     const r = await remote(`/songs/search?query=${encodeURIComponent(q.query ?? '')}&limit=${Number(q.limit ?? 10)}`);
     if (r && r.status === 200) {
-      try { (JSON.parse(r.text).songs as Song[]).forEach(x => remoteSongs.set(x.id, x)); } catch {}
-      return r;
+      try {
+        const songs = (JSON.parse(r.text).songs as Song[]).map(withMockArt);
+        songs.forEach(x => remoteSongs.set(x.id, x));
+        return ok({ songs });
+      } catch {}
     }
     const list = seedSongs.filter(s => `${s.title} ${s.artist}`.toLowerCase().includes(query));
     return ok({ songs: list.slice(0, Number(q.limit ?? 10)) });
@@ -214,7 +220,7 @@ export async function mockFetch(method: string, url: string, headers: Record<str
     const s = song(mm[1]);
     if (s) return ok(s);
     const r = await remote(`/songs/${mm[1]}`);
-    if (r && r.status === 200) { try { const x = JSON.parse(r.text) as Song; remoteSongs.set(x.id, x); } catch {} return r; }
+    if (r && r.status === 200) { try { const x = withMockArt(JSON.parse(r.text) as Song); remoteSongs.set(x.id, x); return ok(x); } catch {} }
     return err(404, 'D3', '노래 없음');
   }
 

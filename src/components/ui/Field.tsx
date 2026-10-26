@@ -45,12 +45,14 @@ export function Field({ label, help, error, secure, right, disabled, style, ...r
 }
 
 /** 여성/남성 세그먼트 (명세: gender true=남성, false=여성) */
-export function GenderSelect({ value, onChange }: { value: boolean | null; onChange: (v: boolean) => void }) {
+/** optional이면 '선택 안 함'(null)도 고를 수 있다 — 가입 시 성별은 필수가 아님 (App Store 5.1.1(v)) */
+export function GenderSelect({ value, onChange, optional }: { value: boolean | null; onChange: (v: boolean | null) => void; optional?: boolean }) {
+  const options: (readonly [string, boolean | null])[] = optional ? [['여성', false], ['남성', true], ['선택 안 함', null]] : [['여성', false], ['남성', true]];
   return (
     <View style={{ gap: 6 }}>
-      <T v="captionStrong" c="ink2">성별</T>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {([['여성', false], ['남성', true]] as const).map(([label, v]) => {
+      <T v="captionStrong" c="ink2">성별{optional ? <T v="caption" c="ink3"> (선택)</T> : null}</T>
+      <View style={{ flexDirection: 'row', gap: 8 }} accessibilityRole="radiogroup">
+        {options.map(([label, v]) => {
           const on = value === v;
           return (
             <Press key={label} onPress={() => onChange(v)} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={label} style={{ flex: 1, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? colors.primarySoft : colors.card, borderWidth: on ? 1.5 : 1, borderColor: on ? colors.primary : colors.line }}>

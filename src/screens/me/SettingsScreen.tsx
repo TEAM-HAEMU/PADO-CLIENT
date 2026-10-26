@@ -1,6 +1,6 @@
 /** 5.4 설정 — 프로필 카드 · 재생 앱 · 거리 표시 · 알림 · 마케팅 동의 · 차단 · 계정 */
 import React from 'react';
-import { ScrollView, View } from 'react-native';
+import { Linking, ScrollView, View } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { errorMessage } from '@/api/errors';
 import { ServiceGlyph } from '@/components/ui/Brand';
 import { Avatar, Icon, type IconName, IconButton, Press, T, Toggle } from '@/components/ui';
 import { env } from '@/config';
+import { OPERATOR } from '@/content/terms';
 import { useAgreements, useMe } from '@/hooks/api';
 import type { UserAgreement } from '@/api/types';
 import type { RootScreen } from '@/navigation/types';
@@ -73,6 +74,12 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
       qc.invalidateQueries({ queryKey: ['agreements'] }); toast(v ? '마케팅 정보 수신에 동의했어요.' : '마케팅 정보 수신을 철회했어요.'); }
     catch (e) { toast(errorMessage(e), 'error'); }
     finally { setMarketingOverride(null); setMarketingBusy(false); }
+  };
+
+  // 메일 앱이 없으면(시뮬레이터 등) 주소를 안내
+  const contact = () => {
+    Linking.openURL(`mailto:${OPERATOR.email}?subject=${encodeURIComponent('[PADO 문의]')}`)
+      .catch(() => dialog.alert('문의하기', `${OPERATOR.email}로 메일을 보내주세요.`));
   };
 
   return (
@@ -148,7 +155,8 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
         <Group title="약관 및 정보">
           <Row icon="link" tone={colors.ink2} title="서비스 이용약관" onPress={() => navigation.navigate('TermsView', { type: 'SERVICE' })} right={<Icon name="chevronRight" size={16} color={colors.ink3} />} />
           <Row icon="link" tone={colors.ink2} title="개인정보 처리방침" onPress={() => navigation.navigate('TermsView', { type: 'PRIVACY' })} right={<Icon name="chevronRight" size={16} color={colors.ink3} />} />
-          <Row icon="link" tone={colors.ink2} title="위치기반서비스 이용약관" last onPress={() => navigation.navigate('TermsView', { type: 'LOCATION' })} right={<Icon name="chevronRight" size={16} color={colors.ink3} />} />
+          <Row icon="link" tone={colors.ink2} title="위치기반서비스 이용약관" onPress={() => navigation.navigate('TermsView', { type: 'LOCATION' })} right={<Icon name="chevronRight" size={16} color={colors.ink3} />} />
+          <Row icon="mail" tone={colors.ink2} title="문의하기" sub={OPERATOR.email} last onPress={contact} right={<Icon name="chevronRight" size={16} color={colors.ink3} />} />
         </Group>
 
         <Group title="계정">
@@ -158,6 +166,7 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
 
         <View style={{ alignItems: 'center', gap: 6, paddingTop: 4 }}>
           <T v="micro" c="ink3">PADO {APP_VERSION}{env.useMock ? ' · 목 서버' : ''}</T>
+          <T v="micro" c="ink3">{OPERATOR.company} · 대표 {OPERATOR.representative} · 사업자등록번호 {OPERATOR.bizNo}</T>
           <T v="micro" c="ink3">지도 © Google · 곡 정보·앨범 아트 © Spotify · 미리듣기 © Apple</T>
         </View>
       </ScrollView>

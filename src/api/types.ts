@@ -22,7 +22,7 @@ export interface RegisterBody {
   password: string;
   email: string;
   birthDate: string; // yyyy-MM-dd
-  gender: boolean; // true=남성, false=여성
+  gender?: boolean; // true=남성, false=여성 — 선택 항목
   agreements: Agreements;
 }
 
@@ -57,7 +57,7 @@ export interface SocialSignupBody {
   username: string;
   email?: string;
   birthDate: string;
-  gender: boolean;
+  gender?: boolean;
   agreements: Agreements;
 }
 

@@ -53,7 +53,6 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
     if (!social) e.password = password.length >= 8 && password.length <= 20 ? null : '비밀번호는 8~20자예요.';
     e.username = username.trim().length >= 1 && username.trim().length <= 15 ? null : '닉네임은 1~15자예요.';
     e.birth = validBirth(birth);
-    e.gender = gender === null ? '성별을 선택해주세요.' : null;
     setErrors(e);
     return Object.values(e).every(v => !v);
   };
@@ -67,14 +66,16 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
     if (!validate()) return;
     if (!requiredOk) return toast('필수 약관에 동의해주세요.', 'error');
     const agreements = Object.fromEntries(terms.map(t => [t.type, !!agreed[t.type]])) as Agreements;
+    // 성별은 선택 — 고르지 않으면 보내지 않는다
+    const genderField = gender === null ? {} : { gender };
     setBusy(true);
     try {
       if (social) {
-        const pair = await authApi.socialSignup({ signupToken: social.signupToken, username: username.trim(), ...(providerEmail ? {} : { email: email.trim() }), birthDate: birth, gender: gender!, agreements });
+        const pair = await authApi.socialSignup({ signupToken: social.signupToken, username: username.trim(), ...(providerEmail ? {} : { email: email.trim() }), birthDate: birth, ...genderField, agreements });
         saveListenApp();
         await signIn(pair, { method: social.provider.toLowerCase(), signup: true });
       } else {
-        await authApi.register({ username: username.trim(), password, email: email.trim(), birthDate: birth, gender: gender!, agreements });
+        await authApi.register({ username: username.trim(), password, email: email.trim(), birthDate: birth, ...genderField, agreements });
         saveListenApp();
         try {
           await signIn(await authApi.login(email.trim(), password), { method: 'email', signup: true });
@@ -121,8 +122,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
         {!social && <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="8~20자" error={errors.password} />}
         <Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} placeholder="지도에 표시될 이름" help="지도에 표시될 이름이에요 (최대 15자)" error={errors.username} right={<T v="number" c="ink3">{username.length}/15</T>} />
         <Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={errors.birth} />
-        <GenderSelect value={gender} onChange={setGender} />
-        {errors.gender ? <T v="micro" c="caution">{errors.gender}</T> : null}
+        <GenderSelect optional value={gender} onChange={setGender} />
         <ListenAppSelect value={listenApp} onChange={setListenApp} />
 
         <View style={{ marginTop: 8, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, overflow: 'hidden' }}>

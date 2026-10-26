@@ -89,7 +89,7 @@ export default function ProfileEditScreen({ navigation }: RootScreen<'ProfileEdi
         </Press>
         <Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} help="지도와 드랍에 표시되는 이름이에요" error={err.username} right={<T v="number" c="ink3">{username.length}/15</T>} />
         <Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={err.birth} />
-        <GenderSelect value={gender} onChange={setGender} />
+        <GenderSelect value={gender} onChange={v => { if (v !== null) setGender(v); }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

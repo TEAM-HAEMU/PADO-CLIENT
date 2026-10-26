@@ -79,12 +79,45 @@ final class DemoTourUITests: XCTestCase {
     saveShot("apple_signup")
   }
 
+  /// 심사 대응 확인: 성별 없이 가입 → 위치 안내는 '계속' 하나만 → 누르면 iOS 권한 창 (앱을 지우고 위치 권한을 초기화한 뒤 실행)
+  func testSignupWithoutGenderThenLocation() {
+    app.launch()
+    pause(3)
+    let apple = any("Apple로 계속하기")
+    XCTAssertTrue(apple.waitForExistence(timeout: 8), "로그아웃 상태가 아님 (앱을 지우고 실행)")
+    apple.tap(); pause(2.5)
+    XCTAssertTrue(containing("거의 다 됐어요").waitForExistence(timeout: 8), "가입 화면으로 넘어가지 않음")
+    XCTAssertTrue(containing("선택 안 함").exists, "성별 '선택 안 함'이 없음")
+    let birth = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "YYYY-MM-DD")).firstMatch
+    XCTAssertTrue(birth.waitForExistence(timeout: 4), "생년월일 칸이 없음")
+    birth.tap(); birth.typeText("20000101"); pause(0.5)
+    saveShot("signup_no_gender")
+    app.swipeUp(); pause(0.8)
+    XCTAssertTrue(tap(containing("전체 동의"), timeout: 4), "전체 동의가 없음"); pause(0.5)
+    XCTAssertTrue(tap(any("가입하고 시작하기"), timeout: 4), "가입 버튼이 없음"); pause(3)
+    // 위치 안내 — 허용 유도 문구·건너뛰기 없이 '계속' 하나
+    let cont = any("계속")
+    XCTAssertTrue(cont.waitForExistence(timeout: 8), "위치 안내 화면이 안 뜸 (성별 없이 가입 실패?)")
+    XCTAssertFalse(any("나중에 할게요").exists, "건너뛰기 버튼이 남아 있음")
+    XCTAssertFalse(any("위치 허용하기").exists, "허용 유도 문구가 남아 있음")
+    saveShot("location_continue")
+    cont.tap(); pause(2)
+    // iOS 시스템 권한 창이 떠야 한다
+    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+    let allow = springboard.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS %@", "While Using", "사용하는 동안")).firstMatch
+    XCTAssertTrue(allow.waitForExistence(timeout: 6), "시스템 위치 권한 창이 안 뜸")
+    saveShot("location_system_alert")
+    allow.tap(); pause(4)
+    XCTAssertTrue(dockTab("지도").waitForExistence(timeout: 10), "지도로 넘어가지 않음")
+    saveShot("map_after_location")
+  }
+
   /// 드랍 ⋯ 메뉴 → 차단하기 → 확인 → 차단됨 (목 모드)
   func testBlockFromDropMenu() {
     app.launch()
     pause(3)
     if tap(any("이메일로 계속하기"), timeout: 4) { pause(1); tap(any("로그인")); pause(2.5) }
-    if any("위치 허용하기").waitForExistence(timeout: 3) { tap(any("위치 허용하기")); pause(2) }
+    if any("계속").waitForExistence(timeout: 3) { tap(any("계속")); pause(2) }
     pause(5)
     // 다른 사람(하윤)의 드랍 — '파도'는 목 계정 본인 드랍이라 삭제 메뉴가 뜸
     let pin = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "난춘")).firstMatch
@@ -140,8 +173,8 @@ final class DemoTourUITests: XCTestCase {
       tap(any("로그인"))
       pause(2.5)
     }
-    if any("위치 허용하기").waitForExistence(timeout: 3) {
-      tap(any("위치 허용하기"))
+    if any("계속").waitForExistence(timeout: 3) {
+      tap(any("계속"))
       pause(2)
     }
 
@@ -246,7 +279,7 @@ final class DemoTourUITests: XCTestCase {
     pause(2)
     tap(any("이메일로 계속하기")); pause(1.5)
     tap(any("로그인")); pause(2.5)
-    if any("위치 허용하기").waitForExistence(timeout: 3) { tap(any("위치 허용하기")); pause(2) }
+    if any("계속").waitForExistence(timeout: 3) { tap(any("계속")); pause(2) }
 
     // 2) 지도 홈 — 주변 드랍 · 주변 곡 자동 재생
     XCTAssertTrue(containing("가까운 드랍").waitForExistence(timeout: 10), "지도 홈이 안 보임")
@@ -385,7 +418,7 @@ final class DemoTourUITests: XCTestCase {
       tap(any("계정 만들기")); pause(1)   // 키보드 내리기 — 비밀번호 칸·가입 버튼이 보이게
       XCTAssertTrue(containing("가까운 드랍").waitForExistence(timeout: TimeInterval(env["PADO_SIGNUP_WAIT_SEC"] ?? "") ?? 900), "가입(로그인)이 완료되지 않음")
     }
-    if any("위치 허용하기").waitForExistence(timeout: 3) { tap(any("위치 허용하기")); pause(2) }
+    if any("계속").waitForExistence(timeout: 3) { tap(any("계속")); pause(2) }
     pause(4)
 
     // 1) 음악 드랍 만들기 — 실서버 곡 검색
@@ -454,7 +487,7 @@ final class DemoTourUITests: XCTestCase {
     app.launch()
     pause(3)
     if tap(any("이메일로 계속하기"), timeout: 4) { pause(1); tap(any("로그인")); pause(2.5) }
-    if any("위치 허용하기").waitForExistence(timeout: 2) { tap(any("위치 허용하기")); pause(2) }
+    if any("계속").waitForExistence(timeout: 2) { tap(any("계속")); pause(2) }
     func shot(_ name: String) {
       let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
       a.name = name; a.lifetime = .keepAlways; add(a)
@@ -559,7 +592,7 @@ final class DemoTourUITests: XCTestCase {
     tap(containing("계정 만들기")); pause(2); shot("signup")
     back()
     tap(any("로그인")); pause(2.5)
-    if any("위치 허용하기").waitForExistence(timeout: 2) { shot("locationPermission"); tap(any("위치 허용하기")); pause(2) }
+    if any("계속").waitForExistence(timeout: 2) { shot("locationPermission"); tap(any("계속")); pause(2) }
     // 2 지도·재생
     pause(6); shot("map")
     tap(containing("난춘")); pause(4); shot("pinPreview")
