@@ -1,0 +1,12 @@
+Hello App Review Team,
+
+Thank you for the review. Regarding Guideline 5.2.3, could you tell us which specific feature or screen you found to be in violation? Here is exactly how music works in PADO, so that we can fix the right part:
+
+1. Song search: When a user picks a song to share, our server looks it up through the official Spotify Web API, under its developer terms. We receive only metadata: title, artist, album artwork URL and the song's public link. Artwork is displayed as provided by Spotify.
+2. 30-second previews: played from Apple's public iTunes Search API, labeled "미리듣기 제공 · Apple Music" with a link to the song on Apple Music. We do not store or re-host any audio.
+3. "Full listen": only opens the song in the user's own music app (Spotify, Apple Music or YouTube Music) through that service's public link. We do not stream their content inside our app.
+4. User content: users share a song's title, artist and a short note at a location. No audio is uploaded.
+
+If the concern is our use of Spotify catalog data or artwork, please let us know what documentation you need, or whether moving search and artwork to Apple Music's catalog would resolve it.
+
+Thank you.

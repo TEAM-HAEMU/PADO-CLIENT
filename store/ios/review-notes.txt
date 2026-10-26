@@ -1,0 +1,32 @@
+CHANGES SINCE THE PREVIOUS REVIEW (build 1.0 (2))
+- 5.1.1(v): Gender is now optional at sign-up ("선택 안 함" / not selected is the default) and is not required to use the app.
+- 5.1.1(iv): The location pre-permission screen now has a single neutral "계속" (Continue) button that always opens the iOS permission dialog. The "나중에 할게요" (skip) button was removed.
+- 5.1.2(i): The app does not track users. The custom analytics consent prompt was removed entirely; first-party usage analytics is off by default and can only be turned on manually in Settings. No ATT prompt is needed because no tracking occurs.
+- 5.2.1: All screenshots were replaced. Album artwork shown in them is original abstract artwork we created; no third-party album covers appear.
+- 5.2.3: Please see our reply in App Store Connect. In short: song search uses the official Spotify Web API (metadata and artwork only), 30-second previews come from Apple's public iTunes Search API with "Apple Music" attribution, we do not store or stream any audio, and "full listen" only opens the user's own music app via its public link.
+
+Thank you for reviewing PADO (파도).
+
+LOGIN
+- The fastest way in is "Sign in with Apple" on the first screen (Kakao, Google and email sign-up are also available). After first login you will see a short sign-up form (nickname, date of birth, and optional gender / preferred listening app) and the terms consent screen.
+
+WHAT THE APP DOES
+- Users leave ("drop") a song at their current location; nearby users discover these drops as pins on the map and can play a 30-second preview.
+- Previews are provided by the Apple iTunes Search API (attribution shown as "미리듣기 제공 · Apple Music"). "전체 듣기" (full listen) opens the song in the user's chosen app (Spotify / Apple Music / YouTube Music) via deep link. We do not host or stream full tracks.
+
+LOCATION
+- The pre-permission screen now has a single "계속" (Continue) button that always proceeds to the system location permission dialog; there is no skip option.
+- Location (When In Use) is required to show nearby drops and to place a drop. Drops are shown within a limited radius, so the map may look empty near Cupertino. To test, tap the drop (+) button in the bottom dock, search any song and drop it at your location; it will then appear on the map.
+
+USER-GENERATED CONTENT (Guideline 1.2)
+- Report: on any drop, tap ⋯ → "신고하기" (report drop) or "사용자 신고" (report user). On comments, long-press a comment → "신고하기" / "차단하기".
+- Block: ⋯ → "차단하기". Blocked users' drops and comments disappear immediately. Manage at Profile → Settings → 차단한 사용자.
+- Reports are reviewed by the operator within 24 hours; violating content is removed and the user may be suspended. Users must agree to the terms (no objectionable content) before using the app.
+
+ACCOUNT DELETION
+- Profile → Settings → 회원 탈퇴. Apple sign-in tokens are revoked on deletion.
+
+ANALYTICS
+- The app does not track users and shows no ads. The custom analytics consent prompt has been removed; usage analytics (Amplitude, first-party only) is off by default and can only be turned on by the user in Profile → Settings → 이용 데이터 분석.
+
+Contact: seo@paado.app
