@@ -29,6 +29,7 @@ const FRIENDLY: Record<string, string> = {
   U18: '소셜 로그인 서버와 연결할 수 없어요.',
   U19: '만 14세 이상만 가입할 수 있어요.',
   U20: '필수 약관에 동의해주세요.',
+  U12: '요청이 너무 많아요. 잠시 후 다시 시도해주세요.',
   D1: '바로 이 자리(1m 안)에 이미 드랍이 있어요. 조금 옮겨서 다시 드랍해주세요.',
   D2: '드랍을 찾을 수 없어요. 만료됐거나 삭제된 드랍이에요.',
   D3: '곡 정보를 찾을 수 없어요.',
@@ -41,6 +42,20 @@ const FRIENDLY: Record<string, string> = {
   B1: '나 자신은 차단할 수 없어요.',
   F1: '지금은 프로필 사진을 올릴 수 없어요. (서버 저장소 준비 중)',
 };
+
+/** 비밀번호 재설정 화면 전용 — U21·U22는 다른 곳에선 제재 코드라 여기서만 이 뜻으로 읽는다 */
+const PASSWORD_RESET: Record<string, string> = {
+  U21: '인증번호는 1분에 한 번만 받을 수 있어요. 잠시 후 다시 시도해주세요.',
+  U22: '인증번호가 맞지 않아요. 다시 확인해주세요.',
+  U23: '인증번호가 만료됐어요. 인증번호를 다시 받아주세요.',
+  U24: '인증 시간이 지났어요. 처음부터 다시 진행해주세요.',
+  U25: '지금은 메일을 보낼 수 없어요. 잠시 후 다시 시도해주세요.',
+};
+
+export function passwordResetErrorMessage(e: unknown): string {
+  if (e instanceof ApiError && PASSWORD_RESET[e.code]) return PASSWORD_RESET[e.code];
+  return errorMessage(e);
+}
 
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {

@@ -24,6 +24,9 @@ export default function EmailLoginScreen({ navigation, route }: RootScreen<'Emai
   const [busy, setBusy] = useState(false);
   // 가입 화면에서 돌아올 때 이메일을 채워준다 (이미 떠 있던 화면이면 초기값이 안 바뀌므로)
   useEffect(() => { if (route.params?.email) { setEmail(route.params.email); setPassword(''); } }, [route.params?.email]);
+  // 비밀번호 재설정에서 돌아오면 안내 (자동 로그인하지 않음)
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => { if (route.params?.reset) { setNotice('비밀번호를 바꿨어요. 새 비밀번호로 로그인해주세요.'); setError(null); } }, [route.params?.reset]);
 
   const submit = async () => {
     if (busy) return;
@@ -46,8 +49,12 @@ export default function EmailLoginScreen({ navigation, route }: RootScreen<'Emai
           <T v="body" c="ink2">이메일로 로그인하고 음악을 이어가요.</T>
         </View>
         <View style={{ height: 8 }} />
+        {notice && <T v="captionStrong" c="positive" accessibilityLiveRegion="polite">{notice}</T>}
         <Field label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" textContentType="emailAddress" />
         <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="8~20자" textContentType="password" onSubmitEditing={submit} error={error} />
+        <Press onPress={() => navigation.navigate('PasswordReset', { email: email.trim() || undefined })} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'flex-end' }}>
+          <T v="caption" c="ink3">비밀번호를 잊으셨나요?</T>
+        </Press>
       </ScrollView>
       <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 16, gap: 14, alignItems: 'center' }}>
         <PrimaryButton label="로그인" onPress={submit} loading={busy} style={{ alignSelf: 'stretch' }} />

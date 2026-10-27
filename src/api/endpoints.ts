@@ -20,6 +20,12 @@ export const authApi = {
     api.post<SocialLoginResponse>(`/oauth2/${provider}`, body, { auth: 'none' }),
   socialSignup: (body: SocialSignupBody) => api.post<TokenPair>('/oauth2/signup', body, { auth: 'none' }),
   terms: () => api.get<Term[]>('/terms', { auth: 'none' }),
+  /** 비밀번호 재설정: 인증번호 메일 → 인증번호 확인(재설정 토큰) → 새 비밀번호. 성공해도 자동 로그인하지 않는다 */
+  passwordReset: {
+    requestCode: (email: string) => api.post('/auth/password-reset/code', { email }, { auth: 'none' }),
+    verify: (email: string, code: string) => api.post<{ resetToken: string }>('/auth/password-reset/verify', { email, code }, { auth: 'none' }),
+    reset: (resetToken: string, newPassword: string) => api.post('/auth/password-reset', { resetToken, newPassword }, { auth: 'none' }),
+  },
 };
 
 // ── 회원

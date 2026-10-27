@@ -71,3 +71,41 @@ test('Apple 로그인: identity token + authorization code → 가입 필요, �
   const r = await call('POST', '/oauth2/apple', { identityToken: 'mock-apple-token', authorizationCode: 'c', name: '정현' });
   expect(r.data).toMatchObject({ signupRequired: true, signupToken: 'mock.signup.apple', profile: { username: '정현', birthDate: null } });
 });
+
+test('비밀번호 재설정 — 인증번호 → 토큰 → 새 비밀번호, 기존 로그인은 모두 끊김', async () => {
+  const { MOCK_RESET_CODE } = require('@/api/mock/server');
+  const { data: before } = await call('POST', '/auth/login', MOCK_ACCOUNT);
+  const reset = '/auth/password-reset';
+
+  // 가입되지 않은 이메일도 같은 204, 형식 오류는 S1
+  expect((await call('POST', `${reset}/code`, { email: 'nobody@example.com' })).status).toBe(204);
+  expect((await call('POST', `${reset}/code`, { email: 'not-an-email' })).data.code).toBe('S1');
+
+  expect((await call('POST', `${reset}/code`, { email: MOCK_ACCOUNT.email })).status).toBe(204);
+  expect((await call('POST', `${reset}/code`, { email: MOCK_ACCOUNT.email })).data.code).toBe('U21'); // 60초 쿨다운
+  expect((await call('POST', `${reset}/verify`, { email: MOCK_ACCOUNT.email, code: '12ab' })).data.code).toBe('S1');
+  expect((await call('POST', `${reset}/verify`, { email: MOCK_ACCOUNT.email, code: '000000' })).data.code).toBe('U22');
+  const v = await call('POST', `${reset}/verify`, { email: MOCK_ACCOUNT.email, code: MOCK_RESET_CODE });
+  expect(v.status).toBe(200);
+  // 인증번호는 한 번 쓰면 끝
+  expect((await call('POST', `${reset}/verify`, { email: MOCK_ACCOUNT.email, code: MOCK_RESET_CODE })).data.code).toBe('U23');
+
+  expect((await call('POST', reset, { resetToken: v.data.resetToken, newPassword: 'short' })).data.code).toBe('S1');
+  expect((await call('POST', reset, { resetToken: v.data.resetToken, newPassword: 'newpass123' })).status).toBe(204);
+  expect((await call('POST', reset, { resetToken: v.data.resetToken, newPassword: 'newpass123' })).data.code).toBe('U24'); // 토큰 1회용
+
+  expect((await call('POST', '/auth/login', MOCK_ACCOUNT)).data.code).toBe('U5');
+  expect((await call('POST', '/auth/login', { ...MOCK_ACCOUNT, password: 'newpass123' })).status).toBe(200);
+  expect((await call('POST', '/auth/refresh', { refreshToken: before.refreshToken })).data.code).toBe('U9');
+  expect((await call('GET', '/users', undefined, before.accessToken)).status).toBe(401);
+});
+
+test('비밀번호 재설정 — 인증번호 5번 틀리면 폐기 (정답도 U23)', async () => {
+  const { MOCK_RESET_CODE } = require('@/api/mock/server');
+  // 목 서버에 두 번째 계정이 필요 — 가입부터
+  const email = 'reset-five@example.com';
+  await call('POST', '/auth/register', { username: '다섯', password: 'pass12345', email, birthDate: '2000-01-01', agreements: { SERVICE: true, PRIVACY: true, LOCATION: true, MARKETING: false } });
+  await call('POST', '/auth/password-reset/code', { email });
+  for (let i = 0; i < 5; i++) expect((await call('POST', '/auth/password-reset/verify', { email, code: '999999' })).data.code).toBe('U22');
+  expect((await call('POST', '/auth/password-reset/verify', { email, code: MOCK_RESET_CODE })).data.code).toBe('U23');
+});

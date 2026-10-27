@@ -14,6 +14,7 @@ import type { RootStackParamList, TabParamList } from './types';
 
 import LoginScreen from '@/screens/auth/LoginScreen';
 import EmailLoginScreen from '@/screens/auth/EmailLoginScreen';
+import PasswordResetScreen from '@/screens/auth/PasswordResetScreen';
 import SignupScreen from '@/screens/auth/SignupScreen';
 import LocationPermissionScreen from '@/screens/auth/LocationPermissionScreen';
 import MapHomeScreen from '@/screens/map/MapHomeScreen';
@@ -98,6 +99,7 @@ export function RootNavigator() {
           <Stack.Screen name="Login" component={LoginScreen} options={{ animation: FADE }} />
           <Stack.Screen name="TermsView" component={TermsViewScreen} />
           <Stack.Screen name="EmailLogin" component={EmailLoginScreen} />
+          <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
           <Stack.Screen name="Signup" component={SignupScreen} />
         </>
       ) : (

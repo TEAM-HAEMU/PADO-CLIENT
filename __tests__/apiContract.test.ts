@@ -134,6 +134,15 @@ describe(`공개 API (${LIVE ? '실서버' : '목 서버'})`, () => {
     await expectApiError(authApi.register({ username: 'a', password: 'short', email: 'not-an-email', birthDate: '2000-01-01', gender: true, agreements: { SERVICE: true, PRIVACY: true, LOCATION: true, MARKETING: false } }), 400, 'S1');
   });
 
+  test('비밀번호 재설정 오류 코드 (메일 발송 없이)', async () => {
+    // 가입되지 않은 이메일 → 같은 204, 메일은 가지 않음
+    await authApi.passwordReset.requestCode('no-such-user-pado-check@example.com');
+    await expectApiError(authApi.passwordReset.verify('no-such-user-pado-check@example.com', '12ab'), 400, 'S1');
+    await expectApiError(authApi.passwordReset.verify('no-such-user-pado-check@example.com', '123456'), 400, 'U23');
+    await expectApiError(authApi.passwordReset.reset('not-a-real-token', 'Abcdefg1'), 400, 'U24');
+    await expectApiError(authApi.passwordReset.reset('not-a-real-token', 'short'), 400, 'S1');
+  });
+
   test('잘못된 리프레시 토큰 → 거절', async () => {
     const e = await authApi.logout('not-a-real-token').then(() => null, (x: unknown) => x);
     // 명세: 로그아웃은 멱등(없는 토큰이어도 성공) 또는 오류 — 어느 쪽이든 서버가 응답해야 한다

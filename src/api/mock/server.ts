@@ -85,6 +85,9 @@ const reports = new Set<string>();
 let marketing = false;
 const sessions = new Map<string, UUID>(); // accessToken → userId
 const refreshTokens = new Map<string, UUID>();
+const resetCodes = new Map<string, { code: string; sentAt: number; tries: number }>(); // email → 인증번호
+const resetTokens = new Map<string, { email: string; issuedAt: number }>();
+const revokedAccess = new Set<string>(); // 비밀번호 재설정으로 폐기된 액세스 토큰
 
 // ── helpers
 const ok = (body?: unknown, status = 200): RawResponse => ({ status, text: body === undefined ? '' : JSON.stringify(body) });
@@ -133,7 +136,7 @@ export async function mockFetch(method: string, url: string, headers: Record<str
   const b: Json = typeof body === 'string' ? JSON.parse(body) : {};
   const token = headers.Authorization?.replace('Bearer ', '') ?? null;
   // 앱을 다시 켜면 메모리 세션이 사라지므로, 키체인에 남은 목 토큰은 기본 계정으로 본다
-  const me = token ? sessions.get(token) ?? (token.startsWith('mock.access.') && !token.includes('expired') ? ME.id : null) : null;
+  const me = token && !revokedAccess.has(token) ? sessions.get(token) ?? (token.startsWith('mock.access.') && !token.includes('expired') ? ME.id : null) : null;
   const need = () => (me ? null : err(401, token ? 'U3' : 'U10', token ? '유효하지 않은 액세스 토큰' : '인증이 필요합니다'));
   const m = (re: RegExp) => path.match(re);
   let mm: RegExpMatchArray | null;
@@ -155,6 +158,41 @@ export async function mockFetch(method: string, url: string, headers: Record<str
     if (!ag.SERVICE || !ag.PRIVACY || !ag.LOCATION) return err(400, 'U20', '필수 약관 미동의');
     users.push({ id: uid(), username: String(b.username), email: String(b.email), password: String(b.password), profileImageUrl: null, gender: b.gender == null ? null : !!b.gender, birth: String(b.birthDate) });
     return ok(undefined, 201);
+  }
+  // 비밀번호 재설정 — 목 인증번호는 항상 MOCK_RESET_CODE. 쿨다운·시도 횟수·토큰 1회용은 실서버 규칙 그대로
+  if (method === 'POST' && path === '/auth/password-reset/code') {
+    const email = String(b.email ?? '');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return err(400, 'S1', '이메일 형식이 올바르지 않습니다.');
+    const prev = resetCodes.get(email);
+    if (prev && Date.now() - prev.sentAt < 60_000) return err(429, 'U21', '인증번호는 60초에 한 번만 요청할 수 있습니다.');
+    // 가입되지 않은 이메일도 같은 204 (메일은 보내지 않음)
+    if (users.some(x => x.email === email)) resetCodes.set(email, { code: MOCK_RESET_CODE, sentAt: Date.now(), tries: 0 });
+    return ok(undefined, 204);
+  }
+  if (method === 'POST' && path === '/auth/password-reset/verify') {
+    const email = String(b.email ?? '');
+    if (!email || !/^\d{6}$/.test(String(b.code ?? ''))) return err(400, 'S1', '인증번호는 6자리 숫자입니다.');
+    const rec = resetCodes.get(email);
+    if (!rec || rec.tries >= 5 || Date.now() - rec.sentAt > 600_000) return err(400, 'U23', '인증번호가 만료되었습니다. 인증번호를 다시 요청해주세요.');
+    if (rec.code !== b.code) { rec.tries += 1; return err(400, 'U22', '인증번호가 일치하지 않습니다.'); }
+    resetCodes.delete(email);
+    const resetToken = `mock.reset.${Math.random().toString(36).slice(2)}`;
+    resetTokens.set(resetToken, { email, issuedAt: Date.now() });
+    return ok({ resetToken });
+  }
+  if (method === 'POST' && path === '/auth/password-reset') {
+    const pw = String(b.newPassword ?? '');
+    if (!b.resetToken) return err(400, 'S1', '재설정 토큰은 필수입니다.');
+    if (pw.length < 8 || pw.length > 20) return err(400, 'S1', '비밀번호는 최소 8자 이상, 최대 20자 이하여야 합니다.');
+    const rec = resetTokens.get(String(b.resetToken));
+    resetTokens.delete(String(b.resetToken));
+    const user = rec && Date.now() - rec.issuedAt <= 600_000 ? users.find(x => x.email === rec.email) : undefined;
+    if (!user) return err(400, 'U24', '유효하지 않거나 만료된 재설정 토큰입니다. 인증을 다시 진행해주세요.');
+    user.password = pw;
+    // 모든 기기에서 로그아웃
+    for (const [k, v] of sessions) if (v === user.id) { sessions.delete(k); revokedAccess.add(k); }
+    for (const [k, v] of refreshTokens) if (v === user.id) refreshTokens.delete(k);
+    return ok(undefined, 204);
   }
   if (method === 'POST' && path === '/auth/refresh') {
     const uidOf = refreshTokens.get(String(b.refreshToken));
@@ -332,3 +370,5 @@ export async function mockFetch(method: string, url: string, headers: Record<str
 
 /** 개발 편의: 목 모드 기본 계정 */
 export const MOCK_ACCOUNT = { email: ME.email, password: ME.password };
+/** 목 모드 비밀번호 재설정 인증번호 (메일 대신) */
+export const MOCK_RESET_CODE = '123456';

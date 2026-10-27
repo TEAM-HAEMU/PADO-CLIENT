@@ -12,7 +12,10 @@ export type TabParamList = {
 export type RootStackParamList = {
   // 인증
   Login: undefined;
-  EmailLogin: { email?: string } | undefined;
+  /** reset: 비밀번호를 막 바꾸고 돌아옴 — 안내 문구를 보여준다 */
+  EmailLogin: { email?: string; reset?: boolean } | undefined;
+  /** 로그인 화면에서 쓰던 이메일을 미리 채운다 */
+  PasswordReset: { email?: string } | undefined;
   Signup: { mode: 'email' } | { mode: 'social'; provider: SocialProvider; signupToken: string; profile: SocialProfile | null };
   LocationPermission: undefined;
   // 메인
