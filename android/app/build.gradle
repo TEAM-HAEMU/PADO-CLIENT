@@ -90,7 +90,7 @@ android {
 
     namespace "com.pado.app"
     defaultConfig {
-        applicationId "com.pado.app"
+        applicationId "com.paado.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // CI는 -PpadoVersionCode=<실행 번호>로 매 빌드 올려서 기존 설치본 위에 업데이트로 깔리게 한다
