@@ -5,7 +5,6 @@ import type { AgreementType, ReportTarget, SocialProfile, SocialProvider, Song, 
 export type TabParamList = {
   Map: undefined;
   Playlists: undefined;
-  Notifications: undefined;
   Profile: undefined;
 };
 
@@ -18,8 +17,12 @@ export type RootStackParamList = {
   PasswordReset: { email?: string } | undefined;
   Signup: { mode: 'email' } | { mode: 'social'; provider: SocialProvider; signupToken: string; profile: SocialProfile | null };
   LocationPermission: undefined;
+  /** 첫 실행 서비스 설명 3장 (로그인 전) */
+  Onboarding: undefined;
   // 메인
   Tabs: NavigatorScreenParams<TabParamList>;
+  /** 알림 — 프로필 오른쪽 위 종 아이콘에서 연다 (하단 바에서 빠짐) */
+  Notifications: undefined;
   PinPreview: { dropId: UUID };
   /** queue: 전체 재생/셔플 — 미리듣기가 끝나면 다음 곡으로. autoplay: 열자마자 미리듣기 */
   Player: { songId: UUID; dropId?: UUID; queue?: UUID[]; autoplay?: boolean };

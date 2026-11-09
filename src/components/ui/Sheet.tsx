@@ -1,5 +1,5 @@
 /**
- * 바텀시트 레이아웃 — transparentModal 라우트에서 사용 (배경 탭 → 닫기).
+ * 바텀시트 레이아웃 — transparentModal 라우트에서 사용 (배경 탭 → 닫기). Figma 새 디자인: 흰 카드 · 위 모서리 32 · 손잡이 #7482AE · 검정 20% 배경.
  * 열림: 배경 페이드 + 시트가 아래에서 부드럽게 올라옴 / 닫힘: 반대로 내려감.
  * goBack·배경 탭·제스처 등 어떤 경로로 닫혀도 beforeRemove에서 닫힘 애니메이션을 먼저 재생한다.
  */
@@ -70,15 +70,15 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
 
   return (
     <KeyboardAvoidingView behavior="padding" pointerEvents={closingNow ? 'none' : 'auto'} style={{ flex: 1, justifyContent: 'flex-end' }}>
-      <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: `rgba(15,27,56,${dim * 0.7})` }, backdrop]}>
+      <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: `rgba(0,0,0,${dim * 0.4})` }, backdrop]}>
         <Pressable style={{ flex: 1 }} onPress={dismissible ? close : undefined} accessible={dismissible} accessibilityLabel="닫기" />
       </Animated.View>
       {/* maxHeight 같은 %값은 화면 기준이어야 하므로 래퍼에, 카드는 그 안에서 줄어든다 */}
       <Animated.View onLayout={e => setHeight(e.nativeEvent.layout.height + 40)} style={[{ maxHeight: style?.maxHeight, height: style?.height }, panel]}>
         {/* 헤더 줄은 화면 폭 전체라 카드 윗부분과 겹친다 → 헤더 요소 말고는 터치를 카드로 넘긴다 (예: 핀 미리보기 ⋯ 버튼) */}
         {header ? <View pointerEvents="box-none" style={{ alignItems: 'center', marginBottom: -headerOverlap, zIndex: 2, elevation: 2 }}>{header}</View> : null}
-        <View style={[{ flexShrink: 1, backgroundColor: colors.card, borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 16, paddingTop: 10, paddingBottom: kb ? 12 : Math.max(insets.bottom, 16) + 12 }, style, { maxHeight: undefined, height: undefined }, style?.height ? { flex: 1 } : null]}>
-          <View style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: colors.ink3, opacity: 0.5, marginBottom: 14 }} />
+        <View style={[{ flexShrink: 1, backgroundColor: colors.page, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 16, paddingTop: 10, paddingBottom: kb ? 12 : Math.max(insets.bottom, 16) + 12 }, style, { maxHeight: undefined, height: undefined }, style?.height ? { flex: 1 } : null]}>
+          <View style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: colors.ink2, marginBottom: 16 }} />
           {children}
         </View>
       </Animated.View>

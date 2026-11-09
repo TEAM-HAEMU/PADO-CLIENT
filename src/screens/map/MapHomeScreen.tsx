@@ -1,11 +1,12 @@
 /**
- * 2.1 지도 홈 — 커스텀 다크 지도 + 드랍 핀 + 가까운 드랍 스트립 (+ 도크는 탭 바)
- * 지도: GOOGLE_MAPS_API_KEY가 있으면 Google(스타일 JSON), 없으면 iOS Apple Maps 다크로 대체.
+ * 2.1 지도 홈 — 하늘빛 지도 + 드랍 핀 + 아래 짙은 페이드 위 '가까운 드랍' 줄 (+ 도크는 탭 바). Figma '2 지도 · 재생' B 2.1.
+ * 지도: GOOGLE_MAPS_API_KEY가 있으면 Google(스타일 JSON), 없으면 iOS Apple Maps(mutedStandard + 하늘빛 막)으로 대체.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Linking, Platform, ScrollView, View, Image } from 'react-native';
-import MapView, { Circle, Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Circle, Marker, Polygon, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 import LinearGradient from 'react-native-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
 import { useIsFocused } from '@react-navigation/native';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +22,7 @@ import { useTermsUpdateCheck } from '@/hooks/useTermsUpdateCheck';
 import { distanceM, FALLBACK, formatDistance, useLocation } from '@/services/location';
 import { usePrefs } from '@/store/prefs';
 import { googleMapStyle } from '@/theme/mapStyle';
-import { colors, glow } from '@/theme/tokens';
+import { colors, fonts, glow } from '@/theme/tokens';
 import type { TabParamList } from '@/navigation/types';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { formatAddress } from '@/utils/address';
@@ -31,10 +32,29 @@ const useGoogle = !!env.googleMapsKey || Platform.OS === 'android';
 
 export const dropArt = (d: DropSummary) => (d.type === 'MUSIC' ? d.albumImageUrl : d.firstAlbumImageUrl);
 export const dropTitle = (d: DropSummary) => (d.type === 'MUSIC' ? d.title : d.type === 'VOTE' ? d.topic : d.playlistName);
+/** 동 이름 옆 ▾ — Figma Location 'Frame' 아이콘 (20×24) */
+const Caret = () => (
+  <Svg width={20} height={24} viewBox="0 0 20 24">
+    <Path d="M9.5625 14.475L6.54167 10.85C6.5 10.8 6.46875 10.7458 6.44792 10.6875C6.42708 10.6292 6.41667 10.5667 6.41667 10.5C6.41667 10.3667 6.45486 10.25 6.53125 10.15C6.60764 10.05 6.70833 10 6.83333 10H13.1667C13.2917 10 13.3924 10.05 13.4688 10.15C13.5451 10.25 13.5833 10.3667 13.5833 10.5C13.5833 10.5333 13.5417 10.65 13.4583 10.85L10.4375 14.475C10.3681 14.5583 10.2986 14.6167 10.2292 14.65C10.1597 14.6833 10.0833 14.7 10 14.7C9.91667 14.7 9.84028 14.6833 9.77083 14.65C9.70139 14.6167 9.63194 14.5583 9.5625 14.475Z" fill={colors.ink} />
+  </Svg>
+);
+
+/** Apple 지도 하늘빛 막 — 지금 위치 주변 넓은 사각형 (축소해도 덮이게 ±2도) */
+const tintArea = (c: { latitude: number; longitude: number }) => [
+  { latitude: c.latitude + 2, longitude: c.longitude - 2 },
+  { latitude: c.latitude + 2, longitude: c.longitude + 2 },
+  { latitude: c.latitude - 2, longitude: c.longitude + 2 },
+  { latitude: c.latitude - 2, longitude: c.longitude - 2 },
+];
 export const dropSub = (d: DropSummary) => (d.type === 'MUSIC' ? d.artist : d.type === 'VOTE' ? `투표 · ${d.options.length}곡` : `플레이리스트 · ${d.songIds.length}곡`);
 
 // 파동은 가까운 핀 몇 개만, 지도가 보일 때만 (Google 지도는 애니메이션 동안 마커 비트맵을 매 프레임 다시 그림)
 const ANIMATED_PINS = 4;
+
+// 하단 도크(높이 50, Dock.tsx) 위로 띄우는 간격
+const dockTop = (bottomInset: number) => Math.max(bottomInset - 4, 14) + 50;
+// '가까운 드랍' 카드(상태 안내) 공통 모양 — 짙은 페이드 위 흰 카드
+const card = { marginHorizontal: 20, padding: 16, borderRadius: 18, backgroundColor: 'rgba(251,251,251,0.96)', flexDirection: 'row', alignItems: 'center', gap: 12 } as const;
 
 export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabParamList, 'Map'>) {
   const insets = useSafeAreaInsets();
@@ -166,6 +186,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         style={{ flex: 1 }}
         provider={useGoogle ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         customMapStyle={useGoogle ? googleMapStyle : undefined}
+        mapType={useGoogle ? 'standard' : 'mutedStandard'}
         userInterfaceStyle="light"
         initialRegion={region}
         showsPointsOfInterests={false}
@@ -174,7 +195,9 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         toolbarEnabled={false}
         pitchEnabled={false}
       >
-        {distanceMode === 'radius' && coords && <Circle center={coords} radius={NEARBY_RADIUS_KM * 1000} strokeColor="rgba(79,151,242,0.7)" fillColor="rgba(79,151,242,0.08)" lineDashPattern={[6, 6]} />}
+        {/* Apple 지도는 스타일을 못 바꾸므로 넓은 하늘빛 막을 깔아 디자인 톤에 맞춘다 (오버레이라 핀 아래에 그려짐) */}
+        {!useGoogle ? <Polygon coordinates={tintArea(here)} fillColor="rgba(120,200,232,0.22)" strokeWidth={0} strokeColor="transparent" tappable={false} /> : null}
+        {distanceMode === 'radius' && coords && <Circle center={coords} radius={NEARBY_RADIUS_KM * 1000} strokeColor="rgba(43,156,255,0.75)" fillColor="rgba(79,209,255,0.10)" lineDashPattern={[6, 6]} />}
         {coords ? (
           <Marker coordinate={coords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={tracks}>
             <MeMarker />
@@ -200,59 +223,63 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         })}
       </MapView>
 
-      {/* 상단 페이드 + 현재 위치 */}
-      <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.98)', 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0)']} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 110 }} />
-      <Press onPress={() => mapRef.current?.animateToRegion(region, 500)} style={{ position: 'absolute', top: insets.top + 14, left: 20, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      {/* 상단 페이드 + 동 이름 */}
+      <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.7)', 'rgba(255,255,255,0)']} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 80 }} />
+      <Press onPress={() => mapRef.current?.animateToRegion(region, 500)} style={{ position: 'absolute', top: insets.top + 12, left: 20, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
         <T v="title">{coords ? label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
-        <Icon name="chevronDown" size={18} color={colors.ink2} />
+        <Caret />
       </Press>
 
-      {/* 하단 페이드 + 가까운 드랍 */}
-      <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.88)', 'rgba(255,255,255,0.98)']} locations={[0, 0.42, 1]} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 380 }} />
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + 86 + 16 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, marginBottom: 12 }}>
-          <T v="captionStrong">가까운 드랍</T>
-          <T v="number" c="primary">{drops.length}</T>
+      {/* 하단 짙은 페이드 + 가까운 드랍 */}
+      {/* Figma 'fade': #040916 0.98 → 0.7(55%) → 0 */}
+      <LinearGradient pointerEvents="none" colors={['rgba(4,9,22,0)', 'rgba(4,9,22,0.7)', 'rgba(4,9,22,0.98)']} locations={[0, 0.45, 1]} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 354 }} />
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: dockTop(insets.bottom) + 24 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, marginBottom: 16 }}>
+          <T v="captionStrong" c="onPrimary">가까운 드랍</T>
+          <T v="number" style={{ fontFamily: fonts.medium, color: '#2BD1FF' }}>{drops.length}</T>
         </View>
         {!coords ? (
-          <Press onPress={fix === 'unavailable' ? retryLocation : undefined} style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Press onPress={fix === 'unavailable' ? retryLocation : undefined} style={card}>
             <Icon name="pin" size={22} color={colors.primary} />
             <T v="caption" c="ink2" style={{ flex: 1 }}>{locationHelp}</T>
             {fix === 'unavailable' ? <Icon name="chevronRight" size={16} color={colors.ink3} /> : null}
           </Press>
         ) : nearby.isError && !sorted.length ? (
-          <Press onPress={() => nearby.refetch()} style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Press onPress={() => nearby.refetch()} style={card}>
             <Icon name="alert" size={22} color={colors.warning} />
             <T v="caption" c="ink2" style={{ flex: 1 }}>주변 드랍을 불러오지 못했어요. 눌러서 다시 시도</T>
           </Press>
         ) : sorted.length ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, gap: 12 }}>
             {sorted.slice(0, 12).map(({ d }, i) => {
               const fresh = i < 3;
               const onAir = d.type === 'MUSIC' && !!playingKey && d.songId === playingKey;
               return (
                 <Press key={d.droppingId} onPress={() => openDrop(d)} style={{ width: 66, alignItems: 'center', gap: 6 }}>
-                  <View style={[{ width: 60, height: 60, borderRadius: 30, borderWidth: fresh || onAir ? 2 : 1.5, borderColor: onAir ? colors.accent2 : fresh ? colors.primary : colors.line, alignItems: 'center', justifyContent: 'center' }, onAir ? glow(0.7, 12) : null]}>
-                    <Art uri={dropArt(d)} size={50} round dim={!fresh && !onAir} />
+                  {/* Figma 'stay music' 아트: 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 (재생 중이면 시안 테두리 + 글로우) */}
+                  <View style={[{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: onAir ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: fresh || onAir ? 1 : 0.6 }, onAir || fresh ? glow(onAir ? 0.9 : 0.5, 12) : null]}>
+                    <Art uri={dropArt(d)} size={49} radius={9} />
                     {onAir ? (
-                      <View style={{ position: 'absolute', right: -2, bottom: -2, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.page }}>
-                        <Icon name="wave" size={11} color={colors.onPrimary} />
+                      <View style={{ position: 'absolute', right: -7, bottom: -7, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#040916' }}>
+                        <Icon name="wave" size={10} color={colors.ink} />
                       </View>
                     ) : null}
                   </View>
-                  <T v="captionStrong" c={fresh ? 'ink' : 'ink3'} numberOfLines={1} style={{ width: 66, textAlign: 'center' }}>{dropTitle(d)}</T>
-                  <T v="micro" c="ink3" numberOfLines={1} style={{ width: 66, textAlign: 'center' }}>{d.type === 'MUSIC' ? d.artist : dropSub(d)}</T>
+                  <View style={{ alignSelf: 'stretch' }}>
+                    <T v="caption" c="onPrimary" numberOfLines={1} style={{ textAlign: 'center' }}>{dropTitle(d)}</T>
+                    <T v="tiny" numberOfLines={1} style={{ textAlign: 'center', color: '#98A2B8' }}>{d.type === 'MUSIC' ? d.artist : dropSub(d)}</T>
+                  </View>
                 </Press>
               );
             })}
           </ScrollView>
         ) : nearby.isLoading ? (
-          <View style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={card}>
             <Icon name="wave" size={22} color={colors.primary} />
             <T v="caption" c="ink2" style={{ flex: 1 }}>주변 드랍을 찾고 있어요…</T>
           </View>
         ) : (
-          <Press onPress={() => navigation.getParent()?.navigate('DropType')} accessibilityLabel="첫 드랍 남기기" style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Press onPress={() => navigation.getParent()?.navigate('DropType')} accessibilityLabel="첫 드랍 남기기" style={card}>
             <Icon name="wave" size={22} color={colors.primary} />
             <View style={{ flex: 1, gap: 2 }}>
               <T v="captionStrong">이 근처엔 아직 드랍이 없어요</T>

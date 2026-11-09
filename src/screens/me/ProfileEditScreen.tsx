@@ -7,11 +7,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { userApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import { Field, formatBirth, GenderSelect, validBirth } from '@/components/ui/Field';
-import { Avatar, Icon, IconButton, Press, T } from '@/components/ui';
+import { Avatar, Press, T, TopBar } from '@/components/ui';
+import { MeGlyph } from '@/components/me/MeIcons';
+import { Wave } from '@/components/ui/Wave';
 import { qk, useMe } from '@/hooks/api';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
-import { colors, glow } from '@/theme/tokens';
+import { colors, fonts } from '@/theme/tokens';
 
 export default function ProfileEditScreen({ navigation }: RootScreen<'ProfileEdit'>) {
   const insets = useSafeAreaInsets();
@@ -73,23 +75,26 @@ export default function ProfileEditScreen({ navigation }: RootScreen<'ProfileEdi
 
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
-      <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}>
-        <IconButton name="chevronLeft" onPress={navigation.goBack} accessibilityLabel="뒤로" />
-        <T v="headline">프로필 편집</T>
-        <Press onPress={save} disabled={busy || !me} style={[{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 18, backgroundColor: colors.primary, opacity: me ? 1 : 0.4 }, me ? glow(0.4, 12) : {}]}>
-          <T v="captionStrong" c="onPrimary">{busy ? '저장 중' : '저장'}</T>
+      {/* Figma: 화면 아래 wave(624×305) */}
+      <Wave scale={1.2} style={{ position: 'absolute', left: -102, right: 0, bottom: -22 }} />
+      <TopBar title="프로필 편집" onBack={navigation.goBack} right={
+        <Press onPress={save} disabled={busy || !me} accessibilityLabel="저장" style={{ height: 30, paddingHorizontal: 14, borderRadius: 999, backgroundColor: 'rgba(240,252,255,0.8)', alignItems: 'center', justifyContent: 'center', opacity: me ? 1 : 0.4 }}>
+          <T v="caption" c="primary" style={{ fontFamily: fonts.medium, letterSpacing: -0.24 }}>{busy ? '저장 중' : '저장'}</T>
         </Press>
-      </View>
-      <ScrollView contentContainerStyle={{ padding: 24, gap: 18 }} keyboardShouldPersistTaps="handled">
-        <Press onPress={pick} style={{ alignSelf: 'center', marginBottom: 8 }} accessibilityLabel="프로필 사진 변경">
-          <Avatar uri={image ?? me?.profileImageUrl} name={username} size={104} />
-          <View style={{ position: 'absolute', right: 0, bottom: 0, width: 34, height: 34, borderRadius: 17, backgroundColor: colors.primary, borderWidth: 3, borderColor: colors.page, alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="camera" size={16} color={colors.onPrimary} />
+      } />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: insets.bottom + 40, gap: 20 }} keyboardShouldPersistTaps="handled">
+        <Press onPress={pick} style={{ alignSelf: 'center', marginBottom: 30, width: 120, height: 120, borderRadius: 60, shadowColor: '#C0EEFF', shadowOpacity: 1, shadowRadius: 50, shadowOffset: { width: 0, height: 0 } }} accessibilityLabel="프로필 사진 변경">
+          <Avatar uri={image ?? me?.profileImageUrl} name={username} size={120} />
+          {/* Figma 카메라 배지 — #4FD1FF 원 · 테두리 #EBF9FE · 아이콘 13 */}
+          <View style={{ position: 'absolute', left: 90, top: 93, padding: 5, borderRadius: 999, backgroundColor: colors.accent, borderWidth: 1, borderColor: '#EBF9FE' }}>
+            <MeGlyph name="camera" size={13} />
           </View>
         </Press>
-        <Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} help="지도와 드랍에 표시되는 이름이에요" error={err.username} right={<T v="number" c="ink3">{username.length}/15</T>} />
+        <Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} help="지도와 드랍에 표시되는 이름이에요" error={err.username} right={<T v="caption" c="lineStrong">{username.length}/15</T>} />
         <Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={err.birth} />
-        <GenderSelect value={gender} onChange={v => { if (v !== null) setGender(v); }} />
+        {/* 성별은 선택 항목 (App Store 5.1.1(v)) — 아직 안 정했으면 '선택 안 함'이 보이고, 고르지 않아도 저장된다.
+            서버에 성별을 지우는 API는 없어서, 이미 정한 사람에겐 '선택 안 함'을 보여주지 않는다 */}
+        <GenderSelect value={gender} optional={me?.gender == null} onChange={v => { if (v !== null || me?.gender == null) setGender(v); }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

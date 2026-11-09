@@ -46,6 +46,18 @@ final class DemoTourUITests: XCTestCase {
       if dialogButton("로그아웃").waitForExistence(timeout: 3) { dialogButton("로그아웃").tap(); break }
       pause(1)
     }
+    pause(2); skipOnboarding()
+  }
+
+  /// 처음 실행 소개 3장(온보딩)이 떠 있으면 '다음'으로 넘겨 로그인 화면까지
+  private func skipOnboarding() {
+    let next = app.buttons.matching(NSPredicate(format: "label == %@", "다음")).firstMatch
+    for _ in 0..<4 {
+      guard containing("서비스 이용을 위해 로그인이 필요합니다").waitForExistence(timeout: 2),
+            !app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "카카오로 계속하기")).firstMatch.exists,
+            next.exists else { break }
+      next.tap(); pause(0.8)
+    }
   }
 
   private func pause(_ s: Double) { Thread.sleep(forTimeInterval: s) }
@@ -59,6 +71,7 @@ final class DemoTourUITests: XCTestCase {
   func testAppleLogin() {
     app.launch()
     pause(3)
+    skipOnboarding()
     if !any("이메일로 계속하기").waitForExistence(timeout: 4) {
       tap(dockTab("프로필")); pause(1.5)
       tap(any("설정")); pause(1.5)
@@ -83,6 +96,7 @@ final class DemoTourUITests: XCTestCase {
   func testSignupWithoutGenderThenLocation() {
     app.launch()
     pause(3)
+    skipOnboarding()
     let apple = any("Apple로 계속하기")
     XCTAssertTrue(apple.waitForExistence(timeout: 8), "로그아웃 상태가 아님 (앱을 지우고 실행)")
     apple.tap(); pause(2.5)
@@ -116,6 +130,7 @@ final class DemoTourUITests: XCTestCase {
   func testBlockFromDropMenu() {
     app.launch()
     pause(3)
+    skipOnboarding()
     if tap(any("이메일로 계속하기"), timeout: 4) { pause(1); tap(any("로그인")); pause(2.5) }
     if any("계속").waitForExistence(timeout: 3) { tap(any("계속")); pause(2) }
     pause(5)
@@ -149,6 +164,7 @@ final class DemoTourUITests: XCTestCase {
   func testPrepareSignedOut() {
     app.launch()
     pause(4)
+    skipOnboarding()
     if any("이메일로 계속하기").waitForExistence(timeout: 4) { return }
     tap(dockTab("프로필"))
     pause(1.5)
@@ -166,6 +182,7 @@ final class DemoTourUITests: XCTestCase {
   func testDemoTour() {
     app.launch()
     pause(3)
+    skipOnboarding()
 
     // 1) 로그인 — 이메일 (목 계정이 미리 채워져 있음)
     if tap(any("이메일로 계속하기"), timeout: 6) {
@@ -237,9 +254,9 @@ final class DemoTourUITests: XCTestCase {
       note.typeText("서낙동강 따라 걸으면서 들어요")
       pause(1.5)
     }
-    tap(any("여기에 드랍하기"))
+    tap(any("여기 빠뜨리기"))
     pause(4)
-    tap(any("지도에서 보기"))
+    tap(any("지도로 돌아가기"))
     pause(3.5)
 
     // 8) 플리
@@ -251,10 +268,12 @@ final class DemoTourUITests: XCTestCase {
     pause(1.5)
 
     // 9) 알림 · 프로필
-    tap(dockTab("알림"))
-    pause(3)
     tap(dockTab("프로필"))
-    pause(3.5)
+    pause(3)
+    tap(any("알림"))  // 알림은 하단 바에서 빠지고 프로필 오른쪽 위 종 아이콘으로 옮김
+    pause(3)
+    tap(any("뒤로"))
+    pause(2)
     tap(dockTab("지도"))
     pause(3)
   }
@@ -264,6 +283,7 @@ final class DemoTourUITests: XCTestCase {
   func testFullTour() {
     app.launch()
     pause(3)
+    skipOnboarding()
     // 이전 실행에서 로그인된 상태면 먼저 로그아웃 (녹화 시작 화면을 로그인 화면으로)
     if !any("이메일로 계속하기").waitForExistence(timeout: 4) {
       tap(dockTab("프로필")); pause(1.5)
@@ -348,16 +368,16 @@ final class DemoTourUITests: XCTestCase {
     XCTAssertTrue(any("미리듣기 일시정지").waitForExistence(timeout: 5), "한마디 화면에서 미리듣기가 끊김")
     let note = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
     if note.waitForExistence(timeout: 5) { note.tap(); note.typeText("서낙동강 따라 걸으면서 들어요"); pause(1.5) }
-    tap(any("여기에 드랍하기")); pause(4)
-    XCTAssertTrue(any("지도에서 보기").waitForExistence(timeout: 8), "드랍 완료 화면이 안 뜸")
-    tap(any("지도에서 보기")); pause(3)
+    tap(any("여기 빠뜨리기")); pause(4)
+    XCTAssertTrue(any("지도로 돌아가기").waitForExistence(timeout: 8), "드랍 완료 화면이 안 뜸")
+    tap(any("지도로 돌아가기")); pause(3)
 
     // 8) 플리 만들기 → 곡 담기
     tap(dockTab("플리")); pause(2.5)
     tap(any("새 플레이리스트")); pause(2)
     let name = app.textFields.firstMatch
     if name.waitForExistence(timeout: 5) { name.tap(); name.typeText("강변 산책"); pause(1) }
-    tap(any("만들고 곡 담으러 가기")); pause(3)
+    tap(any("만들고 곡 담기")); pause(3)
     XCTAssertTrue(containing("주변 드랍").waitForExistence(timeout: 6), "만든 뒤 곡 담기 화면으로 안 넘어감")
     tap(containing("주변 드랍")); pause(2.5)
     tap(containing("난춘")); pause(1.5)
@@ -368,9 +388,10 @@ final class DemoTourUITests: XCTestCase {
     tap(any("뒤로")); pause(2)
 
     // 9) 알림 · 프로필
-    tap(dockTab("알림")); pause(2.5)
-    if containing("모두 읽음").exists { tap(containing("모두 읽음")); pause(1.5) }
     tap(dockTab("프로필")); pause(3)
+    tap(any("알림")); pause(2.5)
+    if containing("모두 읽음").exists { tap(containing("모두 읽음")); pause(1.5) }
+    tap(any("뒤로")); pause(2)
 
     // 10) 설정 — 기본 재생 앱 · 거리 표시 · 약관
     tap(any("설정")); pause(2)
@@ -400,6 +421,7 @@ final class DemoTourUITests: XCTestCase {
     app.launchArguments = []   // 소리 켬 (PADO_MUTE 없음)
     app.launch()
     pause(3)
+    skipOnboarding()
 
     // 0) 가입 화면 채우기 → 사람이 비밀번호 입력·가입 (최대 15분 대기)
     if any("이메일로 계속하기").waitForExistence(timeout: 5) {
@@ -415,7 +437,7 @@ final class DemoTourUITests: XCTestCase {
       app.swipeUp(); pause(1)
       tap(containing("전체 동의")); pause(1)
       app.swipeDown(); pause(1)
-      tap(any("계정 만들기")); pause(1)   // 키보드 내리기 — 비밀번호 칸·가입 버튼이 보이게
+      tap(any("환영합니다!")); pause(1)   // 키보드 내리기 — 비밀번호 칸·가입 버튼이 보이게
       XCTAssertTrue(containing("가까운 드랍").waitForExistence(timeout: TimeInterval(env["PADO_SIGNUP_WAIT_SEC"] ?? "") ?? 900), "가입(로그인)이 완료되지 않음")
     }
     if any("계속").waitForExistence(timeout: 3) { tap(any("계속")); pause(2) }
@@ -430,9 +452,9 @@ final class DemoTourUITests: XCTestCase {
     tap(any("다음")); pause(2)
     let note = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
     if note.waitForExistence(timeout: 5) { note.tap(); note.typeText("서낙동강 따라 걸으면서 들어요"); pause(1.5) }
-    tap(any("여기에 드랍하기")); pause(4)
-    XCTAssertTrue(any("지도에서 보기").waitForExistence(timeout: 10), "드랍이 등록되지 않음")
-    tap(any("지도에서 보기")); pause(4)
+    tap(any("여기 빠뜨리기")); pause(4)
+    XCTAssertTrue(any("지도로 돌아가기").waitForExistence(timeout: 10), "드랍이 등록되지 않음")
+    tap(any("지도로 돌아가기")); pause(4)
 
     // 2) 내가 남긴 드랍 → 미리듣기 → 재생 화면 → 좋아요 · 댓글
     tap(containing("Through the Night")); pause(10)   // 핀을 열면 자동 재생
@@ -453,7 +475,7 @@ final class DemoTourUITests: XCTestCase {
     tap(any("새 플레이리스트")); pause(2)
     let pl = app.textFields.firstMatch
     if pl.waitForExistence(timeout: 5) { pl.tap(); pl.typeText("강변 산책"); pause(1) }
-    tap(any("만들고 곡 담으러 가기")); pause(3)
+    tap(any("만들고 곡 담기")); pause(3)
     let q = app.textFields.firstMatch
     if q.waitForExistence(timeout: 5) { q.typeText("새소년"); pause(3.5) }
     tap(containing("NAN CHUN")); pause(0.8)
@@ -467,8 +489,9 @@ final class DemoTourUITests: XCTestCase {
     tap(any("뒤로")); pause(2)
 
     // 4) 알림 · 프로필 · 설정
-    tap(dockTab("알림")); pause(3)
-    tap(dockTab("프로필")); pause(4)
+    tap(dockTab("프로필")); pause(3)
+    tap(any("알림")); pause(3)
+    tap(any("뒤로")); pause(3)
     tap(any("설정")); pause(2.5)
     tap(containing("기본 재생 앱")); pause(2)
     tap(any("Spotify")); pause(1)
@@ -497,8 +520,9 @@ final class DemoTourUITests: XCTestCase {
     tap(any("뒤로")); pause(1.5)
     tap(containing("봉림동 퇴근길")); pause(3); shot("playlistDrop")
     tap(any("뒤로")); pause(1.5)
-    tap(dockTab("알림")); pause(2.5); shot("notifications")
     tap(dockTab("프로필")); pause(3); shot("profile")
+    tap(any("알림")); pause(2.5); shot("notifications")
+    tap(any("뒤로")); pause(2)
     tap(any("설정")); pause(2); shot("settings")
     tap(any("뒤로")); pause(1)
     tap(dockTab("플리")); pause(2.5); shot("playlists")
@@ -618,8 +642,8 @@ final class DemoTourUITests: XCTestCase {
     let note = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
     if note.waitForExistence(timeout: 5) { note.tap(); note.typeText("서낙동강 따라 걸으면서 들어요"); pause(1.5) }
     shot("note")
-    tap(any("여기에 드랍하기")); pause(4); shot("dropSuccess")
-    tap(any("지도에서 보기")); pause(3)
+    tap(any("여기 빠뜨리기")); pause(4); shot("dropSuccess")
+    tap(any("지도로 돌아가기")); pause(3)
     tap(any("드랍하기")); pause(2); tap(containing("2~5곡")); pause(2.5); shot("voteCreate")
     back(); pause(0.5)
     if !containing("여러 곡을 묶어").exists { tap(any("드랍하기")); pause(2) }
@@ -636,8 +660,9 @@ final class DemoTourUITests: XCTestCase {
     back()
     tap(any("새 플레이리스트")); pause(2); shot("newPlaylist")
     closeSheet(); pause(1.5)
-    tap(dockTab("알림")); pause(2.5); shot("notifications")
     tap(dockTab("프로필")); pause(3); shot("profile")
+    tap(any("알림")); pause(2.5); shot("notifications")
+    back()
     tap(containing("프로필 편집")); pause(2.5); shot("profileEdit")
     back()
     tap(any("설정")); pause(2); shot("settings")

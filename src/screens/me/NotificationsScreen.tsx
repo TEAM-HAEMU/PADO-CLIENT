@@ -1,4 +1,4 @@
-/** 5.3 알림 — 좋아요 · 댓글 · 주변 새 드랍, 모두 읽음 */
+/** 5.3 알림 — 좋아요 · 댓글 · 주변 새 드랍, 모두 읽음 (스택 화면: 프로필 오른쪽 위 종 아이콘으로 연다) */
 import React from 'react';
 import { SectionList, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -6,18 +6,28 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { notificationApi } from '@/api/endpoints';
 import type { AppNotification } from '@/api/types';
-import { Avatar, Empty, Icon, type IconName, Loading, Press, SecondaryButton, T } from '@/components/ui';
+import { Avatar, Empty, Loading, Press, SecondaryButton, T, TopBar } from '@/components/ui';
+import { MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
+import { Wave } from '@/components/ui/Wave';
 import { errorMessage } from '@/api/errors';
 import { toast } from '@/store/toast';
 import { useNotifications } from '@/hooks/api';
-import { colors, glow } from '@/theme/tokens';
+import { colors, fonts } from '@/theme/tokens';
 import { formatRelative } from '@/utils/format';
 
-const META: Record<string, { icon: IconName; tone: string; text: (d: Record<string, unknown>) => string; who: (d: Record<string, unknown>) => string }> = {
-  'like-created': { icon: 'heart', tone: colors.accent, text: d => `${(d.likerUsername as string) || '누군가'}님이 내 드랍을 좋아해요`, who: d => (d.likerUsername as string) || '?' },
-  'comment-created': { icon: 'comment', tone: colors.primary, text: d => `${(d.commenterUsername as string) || (d.username as string) || '누군가'}님이 댓글을 남겼어요`, who: d => (d.commenterUsername as string) || (d.username as string) || '?' },
-  'dropping-created': { icon: 'pin', tone: colors.positive, text: () => '근처에 새 드랍이 생겼어요', who: d => (d.username as string) || '?' },
+/** Figma 알림 카드 — 안 읽음: #F2FCFF + 테두리 #D8F5FF / 읽음: 흰 60% */
+const UNREAD_BG = '#F2FCFF';
+const UNREAD_LINE = '#D8F5FF';
+/** Figma 아바타 배지 — 좋아요 #D9316C · 댓글 #47C831 · 새 드랍 #3A31D9 */
+const META: Record<string, { glyph: MeGlyphName; tone: string; text: (d: Record<string, unknown>) => string; who: (d: Record<string, unknown>) => string }> = {
+  'like-created': { glyph: 'badgeHeart', tone: '#D9316C', text: d => `${(d.likerUsername as string) || '누군가'}님이 내 드랍을 좋아해요`, who: d => (d.likerUsername as string) || '?' },
+  'comment-created': { glyph: 'badgeComment', tone: '#47C831', text: d => `${(d.commenterUsername as string) || (d.username as string) || '누군가'}님이 댓글을 남겼어요`, who: d => (d.commenterUsername as string) || (d.username as string) || '?' },
+  'dropping-created': { glyph: 'badgeDrop', tone: '#3A31D9', text: () => '근처에 새 드랍이 생겼어요', who: d => (d.username as string) || '?' },
 };
+
+/** Figma 간격 — 알림 사이 16 · 섹션 제목과 목록 사이 12 */
+const ItemGap = () => <View style={{ height: 16 }} />;
+const SectionGap = () => <View style={{ height: 12 }} />;
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
@@ -40,36 +50,39 @@ export default function NotificationsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
-      <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}>
-        <T v="titleLarge">알림</T>
-        {data.some(n => !n.readAt) ? <Press onPress={() => notificationApi.readAll().then(refresh).catch(e => toast(errorMessage(e), 'error'))} hitSlop={10}><T v="captionStrong" c="primary">모두 읽음</T></Press> : null}
-      </View>
+      <Wave scale={1.2} style={{ position: 'absolute', left: -102, right: 0, bottom: -22 }} />
+      <TopBar title="알림" onBack={nav.goBack} right={
+        data.some(n => !n.readAt)
+          ? <Press onPress={() => notificationApi.readAll().then(refresh).catch(e => toast(errorMessage(e), 'error'))} hitSlop={10} style={{ minWidth: 44, alignItems: 'flex-end' }}><T v="captionStrong" c="accent">모두 읽음</T></Press>
+          : undefined
+      } />
       {isLoading ? <Loading /> : (
         <SectionList
           sections={sections}
           keyExtractor={n => n.id}
           onRefresh={refetch}
           refreshing={isRefetching}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: insets.bottom + 120, gap: 6 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: insets.bottom + 32 }}
           stickySectionHeadersEnabled={false}
+          ItemSeparatorComponent={ItemGap}
+          SectionSeparatorComponent={SectionGap}
           ListEmptyComponent={isError ? <Empty icon="alert" title="알림을 불러오지 못했어요" desc={errorMessage(error)} action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} /> : <Empty icon="bell" title="아직 알림이 없어요" desc="내 드랍에 좋아요나 댓글이 달리면 여기에 모여요." />}
-          renderSectionHeader={({ section }) => <T v="label" c="ink3" style={{ paddingHorizontal: 8, paddingTop: 12, paddingBottom: 6 }}>{section.title}</T>}
+          renderSectionHeader={({ section }) => <T v="label" c="ink2" style={{ paddingTop: section.title === sections[0]?.title ? 0 : 18 }}>{section.title}</T>}
           renderItem={({ item: n }) => {
             const m = META[n.eventName] ?? META['dropping-created'];
             const unread = !n.readAt;
             return (
-              <Press onPress={() => open(n)} style={{ flexDirection: 'row', gap: 12, padding: 14, borderRadius: 18, backgroundColor: unread ? 'rgba(79,151,242,0.08)' : 'transparent', borderWidth: unread ? 1 : 0, borderColor: 'rgba(79,209,255,0.18)' }}>
-                {unread ? <View style={[{ position: 'absolute', left: 5, top: 32, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }, glow(0.8, 6)]} /> : null}
-                <View>
-                  <Avatar name={m.who(n.data)} size={44} />
-                  <View style={{ position: 'absolute', right: -4, bottom: -4, width: 22, height: 22, borderRadius: 11, backgroundColor: m.tone, borderWidth: 2, borderColor: colors.page, alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name={m.icon} size={11} color={colors.onPrimary} strokeWidth={2.4} />
+              <Press onPress={() => open(n)} style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 10, paddingVertical: 9, borderRadius: 12, backgroundColor: unread ? UNREAD_BG : 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: unread ? UNREAD_LINE : 'transparent' }}>
+                <View style={{ width: 62, height: 62 }}>
+                  <Avatar name={m.who(n.data)} size={62} />
+                  <View style={{ position: 'absolute', left: 47, top: 46, padding: 3.2, borderRadius: 999, backgroundColor: m.tone, borderWidth: 0.64, borderColor: '#EBF9FE' }}>
+                    <MeGlyph name={m.glyph} size={8.6} />
                   </View>
                 </View>
-                <View style={{ flex: 1, gap: 3 }}>
-                  <T v="body">{m.text(n.data)}</T>
-                  {typeof n.data.content === 'string' ? <T v="caption" c="ink2" numberOfLines={2}>“{n.data.content}”</T> : null}
-                  <T v="micro" c="ink3">{formatRelative(n.createdAt)}</T>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <T v="bodyStrong" style={{ fontSize: 14, lineHeight: 20, letterSpacing: 0, color: '#000000' }}>{m.text(n.data)}</T>
+                  {typeof n.data.content === 'string' ? <T v="micro" c="ink2" numberOfLines={2} style={{ fontFamily: fonts.regular }}>“{n.data.content}”</T> : null}
+                  <T v="tiny" c="ink3" style={{ lineHeight: 14 }}>{formatRelative(n.createdAt)}</T>
                 </View>
               </Press>
             );

@@ -1,20 +1,24 @@
-/** 1.1 로그인 — 카카오 · Apple(iOS) · Google · 이메일 */
+/** 1.1 로그인 (Figma B 1.4 메인 로그인) — 카카오 · Apple(iOS) · Google · 이메일 */
 import React, { useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import type { SocialProvider } from '@/api/types';
-import { ParticleWave } from '@/components/anim';
-import { AppleSymbol, GoogleSymbol, KakaoSymbol, PadoSymbol } from '@/components/ui/Brand';
-import { Icon, Press, T } from '@/components/ui';
+import { AUTH_PAGES, AuthButton, AuthDisclaimer, AuthHeader, AuthTitle } from '@/components/auth/AuthChrome';
+import { IntroArt } from '@/components/auth/IntroArt';
+import { AppleSymbol, GoogleSymbol, KakaoSymbol } from '@/components/ui/Brand';
+import { Icon, T } from '@/components/ui';
+import { Wave } from '@/components/ui/Wave';
 import { env } from '@/config';
 import type { RootScreen } from '@/navigation/types';
 import { appleSignInAvailable, getProviderCredential, SocialCancelled } from '@/services/socialAuth';
 import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
-import { colors, fonts } from '@/theme/tokens';
+import { colors } from '@/theme/tokens';
+
+/** 카카오 로그인 버튼 글자·심볼 (카카오 가이드: 검정 85%) */
+const KAKAO_INK = 'rgba(0,0,0,0.85)';
 
 export default function LoginScreen({ navigation }: RootScreen<'Login'>) {
   const insets = useSafeAreaInsets();
@@ -40,44 +44,25 @@ export default function LoginScreen({ navigation }: RootScreen<'Login'>) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <Svg width="100%" height={560} style={{ position: 'absolute', top: 220 }}>
-        <Defs>
-          <RadialGradient id="lg" cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor="#A9D1FB" stopOpacity={0.8} />
-            <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Ellipse cx="50%" cy="260" rx="280" ry="210" fill="url(#lg)" />
-      </Svg>
-      <ParticleWave style={{ position: 'absolute', top: insets.top + 215 }} />
-
-      <View style={{ paddingTop: insets.top + 84, paddingHorizontal: 28, gap: 18 }}>
-        <PadoSymbol size={64} />
-        <T v="wordmark" style={{ fontSize: 44, lineHeight: 48, letterSpacing: 7 }}>PADO</T>
-        <T v="title" c="ink2">{'거리에 음악을 흘려두고,\n누군가의 하루에 닿게.'}</T>
+      <Wave style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
+      {/* 소개를 거쳐 왔으면 마지막 장으로 돌아갈 수 있다 (이미 본 사람은 로그인부터라 뒤로 없음) */}
+      <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.canGoBack() ? navigation.goBack : undefined} style={{ marginTop: insets.top + 12 }} />
+      <AuthTitle title={'바닷속에 숨겨진\n보물을 찾으러 갈까요?'} style={{ marginTop: 39 }} />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}>
+        <IntroArt page={AUTH_PAGES - 1} />
       </View>
 
-      <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 20, gap: 10 }}>
-        <LoginButton bg={colors.kakao} fg="rgba(0,0,0,0.85)" icon={<KakaoSymbol />} label="카카오로 계속하기" busy={busy === 'kakao'} disabled={!!busy} onPress={() => social('kakao')} />
+      <View style={{ paddingHorizontal: 24, gap: 10 }}>
+        <AuthButton strong bg={colors.kakao} fg={KAKAO_INK} icon={<KakaoSymbol color={KAKAO_INK} />} label="카카오로 계속하기" loading={busy === 'kakao'} disabled={!!busy} onPress={() => social('kakao')} />
+        {/* Apple 로그인 (가이드라인 4.8) — HIG: 검정 바탕 + 흰 Apple 로고 */}
         {appleSignInAvailable() ? (
-          <LoginButton bg="#000" fg="#fff" icon={<AppleSymbol color="#fff" />} label="Apple로 계속하기" busy={busy === 'apple'} disabled={!!busy} onPress={() => social('apple')} />
+          <AuthButton strong bg="#000000" fg="#FFFFFF" icon={<AppleSymbol color="#FFFFFF" />} label="Apple로 계속하기" loading={busy === 'apple'} disabled={!!busy} onPress={() => social('apple')} />
         ) : null}
-        <LoginButton bg="#fff" fg="#1F1F1F" border icon={<GoogleSymbol />} label="Google로 계속하기" busy={busy === 'google'} disabled={!!busy} onPress={() => social('google')} />
-        <LoginButton bg={colors.card} fg={colors.ink} border icon={<Icon name="mail" size={20} color={colors.ink} />} label="이메일로 계속하기" disabled={!!busy} onPress={() => navigation.navigate('EmailLogin')} />
-        <T v="micro" c="ink3" style={{ textAlign: 'center', marginTop: 6 }}>
-          가입하면 <T v="micro" c="ink2" style={{ textDecorationLine: 'underline' }} onPress={() => navigation.navigate('TermsView', { type: 'SERVICE' })} accessibilityRole="link">이용약관</T> 및 <T v="micro" c="ink2" style={{ textDecorationLine: 'underline' }} onPress={() => navigation.navigate('TermsView', { type: 'PRIVACY' })} accessibilityRole="link">개인정보 처리방침</T>에 동의하게 돼요
-        </T>
-        {env.useMock ? <T v="micro" c="warning" style={{ textAlign: 'center' }}>목 서버 모드 (USE_MOCK=true)</T> : null}
+        <AuthButton strong bg="#FFFFFF" fg="#000000" border={colors.line} icon={<GoogleSymbol />} label="Google로 계속하기" loading={busy === 'google'} disabled={!!busy} onPress={() => social('google')} />
+        <AuthButton strong icon={<Icon name="mail" size={20} color={colors.onPrimary} />} label="이메일로 계속하기" disabled={!!busy} onPress={() => navigation.navigate('EmailLogin')} />
       </View>
+      {env.useMock ? <T v="micro" c="warning" style={{ textAlign: 'center', marginTop: 8 }}>목 서버 모드 (USE_MOCK=true)</T> : null}
+      <AuthDisclaimer style={{ paddingTop: 30, paddingBottom: insets.bottom + 16 }} />
     </View>
-  );
-}
-
-function LoginButton({ bg, fg, icon, label, onPress, busy, disabled, border }: { bg: string; fg: string; icon: React.ReactNode; label: string; onPress: () => void; busy?: boolean; disabled?: boolean; border?: boolean }) {
-  return (
-    <Press onPress={onPress} disabled={busy || disabled} style={{ opacity: disabled && !busy ? 0.6 : 1, height: 54, borderRadius: 16, backgroundColor: bg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: border ? 1 : 0, borderColor: colors.line }}>
-      {busy ? <ActivityIndicator color={fg} /> : icon}
-      <T v="bodyStrong" style={{ color: fg, fontFamily: fonts.medium }}>{label}</T>
-    </Press>
   );
 }

@@ -12,6 +12,7 @@ import { usePrefs } from '@/store/prefs';
 import { colors } from '@/theme/tokens';
 import type { RootStackParamList, TabParamList } from './types';
 
+import OnboardingScreen from '@/screens/auth/OnboardingScreen';
 import LoginScreen from '@/screens/auth/LoginScreen';
 import EmailLoginScreen from '@/screens/auth/EmailLoginScreen';
 import PasswordResetScreen from '@/screens/auth/PasswordResetScreen';
@@ -54,7 +55,6 @@ function Tabs() {
     <Tab.Navigator tabBar={props => <Dock {...props} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.page } }}>
       <Tab.Screen name="Map" component={MapHomeScreen} />
       <Tab.Screen name="Playlists" component={PlaylistsScreen} />
-      <Tab.Screen name="Notifications" component={NotificationsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -96,11 +96,14 @@ export function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page }, animation: 'slide_from_right' }}>
       {status === 'guest' ? (
         <>
+          {/* 처음 온 손님은 소개 3장부터, 본 뒤엔 로그인부터 (첫 화면 = 맨 앞 등록 화면). 소개는 로그인에서 '뒤로' 돌아갈 수 있게 늘 등록해둔다 */}
+          {usePrefs.getState().onboardingSeen ? null : <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ animation: FADE }} />}
           <Stack.Screen name="Login" component={LoginScreen} options={{ animation: FADE }} />
           <Stack.Screen name="TermsView" component={TermsViewScreen} />
           <Stack.Screen name="EmailLogin" component={EmailLoginScreen} />
           <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
           <Stack.Screen name="Signup" component={SignupScreen} />
+          {usePrefs.getState().onboardingSeen ? <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ animation: FADE }} /> : null}
         </>
       ) : (
         <>
@@ -115,6 +118,7 @@ export function RootNavigator() {
           <Stack.Screen name="VoteDrop" component={VoteDropScreen} />
           <Stack.Screen name="PlaylistDrop" component={PlaylistDropScreen} />
           <Stack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="TermsView" component={TermsViewScreen} />

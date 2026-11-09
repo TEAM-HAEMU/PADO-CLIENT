@@ -14,6 +14,9 @@ import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { track } from '@/services/analytics';
+import { MoreGlyph, SendGlyph } from '@/components/player/glyphs';
+
+const SEND = '#12214A'; // Figma 보내기 버튼 남색
 
 export default function CommentsScreen({ navigation, route }: RootScreen<'Comments'>) {
   const { dropId } = route.params;
@@ -68,42 +71,42 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
 
   return (
     <Sheet dim={0.55} style={{ paddingHorizontal: 0, maxHeight: '78%' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, marginBottom: 12 }}>
-        <T v="headline">댓글</T>
-        <T v="number" c="primary">{list.length}</T>
+      {/* Figma B 2.4 댓글 (시트): '댓글' SemiBold 16 + 시안 개수 · 34px 아바타 줄 · 아래 회색 알약 입력 + 남색 보내기 (가사는 표시하지 않음) */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 24, marginBottom: 20 }}>
+        <T v="bodyLarge" style={{ fontFamily: fonts.semibold, color: '#000000' }}>댓글</T>
+        <T v="caption" style={{ color: colors.accent }}>{list.length}</T>
       </View>
       <FlatList
         data={list}
         keyExtractor={c => c.id}
         style={{ flexGrow: 0 }}
-        contentContainerStyle={{ paddingHorizontal: 20, gap: 18, paddingBottom: 12 }}
+        contentContainerStyle={{ paddingHorizontal: 24, gap: 20, paddingBottom: 16 }}
         ListEmptyComponent={isLoading ? <ActivityIndicator color={colors.primary} /> : isError ? <Empty icon="alert" title="댓글을 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} /> : <Empty icon="comment" title="아직 댓글이 없어요" desc="이 곡에 첫 한마디를 남겨보세요." />}
         renderItem={({ item: c }) => {
           const mine = !!me && c.username === me.username;
           return (
-            <Press onLongPress={() => menu(c)} style={{ flexDirection: 'row', gap: 10 }}>
+            <Press onLongPress={() => menu(c)} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
               <Avatar name={c.username} size={34} />
               <View style={{ flex: 1, gap: 3 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <T v="captionStrong">{c.username}</T>
-                  {mine ? <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: colors.primarySoft }}><T v="micro" c="primary">나</T></View> : null}
+                  <T v="caption" style={{ fontFamily: fonts.medium, color: '#000000' }}>{c.username}</T>
+                  {mine ? <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: colors.primarySoft }}><T v="tiny" c="primary">나</T></View> : null}
                 </View>
-                <T v="body">{c.content}</T>
+                <T v="caption" style={{ lineHeight: 22, color: '#000000' }}>{c.content}</T>
               </View>
-              <Press onPress={() => menu(c)} hitSlop={14} accessibilityLabel="댓글 메뉴"><Icon name="more" size={18} color={colors.ink3} /></Press>
+              <Press onPress={() => menu(c)} hitSlop={14} accessibilityLabel="댓글 메뉴"><MoreGlyph /></Press>
             </Press>
           );
         }}
       />
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.line }}>
-        <Avatar uri={me?.profileImageUrl} name={me?.username} size={32} />
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 6, height: 44, borderRadius: 22, backgroundColor: colors.page, borderWidth: 1, borderColor: editing ? colors.primary : colors.line }}>
-          <TextInput value={text} onChangeText={t => setText(t.slice(0, 100))} placeholder={editing ? '댓글 수정' : '이 곡에 한마디'} placeholderTextColor={colors.ink3} style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 15 }} onSubmitEditing={submit} returnKeyType="send" selectionColor={colors.primary} />
-          {editing ? <Press onPress={() => { setEditing(null); setText(''); }} hitSlop={8} accessibilityLabel="수정 취소" style={{ marginRight: 6 }}><Icon name="close" size={16} color={colors.ink3} /></Press> : null}
-          <Press onPress={submit} disabled={!text.trim() || busy} hitSlop={8} accessibilityLabel="보내기" style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: text.trim() ? colors.primary : colors.card2, alignItems: 'center', justifyContent: 'center' }}>
-            {busy ? <ActivityIndicator size="small" color={colors.onPrimary} /> : <Icon name="send" size={15} color={text.trim() ? colors.onPrimary : colors.ink3} />}
-          </Press>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 24, paddingTop: 12 }}>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 18, paddingRight: 8, height: 38, borderRadius: 99, backgroundColor: '#F7F7F7', borderWidth: editing ? 1 : 0, borderColor: colors.primaryDeep }}>
+          <TextInput value={text} onChangeText={t => setText(t.slice(0, 100))} placeholder={editing ? '댓글 수정' : '이 곡에 한마디'} placeholderTextColor="#BABABA" style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 14 }} onSubmitEditing={submit} returnKeyType="send" selectionColor={colors.primary} />
+          {editing ? <Press onPress={() => { setEditing(null); setText(''); }} hitSlop={8} accessibilityLabel="수정 취소"><Icon name="close" size={16} color={colors.ink3} /></Press> : null}
         </View>
+        <Press onPress={submit} disabled={!text.trim() || busy} hitSlop={8} accessibilityLabel="보내기" style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: SEND, opacity: text.trim() ? 1 : 0.35, alignItems: 'center', justifyContent: 'center' }}>
+          {busy ? <ActivityIndicator size="small" color="#FFFFFF" /> : <SendGlyph />}
+        </Press>
       </View>
     </Sheet>
   );

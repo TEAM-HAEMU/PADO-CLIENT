@@ -1,4 +1,4 @@
-/** 5.1 프로필 — 내 드랍 지도 · 드랍 기록 · 좋아요 */
+/** 5.1 프로필 — 내 드랍 지도 · 드랍 기록 · 좋아요 (오른쪽 위 종 아이콘 → 알림) */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, ScrollView, View, Image } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
@@ -9,15 +9,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dropApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import type { DropSummary } from '@/api/types';
-import { Art, Avatar, Empty, Icon, IconButton, Press, T, PrimaryButton } from '@/components/ui';
+import { Art, Avatar, Empty, Press, T, PrimaryButton } from '@/components/ui';
+import { MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
+import { Wave } from '@/components/ui/Wave';
 import { env } from '@/config';
-import { qk, useLikeCount, useMe, useMyDrops, useMyLikeCount, useMyLikes, useMyPlaylists } from '@/hooks/api';
+import { qk, useLikeCount, useMe, useMyDrops, useMyLikeCount, useMyLikes, useMyPlaylists, useUnreadCount } from '@/hooks/api';
 import { likeApi } from '@/api/endpoints';
 import { artUrl } from '@/utils/artUrl';
 import { dropArt, dropSub, dropTitle } from '@/screens/map/MapHomeScreen';
 import { toast } from '@/store/toast';
 import { googleMapStyle } from '@/theme/mapStyle';
-import { colors, glow } from '@/theme/tokens';
+import { colors, fonts } from '@/theme/tokens';
 
 const useGoogle = !!env.googleMapsKey || Platform.OS === 'android';
 
@@ -38,7 +40,7 @@ export default function ProfileScreen() {
     setTracks(true);
     let t: ReturnType<typeof setTimeout> = setTimeout(() => setTracks(false), 5000);
     // Android 마커 이미지는 미리 받아둔 뒤 다시 만들어야 보인다
-    const urls = drops.map(d => artUrl(dropArt(d), 26)).filter((u): u is string => !!u);
+    const urls = drops.map(d => artUrl(dropArt(d), 49)).filter((u): u is string => !!u);
     Promise.all(urls.map(u => Image.prefetch(u).catch(() => false))).then(() => {
       if (!alive) return;
       if (Platform.OS === 'android') setArtEpoch(e => e + 1);
@@ -52,6 +54,7 @@ export default function ProfileScreen() {
   const likeCounts = useQueries({ queries: drops.map(d => ({ queryKey: qk.likeCount(d.droppingId), queryFn: () => likeApi.countForDrop(d.droppingId) })) });
   const receivedLikes = likeCounts.reduce((a, q) => a + (q.data ?? 0), 0);
   const playlists = useMyPlaylists().data ?? [];
+  const unread = useUnreadCount().data ?? 0;
 
   const region = useMemo(() => {
     if (!drops.length) return null;
@@ -68,80 +71,92 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 120 }}>
-        <View style={{ alignItems: 'flex-end', paddingHorizontal: 20 }}>
-          <IconButton name="settings" onPress={() => nav.navigate('Settings')} accessibilityLabel="설정" />
-        </View>
-        <View style={{ alignItems: 'center', gap: 12, marginTop: -8 }}>
-          <View style={[{ width: 96, height: 96, borderRadius: 48, borderWidth: 2.5, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, glow(0.35, 20)]}>
-            <Avatar uri={me?.profileImageUrl} name={me?.username} size={84} />
-          </View>
-          <T v="title">{me?.username ?? ' '}</T>
-          <View style={{ flexDirection: 'row' }}>
-            {[[drops.length, '드랍'], [receivedLikes, '받은 좋아요'], [playlists.length, '플레이리스트']].map(([n, l], i) => (
-              <View key={String(l)} style={{ width: 108, alignItems: 'center', gap: 2, borderRightWidth: i < 2 ? 1 : 0, borderRightColor: colors.line }}>
-                <T v="numberLarge" style={{ fontSize: 22, lineHeight: 28 }}>{n}</T>
-                <T v="micro" c="ink3">{l}</T>
-              </View>
-            ))}
-          </View>
-          <Press onPress={() => nav.navigate('ProfileEdit')} style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.line }}>
-            <T v="captionStrong" c="ink2">프로필 편집</T>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 120 }}>
+        {/* Figma: 프로필 사진 뒤로 wave(624×305)가 깔린다 */}
+        <Wave scale={1.2} style={{ position: 'absolute', left: -73, right: 0, top: insets.top + 97 }} />
+        {/* 오른쪽 위 아이콘 줄 (24px · 간격 4) — 알림(하단 바에서 옮겨옴) · 프로필 편집 · 설정 */}
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 4, paddingHorizontal: 24 }}>
+          <Press onPress={() => nav.navigate('Notifications')} accessibilityLabel="알림" hitSlop={8}>
+            <MeGlyph name="bell" size={24} />
+            {unread ? <View style={{ position: 'absolute', top: 1, right: 2, width: 7, height: 7, borderRadius: 4, backgroundColor: colors.caution, borderWidth: 1, borderColor: colors.page }} /> : null}
           </Press>
+          <Press onPress={() => nav.navigate('ProfileEdit')} accessibilityLabel="프로필 편집" hitSlop={8}><MeGlyph name="edit" size={24} /></Press>
+          <Press onPress={() => nav.navigate('Settings')} accessibilityLabel="설정" hitSlop={8}><MeGlyph name="gear" size={24} /></Press>
         </View>
-
-        <View style={{ flexDirection: 'row', gap: 22, paddingHorizontal: 20, marginTop: 26 }}>
-          {([['drops', '드랍 기록'], ['likes', myLikeCount ? `좋아요 ${myLikeCount}` : '좋아요']] as const).map(([k, l]) => (
-            <Press key={k} onPress={() => setTab(k)} style={{ alignItems: 'center', gap: 6 }}>
-              <T v="bodyStrong" c={tab === k ? 'ink' : 'ink3'}>{l}</T>
-              <View style={[{ width: tab === k ? 24 : 0, height: 3, borderRadius: 2, backgroundColor: colors.primary }, tab === k ? glow(0.8, 6) : null]} />
-            </Press>
+        <View style={{ alignItems: 'center', gap: 20, marginTop: 12 }}>
+          <View style={{ width: 120, height: 120, borderRadius: 60, shadowColor: '#C0EEFF', shadowOpacity: 1, shadowRadius: 50, shadowOffset: { width: 0, height: 0 } }}>
+            <Avatar uri={me?.profileImageUrl} name={me?.username} size={120} />
+          </View>
+          <T v="title" style={{ fontFamily: fonts.semibold, color: '#000000' }}>{me?.username ?? ' '}</T>
+        </View>
+        {/* 숫자 3칸 — 사이에 1×24 세로선 */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 30, paddingHorizontal: 38 }}>
+          {[[drops.length, '드랍'], [receivedLikes, '받은 좋아요'], [playlists.length, '플레이리스트']].map(([n, l], i) => (
+            <React.Fragment key={String(l)}>
+              {i ? <View style={{ width: 1, height: 24, borderRadius: 1, backgroundColor: '#EBEBEB' }} /> : null}
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <T v="headline" style={{ fontSize: 20, lineHeight: 26, letterSpacing: -0.4, color: '#000000' }}>{n}</T>
+                <T v="caption" style={{ color: '#959595', letterSpacing: -0.24 }}>{l}</T>
+              </View>
+            </React.Fragment>
           ))}
         </View>
 
+        {/* Figma 'tag' 칩 탭 (높이 30) — 고른 탭이 채워진 파랑 */}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 30 }}>
+          <TabTag label="드랍 기록" glyph="drop" on={tab === 'drops'} onPress={() => setTab('drops')} />
+          <TabTag label={myLikeCount ? `좋아요 ${myLikeCount}` : '좋아요'} glyph="heart" on={tab === 'likes'} onPress={() => setTab('likes')} />
+        </View>
+
         {tab === 'drops' ? (
-          <View style={{ paddingHorizontal: 20, marginTop: 16, gap: 6 }}>
+          <View style={{ marginTop: 30 }}>
             {region ? (
-              <View style={{ height: 130, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, marginBottom: 8 }}>
+              <View style={{ height: 120, marginHorizontal: 20, marginBottom: 20, borderRadius: 16, overflow: 'hidden' }}>
                 <MapView style={{ flex: 1 }} provider={useGoogle ? PROVIDER_GOOGLE : PROVIDER_DEFAULT} customMapStyle={useGoogle ? googleMapStyle : undefined} userInterfaceStyle="light" initialRegion={region} scrollEnabled={false} zoomEnabled={false} rotateEnabled={false} pitchEnabled={false}>
                   {drops.map(d => (
-                    <Marker key={`${d.droppingId}:${artEpoch}`} coordinate={d} tracksViewChanges={tracks} anchor={{ x: 0.5, y: 0.5 }}>
-                      <View style={[{ width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, Platform.OS === 'ios' ? glow(0.6, 10) : null]}><Art uri={dropArt(d)} size={26} round /></View>
+                    <Marker key={`${d.droppingId}:${artEpoch}`} coordinate={d} tracksViewChanges={tracks} anchor={{ x: 0.5, y: 1 }}>
+                      {/* Figma 'stay music' 핀 — #FAFAFA 3px 테두리 앨범 아트 55 + 가는 막대 + 바닥 점 */}
+                      <View style={{ alignItems: 'center', width: 55 }}>
+                        <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: '#FAFAFA', backgroundColor: '#FFFFFF', overflow: 'hidden' }}><Art uri={dropArt(d)} size={49} radius={9} /></View>
+                        <View style={{ width: 8, height: 19, alignItems: 'center' }}>
+                          <View style={{ width: 1, height: 16, borderBottomLeftRadius: 1, borderBottomRightRadius: 1, backgroundColor: 'rgba(250,250,250,0.7)' }} />
+                          <View style={{ position: 'absolute', top: 12, width: 8, height: 7, borderRadius: 4, backgroundColor: 'rgba(250,250,250,0.7)' }} />
+                        </View>
+                      </View>
                     </Marker>
                   ))}
                 </MapView>
-                <View style={{ position: 'absolute', left: 10, top: 10, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.92)' }}>
-                  <Icon name="map" size={12} color={colors.primary} />
-                  <T v="micro">내 드랍 지도</T>
+                <View style={{ position: 'absolute', left: 10, top: 10, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8, paddingRight: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: '#FFFFFF' }}>
+                  <MeGlyph name="mapFold" size={12} />
+                  <T v="micro" style={{ color: '#1C1C1C' }}>내 드랍 지도</T>
                 </View>
               </View>
             ) : null}
-            {drops.length ? drops.map(d => (
-              <Press key={d.droppingId} onPress={() => openDrop(d)} onLongPress={() => removeDrop(d)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
-                <Art uri={dropArt(d)} size={52} radius={12} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <T v="bodyStrong" numberOfLines={1}>{dropTitle(d)}</T>
-                  <T v="caption" c="ink2" numberOfLines={1}>{d.content || (d.type === 'MUSIC' ? d.artist : dropSub(d))}</T>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Icon name="pin" size={11} color={colors.ink3} />
-                    <T v="micro" c="ink3" numberOfLines={1}>{d.address}</T>
+            <View style={{ paddingHorizontal: 20, gap: 4 }}>
+              {drops.length ? drops.map(d => (
+                <Press key={d.droppingId} onPress={() => openDrop(d)} onLongPress={() => removeDrop(d)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
+                  <Art uri={dropArt(d)} size={52} radius={12} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <T v="bodyStrong" numberOfLines={1} style={ROW_TITLE}>{dropTitle(d)}</T>
+                    <T v="caption" c="ink2" numberOfLines={1}>{d.content || (d.type === 'MUSIC' ? d.artist : dropSub(d))}</T>
+                    <Address text={d.address} />
                   </View>
-                </View>
-                <LikeBadge dropId={d.droppingId} />
-              </Press>
-            )) : <Empty icon="wave" title="아직 남긴 드랍이 없어요" desc="지금 있는 곳에 첫 곡을 남겨보세요." action={<PrimaryButton label="첫 드랍 남기기" icon="plus" onPress={() => nav.navigate('DropType')} style={{ alignSelf: 'stretch', marginTop: 8 }} />} />}
-            {drops.length ? <T v="micro" c="ink3" style={{ textAlign: 'center', marginTop: 6 }}>길게 누르면 드랍을 삭제할 수 있어요</T> : null}
+                  <LikeBadge dropId={d.droppingId} />
+                </Press>
+              )) : <Empty icon="wave" title="아직 남긴 드랍이 없어요" desc="지금 있는 곳에 첫 곡을 남겨보세요." action={<PrimaryButton label="첫 드랍 남기기" icon="plus" onPress={() => nav.navigate('DropType')} style={{ alignSelf: 'stretch', marginTop: 8 }} />} />}
+              {drops.length ? <T v="micro" c="faint" style={{ textAlign: 'center', marginTop: 8 }}>길게 누르면 드랍을 삭제할 수 있어요</T> : null}
+            </View>
           </View>
         ) : (
-          <View style={{ paddingHorizontal: 20, marginTop: 16, gap: 6 }}>
+          <View style={{ paddingHorizontal: 20, marginTop: 30, gap: 4 }}>
             {likes.length ? likes.map(l => (
               <Press key={l.droppingId} onPress={() => nav.navigate(l.droppingType === 'VOTE' ? 'VoteDrop' : l.droppingType === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: l.droppingId })} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
                 <Art uri={l.imageUrl} size={52} radius={12} />
                 <View style={{ flex: 1, gap: 2 }}>
-                  <T v="bodyStrong" numberOfLines={1}>{l.title ?? l.topic ?? l.playlistName}</T>
-                  <T v="caption" c="ink2" numberOfLines={1}>{l.address}</T>
+                  <T v="bodyStrong" numberOfLines={1} style={ROW_TITLE}>{l.title ?? l.topic ?? l.playlistName}</T>
+                  <Address text={l.address} />
                 </View>
-                <Icon name="heartFill" size={16} color={colors.primary} />
+                <MeGlyph name="heart" size={14} color={colors.like} />
               </Press>
             )) : <Empty icon="heart" title="좋아요한 드랍이 없어요" />}
           </View>
@@ -151,13 +166,38 @@ export default function ProfileScreen() {
   );
 }
 
+/** Figma 드랍 행 제목 14 Medium 검정 */
+const ROW_TITLE = { fontSize: 14, letterSpacing: -0.14, color: '#000000' };
+/** Figma 드랍 행 주소·좋아요 숫자 색 */
+const SUB_INK = '#98A2B8';
+
+/** Figma 'tag' (h30 · 아이콘 14 · 12 Medium) — 꺼짐: 옅은 하늘 + 파란 글자 / 켜짐: 파랑 80% + 흰 글자 */
+function TabTag({ label, glyph, on, onPress }: { label: string; glyph: MeGlyphName; on: boolean; onPress: () => void }) {
+  return (
+    <Press onPress={onPress} accessibilityState={{ selected: on }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, height: 30, paddingHorizontal: 14, borderRadius: 999, backgroundColor: on ? 'rgba(43,156,255,0.8)' : 'rgba(240,252,255,0.8)' }}>
+      <MeGlyph name={glyph} size={14} color={on ? colors.primarySoft : '#55B0FF'} />
+      <T v="caption" style={{ fontFamily: fonts.medium, letterSpacing: -0.24, color: on ? colors.primarySoft : colors.primary }}>{label}</T>
+    </Press>
+  );
+}
+
+/** 주소 한 줄 — 위치 핀 10px + 10 Medium */
+function Address({ text }: { text?: string | null }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <MeGlyph name="place" size={10} />
+      <T v="tiny" numberOfLines={1} style={{ flex: 1, fontFamily: fonts.medium, color: SUB_INK }}>{text}</T>
+    </View>
+  );
+}
+
 /** 드랍별 받은 좋아요 수 (디자인: 행 오른쪽 하트) */
 function LikeBadge({ dropId }: { dropId: string }) {
   const n = useLikeCount(dropId).data;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }} accessibilityLabel={n !== undefined ? `좋아요 ${n}개` : undefined}>
-      <Icon name="heart" size={14} color={colors.ink2} />
-      <T v="number" c="ink2">{n ?? '·'}</T>
+      <MeGlyph name="heart" size={14} color={colors.ink2} />
+      <T v="caption" style={{ lineHeight: 16, color: SUB_INK }}>{n ?? '·'}</T>
     </View>
   );
 }

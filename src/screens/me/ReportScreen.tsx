@@ -5,7 +5,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { safetyApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import type { ReportReason } from '@/api/types';
-import { Icon, Press, PrimaryButton, Radio, T } from '@/components/ui';
+import { Icon, Press, PrimaryButton, T } from '@/components/ui';
+import { ReportRadio } from '@/components/me/MeIcons';
 import { Sheet } from '@/components/ui/Sheet';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
@@ -40,31 +41,36 @@ export default function ReportScreen({ navigation, route }: RootScreen<'Report'>
 
   return (
     <Sheet>
-      <View style={{ gap: 4, paddingHorizontal: 4, marginBottom: 12 }}>
-        <T v="title">{withObjectParticle(label ?? '이 콘텐츠')} 신고할까요?</T>
-        <T v="caption" c="ink2">신고 내용은 운영자만 확인해요. 같은 대상은 한 번만 신고할 수 있어요.</T>
-      </View>
-      <View style={{ borderRadius: 20, backgroundColor: colors.page, overflow: 'hidden' }}>
-        {REASONS.map(([k, l], i) => (
-          <Press key={k} onPress={() => setReason(k)} accessibilityRole="radio" accessibilityState={{ checked: reason === k }} accessibilityLabel={l} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: i < REASONS.length - 1 ? 1 : 0, borderBottomColor: colors.line }}>
-            <T v="body">{l}</T>
-            <Radio on={reason === k} />
+      <View style={{ gap: 20 }}>
+        <View style={{ gap: 2, paddingLeft: 4, paddingBottom: 6 }}>
+          <T v="title" style={{ color: '#000000' }}>{withObjectParticle(label ?? '이 콘텐츠')} 신고할까요?</T>
+          <T v="caption" style={{ fontSize: 13, color: GREY }}>신고 내용은 운영자만 확인해요. 같은 대상은 한 번만 신고할 수 있어요.</T>
+        </View>
+        <View style={{ borderRadius: 20, backgroundColor: colors.card, overflow: 'hidden' }}>
+          {REASONS.map(([k, l], i) => (
+            <Press key={k} onPress={() => setReason(k)} accessibilityRole="radio" accessibilityState={{ checked: reason === k }} accessibilityLabel={l} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: i < REASONS.length - 1 ? 1 : 0, borderBottomColor: colors.card2 }}>
+              <T v="body" style={{ color: '#000000' }}>{l}</T>
+              <ReportRadio on={reason === k} />
+            </Press>
+          ))}
+        </View>
+        <TextInput value={detail} onChangeText={t => setDetail(t.slice(0, 500))} placeholder="자세한 내용 (선택, 500자)" placeholderTextColor={GREY} multiline maxFontSizeMultiplier={1.2} selectionColor={colors.primary} style={{ minHeight: 64, borderRadius: 16, padding: 14, paddingTop: 14, backgroundColor: colors.card, color: colors.ink, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, textAlignVertical: 'top' }} />
+        {userId ? (
+          <Press onPress={() => setBlock(b => !b)} accessibilityRole="checkbox" accessibilityState={{ checked: block }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, paddingVertical: 2 }}>
+            <View style={{ width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: block ? colors.primary : 'transparent', borderWidth: block ? 0 : 1.5, borderColor: '#E7E7E7' }}>
+              {block ? <Icon name="check" size={14} color="#FFFFFF" strokeWidth={2.6} /> : null}
+            </View>
+            <T v="captionStrong" style={{ flex: 1, color: GREY }}>이 사용자도 차단하기 (드랍·댓글이 더 이상 보이지 않아요)</T>
           </Press>
-        ))}
+        ) : null}
+        <PrimaryButton label="확인" accessibilityLabel="신고하기" onPress={submit} loading={busy} disabled={!reason} />
       </View>
-      <TextInput value={detail} onChangeText={t => setDetail(t.slice(0, 500))} placeholder="자세한 내용 (선택, 500자)" placeholderTextColor={colors.ink3} multiline selectionColor={colors.primary} style={{ marginTop: 12, minHeight: 64, borderRadius: 16, padding: 14, backgroundColor: colors.page, borderWidth: 1, borderColor: colors.line, color: colors.ink, fontFamily: fonts.regular, fontSize: 15 }} />
-      {userId ? (
-        <Press onPress={() => setBlock(b => !b)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, paddingVertical: 14 }}>
-          <View style={{ width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: block ? colors.primary : 'transparent', borderWidth: block ? 0 : 1.5, borderColor: colors.line }}>
-            {block ? <Icon name="check" size={14} color={colors.onPrimary} strokeWidth={2.4} /> : null}
-          </View>
-          <T v="captionStrong" c="ink2">이 사용자도 차단하기 (드랍·댓글이 더 이상 보이지 않아요)</T>
-        </Press>
-      ) : <View style={{ height: 14 }} />}
-      <PrimaryButton label="신고하기" onPress={submit} loading={busy} disabled={!reason} />
     </Sheet>
   );
 }
+
+/** Figma 시트 안내·자리표시 회색 */
+const GREY = '#A4A4A4';
 
 /** 목적격 조사 — 받침이 있으면 '을', 없으면 '를' (예: 하윤님을, 이 드랍을, 이 댓글을) */
 function withObjectParticle(word: string) {

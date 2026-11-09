@@ -1,11 +1,12 @@
-/** 4.4 곡 메뉴 (시트) */
+/** 4.4 곡 메뉴 (시트) — Figma 'B 4.6 곡 메뉴 (시트)' */
 import React from 'react';
 import { Share, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { playlistApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
-import { Art, Icon, type IconName, Press, T } from '@/components/ui';
+import { Art, Press, T } from '@/components/ui';
 import { Sheet } from '@/components/ui/Sheet';
+import { Glyph, type GlyphName } from '@/components/detail/glyphs';
 import type { RootScreen } from '@/navigation/types';
 import { openInService, SERVICES } from '@/services/musicLinks';
 import { usePreviewStore } from '@/services/preview';
@@ -13,7 +14,7 @@ import { findItunes } from '@/services/itunes';
 import { useDraft } from '@/store/draft';
 import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
-import { colors } from '@/theme/tokens';
+import { colors, fonts } from '@/theme/tokens';
 import { formatDuration } from '@/utils/format';
 import { track } from '@/services/analytics';
 
@@ -23,7 +24,7 @@ export default function TrackMenuScreen({ navigation, route }: RootScreen<'Track
   const service = usePrefs(s => s.service);
   const close = () => navigation.goBack();
 
-  const items: [IconName, string, () => void, boolean?][] = [
+  const items: [GlyphName, string, () => void, boolean?][] = [
     ['play', '30초 미리듣기', async () => { const r = await findItunes(song.title, song.artist); if (r.previewUrl) { usePreviewStore.getState().play(song.id, r.previewUrl, { title: song.title, artist: song.artist, image: song.albumImagePath }); close(); } else toast(r.unavailable ? '지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.' : '이 곡은 미리듣기를 지원하지 않아요.'); }],
     ['external', `${service ? SERVICES[service].label : '음악 앱'}에서 열기`, async () => { if (!service) return navigation.replace('ServicePicker', { song }); close(); if (!(await openInService(service, song))) toast(`${SERVICES[service].label}을(를) 열 수 없어요.`, 'error'); }],
     ['plus', '다른 플리에 담기', () => navigation.replace('PlaylistPicker', { song, excludeId: playlistId })],
@@ -44,27 +45,34 @@ export default function TrackMenuScreen({ navigation, route }: RootScreen<'Track
     } catch (e) { toast(errorMessage(e), 'error'); } finally { removing.current = false; }
   };
 
+  const label = (text: string, color: string) => <T style={{ fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, letterSpacing: -0.15, color }}>{text}</T>;
+
   return (
-    <Sheet>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4, paddingBottom: 14 }}>
-        <Art uri={song.albumImagePath} size={52} radius={12} />
+    <Sheet style={{ paddingHorizontal: 17 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+        <ArtCircle uri={song.albumImagePath} />
         <View style={{ flex: 1 }}>
-          <T v="bodyStrong" numberOfLines={1}>{song.title}</T>
-          <T v="caption" c="ink2">{song.artist} · {formatDuration(song.duration)}</T>
+          <T numberOfLines={1} style={{ fontFamily: fonts.medium, fontSize: 15, lineHeight: 22, letterSpacing: -0.15, color: '#000000' }}>{song.title}</T>
+          <T numberOfLines={1} style={{ fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, letterSpacing: -0.065, color: '#BCBEC6' }}>{song.artist} · {formatDuration(song.duration)}</T>
         </View>
       </View>
-      <View style={{ borderRadius: 20, backgroundColor: colors.page, overflow: 'hidden' }}>
-        {items.map(([ic, label, fn, accent], i) => (
-          <Press key={label} onPress={fn} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 15, borderBottomWidth: i < items.length - 1 ? 1 : 0, borderBottomColor: colors.line }}>
-            <Icon name={ic} size={20} color={accent ? colors.primary : colors.ink} />
-            <T v="body" c={accent ? 'primary' : 'ink'}>{label}</T>
+      <View style={{ borderRadius: 20, backgroundColor: '#FDFCFC', overflow: 'hidden' }}>
+        {items.map(([ic, text, fn, accent], i) => (
+          <Press key={text} onPress={fn} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 15, borderBottomWidth: i < items.length - 1 ? 1 : 0, borderBottomColor: '#F6F4F4' }}>
+            <Glyph name={ic} color={accent ? colors.primary : '#B7B7B7'} />
+            {label(text, accent ? colors.primary : '#B7B7B7')}
           </Press>
         ))}
       </View>
-      <Press onPress={remove} style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 15, borderRadius: 20, backgroundColor: colors.page }}>
-        <Icon name="close" size={20} color={colors.caution} />
-        <T v="body" c="caution">이 플리에서 빼기</T>
+      <Press onPress={remove} style={{ marginTop: 12, height: 52, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#FDFCFC' }}>
+        <Glyph name="close" color="#FB3C3F" />
+        {label('이 플리에서 빼기', '#FB3C3F')}
       </Press>
     </Sheet>
   );
+}
+
+/** 원형 앨범 아트 60 (재생 표시 없이) */
+function ArtCircle({ uri }: { uri?: string | null }) {
+  return <View style={{ width: 60, height: 60, borderRadius: 30, overflow: 'hidden' }}><Art uri={uri} size={60} radius={30} /></View>;
 }

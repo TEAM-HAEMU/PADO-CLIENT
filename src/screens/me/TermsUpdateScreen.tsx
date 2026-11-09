@@ -16,7 +16,6 @@ import { termsSeenKey } from '@/store/terms';
 import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
 
-
 export default function TermsUpdateScreen({ route }: RootScreen<'TermsUpdate'>) {
   const { changed } = route.params;
   const qc = useQueryClient();
@@ -44,23 +43,23 @@ export default function TermsUpdateScreen({ route }: RootScreen<'TermsUpdate'>) 
 
   return (
     <Sheet dismissible={false} closeRef={closeRef}>
-      <View style={{ gap: 16, paddingHorizontal: 4 }}>
-        <View style={{ gap: 6 }}>
-          <T v="title">약관이 개정됐어요</T>
-          <T v="caption" c="ink2">서비스를 계속 이용하시면 개정된 약관에 동의한 것으로 봐요.</T>
+      <View style={{ gap: 20 }}>
+        <View style={{ gap: 2, paddingLeft: 4, paddingBottom: 6 }}>
+          <T v="title" style={{ color: '#000000' }}>약관이 개정됐어요</T>
+          <T v="caption" style={{ fontSize: 13, color: '#A4A4A4' }}>서비스를 계속 이용하시면 개정된 약관에 동의한 것으로 봐요.</T>
         </View>
         <View style={{ gap: 10 }}>
           {changed.filter(c => c.type !== 'MARKETING').map(c => (
-            <View key={c.type} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 16, backgroundColor: colors.page, borderWidth: 1, borderColor: colors.line }}>
-              <T v="bodyStrong">{title(c.type)}</T>
-              <T v="number" c="ink3">{c.latestVersion}</T>
+            <View key={c.type} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 14, borderRadius: 16, backgroundColor: colors.card }}>
+              <T v="bodyStrong" style={{ flex: 1, color: INK }} numberOfLines={1}>{title(c.type)}</T>
+              <T v="captionStrong" style={{ lineHeight: 16, letterSpacing: 0, color: PALE }}>{c.latestVersion}</T>
             </View>
           ))}
           {marketing ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, backgroundColor: colors.page, borderWidth: 1, borderColor: colors.line }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, backgroundColor: colors.card }}>
               <View style={{ flex: 1, gap: 2 }}>
-                <T v="bodyStrong">{title('MARKETING')} (선택)</T>
-                <T v="caption" c="ink3">이벤트·새 기능 소식을 받아볼래요</T>
+                <T v="bodyStrong" style={{ color: INK }}>{title('MARKETING')} (선택)</T>
+                <T v="caption" style={{ fontSize: 13, color: PALE }}>이벤트·새 기능 소식을 받아볼래요</T>
               </View>
               <Toggle label="마케팅 정보 수신 동의" value={agreeMarketing} onChange={setAgreeMarketing} />
             </View>
@@ -71,3 +70,7 @@ export default function TermsUpdateScreen({ route }: RootScreen<'TermsUpdate'>) 
     </Sheet>
   );
 }
+
+/** Figma 약관 행 글자 · 버전 회색 */
+const INK = '#020202';
+const PALE = '#CCCCCC';

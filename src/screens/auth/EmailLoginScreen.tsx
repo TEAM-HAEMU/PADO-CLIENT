@@ -1,12 +1,13 @@
-/** 1.2 이메일 로그인 */
+/** 1.2 이메일 로그인 (Figma B 1.4 이메일 로그인) */
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
-import { PadoSymbol } from '@/components/ui/Brand';
+import { AUTH_PAGES, AuthButton, AuthDisclaimer, AuthHeader, AuthTitle } from '@/components/auth/AuthChrome';
 import { Field } from '@/components/ui/Field';
-import { IconButton, Press, PrimaryButton, T } from '@/components/ui';
+import { Press, T } from '@/components/ui';
+import { Wave } from '@/components/ui/Wave';
 import { env } from '@/config';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
@@ -39,30 +40,27 @@ export default function EmailLoginScreen({ navigation, route }: RootScreen<'Emai
 
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: colors.page }}>
-      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16 }}>
-        <IconButton name="chevronLeft" onPress={navigation.goBack} accessibilityLabel="뒤로" size={40} />
-      </View>
-      <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }} keyboardShouldPersistTaps="handled">
-        <PadoSymbol size={48} />
-        <View style={{ gap: 6 }}>
-          <T v="titleLarge">다시 만나서 반가워요</T>
-          <T v="body" c="ink2">이메일로 로그인하고 음악을 이어가요.</T>
+      <Wave style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
+      <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.goBack} style={{ marginTop: insets.top + 12 }} />
+      <ScrollView contentContainerStyle={{ paddingTop: 39, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+        <AuthTitle title="다시 만나서 반가워요." desc="이메일로 로그인하고 내 주변의 바다를 탐색해요." />
+        <View style={{ paddingHorizontal: 24, paddingTop: 34, gap: 16 }}>
+          {notice && <T v="captionStrong" c="positive" accessibilityLiveRegion="polite">{notice}</T>}
+          <Field label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" textContentType="emailAddress" />
+          <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="비밀번호를 입력하세요" textContentType="password" onSubmitEditing={submit} error={error} />
+          <Press onPress={() => navigation.navigate('PasswordReset', { email: email.trim() || undefined })} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'flex-end' }}>
+            <T v="caption" c="ink2">비밀번호를 잊으셨나요?</T>
+          </Press>
         </View>
-        <View style={{ height: 8 }} />
-        {notice && <T v="captionStrong" c="positive" accessibilityLiveRegion="polite">{notice}</T>}
-        <Field label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" textContentType="emailAddress" />
-        <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="8~20자" textContentType="password" onSubmitEditing={submit} error={error} />
-        <Press onPress={() => navigation.navigate('PasswordReset', { email: email.trim() || undefined })} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'flex-end' }}>
-          <T v="caption" c="ink3">비밀번호를 잊으셨나요?</T>
-        </Press>
       </ScrollView>
-      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 16, gap: 14, alignItems: 'center' }}>
-        <PrimaryButton label="로그인" onPress={submit} loading={busy} style={{ alignSelf: 'stretch' }} />
-        <Press onPress={() => navigation.navigate('Signup', { mode: 'email' })} style={{ flexDirection: 'row', gap: 6 }}>
-          <T v="caption" c="ink3">처음이신가요?</T>
-          <T v="captionStrong" c="primary">계정 만들기</T>
+      <View style={{ paddingHorizontal: 24, gap: 10, alignItems: 'center' }}>
+        <AuthButton label="로그인" onPress={submit} loading={busy} style={{ alignSelf: 'stretch' }} />
+        <Press onPress={() => navigation.navigate('Signup', { mode: 'email' })} hitSlop={8} style={{ flexDirection: 'row', gap: 6 }}>
+          <T v="caption" c="ink2">처음이신가요?</T>
+          <T v="caption" c="primaryDeep">계정 만들기</T>
         </Press>
       </View>
+      <AuthDisclaimer style={{ paddingTop: 40, paddingBottom: insets.bottom + 16 }} />
     </KeyboardAvoidingView>
   );
 }

@@ -52,7 +52,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
     initialRouteName: 'Tabs',
     screens: {
       Tabs: {
-        screens: { Map: 'map', Playlists: 'playlists', Notifications: 'notifications', Profile: 'me' },
+        screens: { Map: 'map', Playlists: 'playlists', Profile: 'me' },
       },
       PinPreview: { path: 'drop/:dropId', parse: { dropId: uuid } },
       VoteDrop: { path: 'vote/:dropId', parse: { dropId: uuid } },
@@ -63,6 +63,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
       PlaylistDetail: { path: 'playlist/:playlistId', parse: { playlistId: uuid, openAdd: () => undefined } },
       DropType: 'new',
       NewPlaylist: 'playlists/new',
+      Notifications: 'notifications',
       Settings: 'settings',
       ProfileEdit: 'me/edit',
       BlockedUsers: 'settings/blocked',

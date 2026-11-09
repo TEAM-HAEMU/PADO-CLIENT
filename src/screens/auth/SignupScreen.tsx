@@ -1,5 +1,5 @@
 /**
- * 1.3 계정 만들기 — 이메일 가입(/auth/register) · 소셜 가입 완료(/oauth2/signup) 공용.
+ * 1.3 계정 만들기 (Figma B 1.4 계정 만들기) — 이메일 가입(/auth/register) · 소셜 가입 완료(/oauth2/signup) 공용.
  * 약관 목록은 GET /terms 응답으로 구성 (SERVICE·PRIVACY·LOCATION 필수, MARKETING 선택).
  */
 import React, { useMemo, useState } from 'react';
@@ -10,13 +10,15 @@ import { authApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import type { AgreementType, Agreements, Term } from '@/api/types';
 import { Field, formatBirth, GenderSelect, ListenAppSelect, validBirth } from '@/components/ui/Field';
-import { Icon, IconButton, Press, PrimaryButton, T } from '@/components/ui';
+import { AUTH_PAGES, AuthButton, AuthHeader, AuthTitle, CheckBox } from '@/components/auth/AuthChrome';
+import { Icon, Press, T } from '@/components/ui';
+import { Wave } from '@/components/ui/Wave';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
 import { type ServiceId, usePrefs } from '@/store/prefs';
 import { getProviderCredential } from '@/services/socialAuth';
 import { toast } from '@/store/toast';
-import { colors } from '@/theme/tokens';
+import { colors, fonts } from '@/theme/tokens';
 
 const FALLBACK_TERMS: Term[] = [
   { type: 'SERVICE', title: '서비스 이용약관', version: '', required: true },
@@ -105,61 +107,58 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
     }
   };
 
-  const title = useMemo(() => (social ? '거의 다 됐어요' : '계정 만들기'), [social]);
+  // 이메일 가입은 디자인 문구('환영합니다!'), 소셜 가입은 마무리 단계라 '거의 다 됐어요'
+  const title = useMemo(() => (social ? '거의 다 됐어요' : '환영합니다!'), [social]);
+  const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
 
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: colors.page }}>
-      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16 }}>
-        <IconButton name="chevronLeft" onPress={navigation.goBack} accessibilityLabel="뒤로" size={40} />
-      </View>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24, gap: 16 }} keyboardShouldPersistTaps="handled">
-        <View style={{ gap: 6 }}>
-          <T v="display">{title}</T>
-          <T v="body" c="ink2">{social ? '몇 가지만 확인하면 바로 시작할 수 있어요.' : '몇 가지만 알려주면 바로 시작할 수 있어요.'}</T>
-        </View>
-        <View style={{ height: 4 }} />
-        <Field label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" disabled={!!providerEmail} help={providerEmail ? '소셜 계정의 이메일로 가입돼요' : undefined} error={errors.email} />
-        {!social && <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="8~20자" error={errors.password} />}
-        <Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} placeholder="지도에 표시될 이름" help="지도에 표시될 이름이에요 (최대 15자)" error={errors.username} right={<T v="number" c="ink3">{username.length}/15</T>} />
-        <Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={errors.birth} />
-        <GenderSelect optional value={gender} onChange={setGender} />
-        <ListenAppSelect value={listenApp} onChange={setListenApp} />
+      <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.goBack} style={{ marginTop: insets.top + 12 }} />
+      <ScrollView contentContainerStyle={{ paddingTop: 39, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+        {/* 파도는 입력칸 뒤에 깔린 채 함께 스크롤 (디자인 474/1140) */}
+        <Wave style={{ position: 'absolute', left: 0, right: 0, top: 377 }} />
+        <AuthTitle title={title} desc={social ? '몇 가지만 확인하면 바로 시작할 수 있어요.' : '몇 가지만 알려주면 바로 시작할 수 있어요.'} />
+        <View style={{ paddingHorizontal: 24, paddingTop: 24, gap: 16 }}>
+          <Field
+            label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" disabled={!!providerEmail}
+            help={providerEmail ? '소셜 계정의 이메일로 가입돼요' : undefined} error={errors.email}
+            right={emailOk && !errors.email ? <Icon name="check" size={16} color={colors.primaryDeep} strokeWidth={2.2} /> : undefined}
+          />
+          {!social && <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="비밀번호를 입력하세요" help="8~20자" error={errors.password} />}
+          <Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} placeholder="지도에 표시될 이름" help="지도에 표시될 이름이에요 (최대 15자)" error={errors.username} right={<T v="caption" c="lineStrong">{username.length}/15</T>} />
+          <Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={errors.birth} />
+          <GenderSelect optional value={gender} onChange={setGender} />
+          <ListenAppSelect value={listenApp} onChange={setListenApp} />
 
-        <View style={{ marginTop: 8, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, overflow: 'hidden' }}>
-          <Press onPress={() => setAgreed(allOn ? {} : Object.fromEntries(terms.map(t => [t.type, true])))} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderBottomWidth: 1, borderBottomColor: colors.line }}>
-            <Check on={allOn} />
-            <T v="bodyStrong">전체 동의</T>
-          </Press>
-          {terms.map(t => (
-            <Press key={t.type} onPress={() => setAgreed(a => ({ ...a, [t.type]: !a[t.type] }))} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
-              <Check on={!!agreed[t.type]} small />
-              <T v="caption" c="ink2" style={{ flex: 1 }}>
-                <T v="captionStrong" c={t.required ? 'primary' : 'ink3'}>{t.required ? '[필수] ' : '[선택] '}</T>{t.title}
-              </T>
-              <Press onPress={() => navigation.navigate('TermsView', { type: t.type })} hitSlop={10} accessibilityRole="link" accessibilityLabel={`${t.title} 보기`}>
-                <T v="caption" c="ink3" style={{ textDecorationLine: 'underline' }}>보기</T>
-              </Press>
+          {/* 약관 — 전체 동의 + 개별(필수 3 · 선택 마케팅), 각 항목 '보기' */}
+          <View style={{ borderRadius: 8, backgroundColor: colors.field, overflow: 'hidden' }}>
+            <Press onPress={() => setAgreed(allOn ? {} : Object.fromEntries(terms.map(t => [t.type, true])))} accessibilityRole="checkbox" accessibilityState={{ checked: allOn }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 }}>
+              <CheckBox on={allOn} />
+              <T v="bodyStrong">전체 동의</T>
             </Press>
-          ))}
+            {terms.map(t => (
+              <Press key={t.type} onPress={() => setAgreed(a => ({ ...a, [t.type]: !a[t.type] }))} accessibilityRole="checkbox" accessibilityState={{ checked: !!agreed[t.type] }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
+                <CheckBox on={!!agreed[t.type]} small />
+                <T v="captionStrong" c="ink3" style={{ flex: 1, fontFamily: fonts.regular }}>
+                  <T v="captionStrong" c={t.required ? 'primary' : 'ink2'}>{t.required ? '[필수] ' : '[선택] '}</T>{t.title}
+                </T>
+                <Press onPress={() => navigation.navigate('TermsView', { type: t.type })} hitSlop={10} accessibilityRole="link" accessibilityLabel={`${t.title} 보기`}>
+                  <T v="captionStrong" c="ink2" style={{ fontFamily: fonts.regular, textDecorationLine: 'underline' }}>보기</T>
+                </Press>
+              </Press>
+            ))}
+          </View>
         </View>
       </ScrollView>
-      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 16, paddingTop: 8 }}>
-        <PrimaryButton label="가입하고 시작하기" onPress={submit} loading={busy} disabled={!requiredOk} />
+      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 16, paddingTop: 8, gap: 10 }}>
+        <AuthButton label="가입하고 시작하기" onPress={submit} loading={busy} disabled={!requiredOk} />
         {social ? null : (
-          <Press onPress={() => navigation.popTo('EmailLogin', {})} hitSlop={8} style={{ alignSelf: 'center', marginTop: 12 }} accessibilityRole="link">
-            <T v="caption" c="ink3">이미 계정이 있나요? <T v="captionStrong" c="primary">로그인</T></T>
+          <Press onPress={() => navigation.popTo('EmailLogin', {})} hitSlop={8} style={{ alignSelf: 'center', flexDirection: 'row', gap: 6 }} accessibilityRole="link">
+            <T v="caption" c="ink2">이미 계정이 있나요?</T>
+            <T v="caption" c="primaryDeep">로그인</T>
           </Press>
         )}
       </View>
     </KeyboardAvoidingView>
-  );
-}
-
-function Check({ on, small }: { on: boolean; small?: boolean }) {
-  const s = small ? 20 : 24;
-  return (
-    <View style={{ width: s, height: s, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? colors.primary : 'transparent', borderWidth: on ? 0 : 1.5, borderColor: colors.line }}>
-      {on ? <Icon name="check" size={s - 6} color={colors.onPrimary} strokeWidth={2.4} /> : null}
-    </View>
   );
 }

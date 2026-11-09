@@ -1,5 +1,5 @@
 /**
- * 4.3 곡 추가 (시트) — 검색 / 주변 드랍 / 좋아요 탭.
+ * 4.3 곡 추가 (시트) — 검색 / 주변 드랍 / 좋아요 탭. (Figma 'B 4.5 곡 추가 (시트)')
  *  · { playlistId } : 선택한 곡을 POST /playlists/{id}/songs
  *  · { picker }     : 투표 후보·새 플리 곡 고르기 → useDraft.picked로 돌려줌
  */
@@ -9,7 +9,9 @@ import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { dropApi, playlistApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import { isMusicDetail, type DropSummary, type Song } from '@/api/types';
-import { Art, Empty, Icon, Press, T } from '@/components/ui';
+import { Empty, Press, PrimaryButton, T } from '@/components/ui';
+import { Glyph } from '@/components/detail/glyphs';
+import { DiscRow, SheetTitle } from '@/components/detail/parts';
 import { ServiceGlyph } from '@/components/ui/Brand';
 import { Sheet } from '@/components/ui/Sheet';
 import { useMyLikes, useSongSearch } from '@/hooks/api';
@@ -17,7 +19,8 @@ import { useDebounced } from '@/hooks/useDebounced';
 import type { RootScreen } from '@/navigation/types';
 import { useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
-import { colors, fonts, glow } from '@/theme/tokens';
+import { colors, fonts } from '@/theme/tokens';
+import { formatDuration } from '@/utils/format';
 import { track } from '@/services/analytics';
 
 type Tab = 'search' | 'nearby' | 'liked';
@@ -84,59 +87,52 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
     }
   };
 
+  const desc = playlistId ? `${plName ? `${plName} · ` : ''}지금 ${p.existing.length}곡` : 'picker' in p && p.picker === 'vote' ? '투표 후보는 2~5곡이에요' : '플레이리스트에 담을 곡을 골라요';
+  // 오른쪽 위 아이콘 두 개 = 좋아요 / 주변 드랍 목록. 다시 누르거나 검색칸을 누르면 검색으로
+  const tabIcon = (k: Tab, glyph: 'heart' | 'drop', label: string) => (
+    <Press key={k} onPress={() => setTab(tab === k ? 'search' : k)} accessibilityLabel={label} accessibilityState={{ selected: tab === k }} hitSlop={6}>
+      <Glyph name={glyph} color={tab === k ? colors.accent : '#E9E9E9'} />
+    </Press>
+  );
+
   return (
-    <Sheet style={{ height: '82%' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 14 }}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <T v="title">곡 추가</T>
-          <T v="caption" c="ink2">{playlistId ? `${plName ? `${plName} · ` : ''}지금 ${p.existing.length}곡` : 'picker' in p && p.picker === 'vote' ? '투표 후보는 2~5곡이에요' : '플레이리스트에 담을 곡을 골라요'}</T>
+    <Sheet style={{ height: '82%', paddingHorizontal: 26 }}>
+      <View style={{ gap: 20, flex: 1 }}>
+        <SheetTitle title="곡 추가" desc={desc} right={<View style={{ flexDirection: 'row', gap: 4 }}>{tabIcon('liked', 'heart', '좋아요')}{tabIcon('nearby', 'drop', '주변 드랍')}</View>} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 40, paddingHorizontal: 16, borderRadius: 99, borderWidth: 1, borderColor: '#55B0FF' }}>
+          <Glyph name="search" size={15} color="#55B0FF" />
+          <TextInput value={q} onChangeText={setQ} onFocus={() => setTab('search')} placeholder="곡을 검색하세요" placeholderTextColor="#B0B0B2" selectionColor={colors.primary} style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 13, letterSpacing: -0.065 }} autoFocus />
+          <ServiceGlyph service="spotify" size={14} />
         </View>
-        <Press onPress={done} disabled={busy} style={[{ paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, backgroundColor: colors.primary }, glow(0.4, 12)]}>
-          {busy ? <ActivityIndicator color={colors.onPrimary} /> : <T v="captionStrong" c="onPrimary">완료{picked.length ? ` · ${picked.length}곡` : ''}</T>}
-        </Press>
+        {tab !== 'search' ? <T style={{ marginTop: -8, fontFamily: fonts.medium, fontSize: 12, lineHeight: 17, color: colors.ink3 }}>{tab === 'liked' ? '좋아요한 음악 드랍' : '주변 드랍'}</T> : null}
+        <FlatList
+          style={{ flex: 1, marginHorizontal: -4 }}
+          data={data}
+          keyExtractor={s => s.id}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ gap: 12, paddingBottom: 12 }}
+          ListEmptyComponent={tab === 'search' && !query ? <Empty icon="search" title="어떤 곡을 담을까요?" /> : search.isFetching || likedLoading ? <ActivityIndicator color={colors.primary} /> : tab === 'search' && search.isError ? <Empty icon="alert" title="검색하지 못했어요" desc={errorMessage(search.error)} /> : <Empty title={tab === 'liked' ? '좋아요한 음악 드랍이 없어요' : tab === 'nearby' ? '주변에 음악 드랍이 없어요' : '검색 결과가 없어요'} />}
+          renderItem={({ item: s }) => {
+            const inList = existing.has(s.id);
+            const on = picked.some(x => x.id === s.id);
+            return (
+              <DiscRow
+                height={67}
+                art={s.albumImagePath}
+                title={s.title}
+                artist={inList ? '이미 담긴 곡' : s.artist}
+                duration={s.duration ? formatDuration(s.duration) : undefined}
+                dim={inList}
+                active={on}
+                onPress={() => toggle(s)}
+                right={<Glyph name="checkCircle" color={on || inList ? colors.accent : '#DEDEDE'} />}
+              />
+            );
+          }}
+        />
+        {/* 시안에는 없지만 고른 곡을 담으려면 필요 — 고른 곡이 있을 때만 */}
+        {picked.length ? <PrimaryButton label={`완료 · ${picked.length}곡`} onPress={done} loading={busy} /> : null}
       </View>
-      <View style={{ flexDirection: 'row', padding: 4, borderRadius: 16, backgroundColor: colors.page, gap: 4, marginBottom: 12 }}>
-        {([['search', 'search', '검색'], ['nearby', 'pin', '주변 드랍'], ['liked', 'heart', '좋아요']] as const).map(([k, ic, l]) => (
-          <Press key={k} onPress={() => setTab(k)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 12, backgroundColor: tab === k ? colors.card2 : 'transparent' }}>
-            <Icon name={ic} size={14} color={tab === k ? colors.primary : colors.ink3} />
-            <T v="captionStrong" c={tab === k ? 'ink' : 'ink3'}>{l}</T>
-          </Press>
-        ))}
-      </View>
-      {tab === 'search' ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, paddingRight: 12, height: 48, borderRadius: 16, backgroundColor: colors.page, borderWidth: 1.5, borderColor: colors.primary, marginBottom: 8 }}>
-          <Icon name="search" size={18} color={colors.primary} />
-          <TextInput value={q} onChangeText={setQ} placeholder="곡·아티스트 검색" placeholderTextColor={colors.ink3} selectionColor={colors.primary} style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 15 }} autoFocus />
-          <ServiceGlyph service="spotify" size={16} />
-        </View>
-      ) : null}
-      <FlatList
-        data={data}
-        keyExtractor={s => s.id}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ gap: 12, paddingVertical: 6, paddingBottom: 20 }}
-        ListEmptyComponent={tab === 'search' && !query ? <Empty icon="search" title="어떤 곡을 담을까요?" /> : search.isFetching || likedLoading ? <ActivityIndicator color={colors.primary} /> : tab === 'search' && search.isError ? <Empty icon="alert" title="검색하지 못했어요" desc={errorMessage(search.error)} /> : <Empty title={tab === 'liked' ? '좋아요한 음악 드랍이 없어요' : tab === 'nearby' ? '주변에 음악 드랍이 없어요' : '검색 결과가 없어요'} />}
-        renderItem={({ item: s }) => {
-          const inList = existing.has(s.id);
-          const on = picked.some(x => x.id === s.id);
-          return (
-            <Press onPress={() => toggle(s)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4 }}>
-              <Art uri={s.albumImagePath} size={50} radius={12} dim={inList} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <T v="bodyStrong" c={inList ? 'ink3' : 'ink'} numberOfLines={1}>{s.title}</T>
-                <T v="caption" c="ink3" numberOfLines={1}>{inList ? '이미 담긴 곡' : s.artist}</T>
-              </View>
-              {inList ? (
-                <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: colors.card2 }}><T v="micro" c="ink3">담김</T></View>
-              ) : (
-                <View style={[{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? colors.primary : 'transparent', borderWidth: on ? 0 : 1.5, borderColor: colors.line }, on ? glow(0.45, 10) : null]}>
-                  <Icon name={on ? 'check' : 'plus'} size={16} color={on ? colors.onPrimary : colors.ink} strokeWidth={on ? 2.4 : 1.8} />
-                </View>
-              )}
-            </Press>
-          );
-        }}
-      />
     </Sheet>
   );
 }

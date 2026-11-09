@@ -1,5 +1,5 @@
 /**
- * B · Deep 기본 컴포넌트. 타이포 스케일은 Figma 텍스트 스타일 "B Deep/*" 그대로.
+ * PADO 기본 컴포넌트 — Figma '파도' 새 디자인 기준 (흰 바탕 · #2B9CFF 버튼 · Pretendard).
  */
 import React from 'react';
 import {
@@ -12,20 +12,22 @@ import { Icon, type IconName } from './Icon';
 import { artUrl } from '@/utils/artUrl';
 import { trackTap } from '@/services/analytics';
 
-// ── Typography
+// ── Typography — Pretendard (Figma 새 디자인 텍스트 스타일 text/* · B Deep/*)
 const ls = (size: number, pct: number) => (size * pct) / 100;
 export const type = StyleSheet.create({
-  display: { fontFamily: fonts.bold, fontSize: 30, lineHeight: 38, letterSpacing: ls(30, -2.5) },
-  titleLarge: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 34, letterSpacing: ls(26, -2) },
+  display: { fontFamily: fonts.semibold, fontSize: 30, lineHeight: 38, letterSpacing: ls(30, -1) },
+  titleLarge: { fontFamily: fonts.semibold, fontSize: 24, lineHeight: 34, letterSpacing: ls(24, -2) },
   title: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 30, letterSpacing: ls(22, -2) },
-  headline: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 24, letterSpacing: ls(17, -1.5) },
-  bodyLarge: { fontFamily: fonts.regular, fontSize: 17, lineHeight: 26, letterSpacing: ls(17, -1) },
+  headline: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 26, letterSpacing: ls(18, -2) },
+  navTitle: { fontFamily: fonts.medium, fontSize: 16, lineHeight: 30, letterSpacing: ls(16, -2) },
+  bodyLarge: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 22, letterSpacing: ls(16, -1) },
   body: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, letterSpacing: ls(15, -1) },
   bodyStrong: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 22, letterSpacing: ls(15, -1) },
-  caption: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, letterSpacing: ls(13, -0.5) },
+  caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18, letterSpacing: ls(12, -0.5) },
   captionStrong: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, letterSpacing: ls(13, -0.5) },
   micro: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
-  label: { fontFamily: fonts.groteskMedium, fontSize: 11, lineHeight: 14, letterSpacing: ls(11, 6), textTransform: 'uppercase' },
+  tiny: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 14 },
+  label: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 14, letterSpacing: ls(12, 6) },
   number: { fontFamily: fonts.groteskMedium, fontSize: 13, lineHeight: 16 },
   numberLarge: { fontFamily: fonts.groteskBold, fontSize: 28, lineHeight: 32, letterSpacing: ls(28, -2) },
   wordmark: { fontFamily: fonts.groteskBold, fontSize: 20, lineHeight: 24, letterSpacing: ls(20, 4) },
@@ -84,15 +86,17 @@ export function Press({ style, children, onPressIn, onPressOut, onPress, onLongP
   );
 }
 
+/** Figma 'button' 컴포넌트: 알약 47px, 켜짐 #2B9CFF + 짙은 글자 / 꺼짐(보조) #DFF0FF + 파란 글자 */
+const BTN_INK = '#0B1535';
 interface BtnProps extends PressableProps { label: string; icon?: IconName; loading?: boolean; style?: ViewStyle; right?: IconName }
 export function PrimaryButton({ label, icon, loading, disabled, style, right, ...rest }: BtnProps) {
   return (
-    <Press {...rest} disabled={disabled || loading} style={[s.primary, disabled ? { opacity: 0.4 } : glow(0.45, 20), style ?? {}]}>
+    <Press {...rest} disabled={disabled || loading} style={[s.primary, disabled ? { opacity: 0.4 } : null, style ?? {}] as ViewStyle[]}>
       {loading ? <ActivityIndicator color={colors.onPrimary} /> : (
         <>
-          {icon && <Icon name={icon} size={20} color={colors.onPrimary} />}
-          <T v="bodyStrong" c="onPrimary">{label}</T>
-          {right && <Icon name={right} size={18} color={colors.onPrimary} />}
+          {icon && <Icon name={icon} size={20} color={BTN_INK} />}
+          <T v="bodyLarge" style={{ fontFamily: fonts.medium, color: BTN_INK }}>{label}</T>
+          {right && <Icon name={right} size={18} color={BTN_INK} />}
         </>
       )}
     </Press>
@@ -102,19 +106,20 @@ export function PrimaryButton({ label, icon, loading, disabled, style, right, ..
 export function SecondaryButton({ label, icon, style, loading, ...rest }: BtnProps) {
   return (
     <Press {...rest} style={[s.secondary, style ?? {}]}>
-      {loading ? <ActivityIndicator color={colors.ink} /> : (
+      {loading ? <ActivityIndicator color={colors.primary} /> : (
         <>
-          {icon && <Icon name={icon} size={18} color={colors.ink} />}
-          <T v="bodyStrong">{label}</T>
+          {icon && <Icon name={icon} size={18} color={colors.primary} />}
+          <T v="bodyLarge" c="primary" style={{ fontFamily: fonts.medium }}>{label}</T>
         </>
       )}
     </Press>
   );
 }
 
-export function IconButton({ name, onPress, size = 44, color = colors.ink, badge, style, accessibilityLabel }: { name: IconName; onPress?: () => void; size?: number; color?: string; badge?: boolean; style?: ViewStyle; accessibilityLabel?: string }) {
+/** 아이콘 버튼 — 기본은 바탕 없음, filled면 Figma 'next' 칩처럼 옅은 하늘 알약 바탕 */
+export function IconButton({ name, onPress, size = 44, color = colors.ink, badge, style, accessibilityLabel, filled }: { name: IconName; onPress?: () => void; size?: number; color?: string; badge?: boolean; style?: ViewStyle; accessibilityLabel?: string; filled?: boolean }) {
   return (
-    <Press onPress={onPress} accessibilityLabel={accessibilityLabel} hitSlop={6} style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' }, style ?? {}]}>
+    <Press onPress={onPress} accessibilityLabel={accessibilityLabel} hitSlop={6} style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: filled ? 'rgba(240,252,255,0.8)' : 'transparent', alignItems: 'center', justifyContent: 'center' }, style ?? {}]}>
       <Icon name={name} size={size * 0.48} color={color} />
       {badge && <View style={s.badge} />}
     </Press>
@@ -123,9 +128,9 @@ export function IconButton({ name, onPress, size = 44, color = colors.ink, badge
 
 export function Chip({ label, active, onPress, icon }: { label: string; active?: boolean; onPress?: () => void; icon?: IconName }) {
   return (
-    <Press onPress={onPress} style={[s.chip, active ? { backgroundColor: colors.primarySoft, borderColor: 'rgba(79,151,242,0.5)' } : null] as ViewStyle[]}>
-      {icon && <Icon name={icon} size={14} color={active ? colors.primary : colors.ink2} />}
-      <T v="captionStrong" c={active ? 'primary' : 'ink2'}>{label}</T>
+    <Press onPress={onPress} style={[s.chip, active ? { backgroundColor: 'rgba(43,156,255,0.8)' } : null] as ViewStyle[]}>
+      {icon && <Icon name={icon} size={14} color={active ? colors.primarySoft : colors.primary} />}
+      <T v="caption" style={{ fontFamily: fonts.medium, color: active ? colors.primarySoft : colors.primary }}>{label}</T>
     </Press>
   );
 }
@@ -137,7 +142,7 @@ export function Art({ uri, size, radius = 12, round, style, dim }: { uri?: strin
     <View style={[{ width: size, height: size, borderRadius: r, backgroundColor: colors.card2, opacity: dim ? 0.55 : 1 }, style]}>
       {/* Image에도 radius — Android 지도 마커 스냅샷은 부모 overflow 클리핑을 못 그린다 */}
       {uri ? <Image source={{ uri: artUrl(uri, size)! }} style={{ width: size, height: size, borderRadius: r }} /> : (
-        <LinearGradient colors={['#E3EEFD', '#F3F8FF']} style={{ flex: 1, borderRadius: r, alignItems: 'center', justifyContent: 'center' }}>
+        <LinearGradient colors={['#C8E8FF', '#F0FCFF']} style={{ flex: 1, borderRadius: r, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="music" size={size * 0.38} color={colors.ink3} />
         </LinearGradient>
       )}
@@ -149,7 +154,7 @@ export function Avatar({ uri, name, size = 36 }: { uri?: string | null; name?: s
   if (uri) return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.card2 }} />;
   const initial = (name ?? '?').trim().charAt(0) || '?';
   return (
-    <LinearGradient colors={['#BFE0FF', '#E8F2FE']} style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }}>
+    <LinearGradient colors={['#C8E8FF', '#F0FCFF']} style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }}>
       <T v={size > 48 ? 'title' : 'captionStrong'} style={{ fontSize: size * 0.4, lineHeight: size * 0.5 }}>{initial}</T>
     </LinearGradient>
   );
@@ -160,14 +165,14 @@ export const Divider = ({ style }: { style?: ViewStyle }) => <View style={[{ hei
 
 export function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label?: string }) {
   return (
-    <Press onPress={() => onChange(!value)} hitSlop={8} accessibilityRole="switch" accessibilityState={{ checked: value }} accessibilityLabel={label} style={{ width: 50, height: 30, borderRadius: 15, backgroundColor: value ? colors.primary : colors.card2, padding: 3, alignItems: value ? 'flex-end' : 'flex-start' }}>
-      <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: value ? colors.onPrimary : colors.ink2 }} />
+    <Press onPress={() => onChange(!value)} hitSlop={8} accessibilityRole="switch" accessibilityState={{ checked: value }} accessibilityLabel={label} style={{ width: 50, height: 30, borderRadius: 15, backgroundColor: value ? '#E8F9FF' : colors.card2, padding: 3, alignItems: value ? 'flex-end' : 'flex-start' }}>
+      <View style={[{ width: 24, height: 24, borderRadius: 12, backgroundColor: value ? '#2BC3FF' : colors.faint }, value ? glow(0.5, 6) : null]} />
     </Press>
   );
 }
 
 export const Radio = ({ on }: { on: boolean }) => (
-  <View style={[{ width: 24, height: 24, borderRadius: 12, borderWidth: on ? 7 : 1.5, borderColor: on ? colors.primary : colors.line }, on ? glow(0.5, 8) : null]} />
+  <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: on ? 6 : 1.5, borderColor: on ? colors.primary : '#CDCDCD', backgroundColor: '#FFFFFF' }} />
 );
 
 export function Loading({ style }: { style?: ViewStyle }) {
@@ -177,8 +182,8 @@ export function Loading({ style }: { style?: ViewStyle }) {
 export function Empty({ icon = 'music', title, desc, action }: { icon?: IconName; title: string; desc?: string; action?: React.ReactNode }) {
   return (
     <View style={{ alignItems: 'center', paddingVertical: 48, paddingHorizontal: 32, gap: 10 }}>
-      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.line }}>
-        <Icon name={icon} size={24} color={colors.ink3} />
+      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.iconTint, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name={icon} size={24} color={colors.primary} />
       </View>
       <T v="headline" style={{ textAlign: 'center' }}>{title}</T>
       {desc ? <T v="caption" c="ink2" style={{ textAlign: 'center' }}>{desc}</T> : null}
@@ -189,9 +194,9 @@ export function Empty({ icon = 'music', title, desc, action }: { icon?: IconName
 
 export function TopBar({ title, onBack, right, left = 'chevronLeft' }: { title?: string; onBack?: () => void; right?: React.ReactNode; left?: IconName }) {
   return (
-    <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}>
-      {onBack ? <IconButton name={left} onPress={onBack} accessibilityLabel="뒤로" /> : <View style={{ width: 44 }} />}
-      {title ? <T v="headline">{title}</T> : <View />}
+    <View style={{ height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14 }}>
+      {onBack ? <IconButton name={left} onPress={onBack} color="#C5C5C5" accessibilityLabel="뒤로" /> : <View style={{ width: 44 }} />}
+      {title ? <T v="navTitle">{title}</T> : <View />}
       {right ?? <View style={{ width: 44 }} />}
     </View>
   );
@@ -199,10 +204,10 @@ export function TopBar({ title, onBack, right, left = 'chevronLeft' }: { title?:
 
 const s = StyleSheet.create({
   pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  primary: { height: 56, borderRadius: 30, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  secondary: { height: 52, borderRadius: 30, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 18 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card },
-  badge: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, borderWidth: 1.5, borderColor: colors.card },
+  primary: { height: 47, borderRadius: 999, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  secondary: { height: 47, borderRadius: 999, backgroundColor: '#DFF0FF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 18 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, height: 26, borderRadius: 999, backgroundColor: 'rgba(240,252,255,0.8)' },
+  badge: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.caution, borderWidth: 1.5, borderColor: colors.page },
 });
 
 export { Icon };

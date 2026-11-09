@@ -7,20 +7,30 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0BBC6A2000DB4D0083D63560 /* Pretendard-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = FD743F28033E494BAEF2C794 /* Pretendard-SemiBold.otf */; };
 		0C80B921A6F3F58F76C31292 /* libPods-PADO.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-PADO.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		1E6DD0D9EDA44A6982A1FBAD /* Pretendard-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = 41C3E88D18B642E2B10594C6 /* Pretendard-Medium.otf */; };
 		220D79F8875E4AED89073CAF /* SUIT-Bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 9C466395416146088BF793DD /* SUIT-Bold.otf */; };
+		35EEDAB91E1F4DD8A1848CD4 /* Pretendard-Bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = EF4A3E6775B849DB98D3A2D8 /* Pretendard-Bold.otf */; };
 		44A5730D44AB4994AD066848 /* GowunBatang-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 15AF9D430445489E905C00B6 /* GowunBatang-Regular.ttf */; };
 		450A12F9E5C238D7DEF05C5A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		582460DA8FF7408AAA6DB9D0 /* SpaceGrotesk-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AFA8CBFBE10649BF8EE91763 /* SpaceGrotesk-Bold.ttf */; };
 		63B74AC0020B48DFA7F6E7AF /* SpaceGrotesk-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C33D8B96DFDE46499D4515BE /* SpaceGrotesk-Medium.ttf */; };
 		6681F3B75A054B72BEB82127 /* SUIT-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = 965F095856604ED79CC34DCD /* SUIT-Regular.otf */; };
+		66A4FA5DBB4B459F851BA80B /* Pretendard-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = BFC48AF61FA04AAA8226FA82 /* Pretendard-Regular.otf */; };
+		69A7C061F8144513AFF722A7 /* Pretendard-Bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = EF4A3E6775B849DB98D3A2D8 /* Pretendard-Bold.otf */; };
 		6DFE0AF7D39A43928491D12F /* SpaceGrotesk-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2F4EF3F036BB4B0B97628F52 /* SpaceGrotesk-Regular.ttf */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		80E6396F1853402D9A532AD5 /* Pretendard-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = 41C3E88D18B642E2B10594C6 /* Pretendard-Medium.otf */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		8F09635BAF904C268CC88B5F /* SUIT-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 5E1EEAC1C8924D83AE6EC397 /* SUIT-SemiBold.otf */; };
 		A95C8EF7F6A6A8183F0A8D50 /* DemoTourUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF9FB17EC38C28A26198763 /* DemoTourUITests.swift */; };
+		C7A7CE1489FD4C269AF4BE67 /* Pretendard-Light.otf in Resources */ = {isa = PBXBuildFile; fileRef = 23977B4023C64838B28FC5A7 /* Pretendard-Light.otf */; };
+		D362CFF10C1A4AAEB965BDC5 /* Pretendard-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = FD743F28033E494BAEF2C794 /* Pretendard-SemiBold.otf */; };
+		D67BB49A20984E58B4F5EDD5 /* Pretendard-Light.otf in Resources */ = {isa = PBXBuildFile; fileRef = 23977B4023C64838B28FC5A7 /* Pretendard-Light.otf */; };
 		D78B9CF4CAC041A8ACC4F0F9 /* SUIT-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = A2F08C80ED2846FCB825494A /* SUIT-Medium.otf */; };
+		FE0DC0AE44704A0997C8528D /* Pretendard-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = BFC48AF61FA04AAA8226FA82 /* Pretendard-Regular.otf */; };
 		FF9F03770791878A95555932 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5109159F6E524CAE0ABC455 /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
@@ -40,8 +50,10 @@
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = PADO/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = PADO/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		15AF9D430445489E905C00B6 /* GowunBatang-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "GowunBatang-Regular.ttf"; path = "../src/assets/fonts/GowunBatang-Regular.ttf"; sourceTree = "<group>"; };
+		23977B4023C64838B28FC5A7 /* Pretendard-Light.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Pretendard-Light.otf"; path = "../src/assets/fonts/Pretendard-Light.otf"; sourceTree = "<group>"; };
 		2F4EF3F036BB4B0B97628F52 /* SpaceGrotesk-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "SpaceGrotesk-Regular.ttf"; path = "../src/assets/fonts/SpaceGrotesk-Regular.ttf"; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-PADO.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-PADO.debug.xcconfig"; path = "Target Support Files/Pods-PADO/Pods-PADO.debug.xcconfig"; sourceTree = "<group>"; };
+		41C3E88D18B642E2B10594C6 /* Pretendard-Medium.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Pretendard-Medium.otf"; path = "../src/assets/fonts/Pretendard-Medium.otf"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-PADO.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-PADO.release.xcconfig"; path = "Target Support Files/Pods-PADO/Pods-PADO.release.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-PADO.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-PADO.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E1EEAC1C8924D83AE6EC397 /* SUIT-SemiBold.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "SUIT-SemiBold.otf"; path = "../src/assets/fonts/SUIT-SemiBold.otf"; sourceTree = "<group>"; };
@@ -53,9 +65,12 @@
 		9C466395416146088BF793DD /* SUIT-Bold.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "SUIT-Bold.otf"; path = "../src/assets/fonts/SUIT-Bold.otf"; sourceTree = "<group>"; };
 		A2F08C80ED2846FCB825494A /* SUIT-Medium.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "SUIT-Medium.otf"; path = "../src/assets/fonts/SUIT-Medium.otf"; sourceTree = "<group>"; };
 		AFA8CBFBE10649BF8EE91763 /* SpaceGrotesk-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "SpaceGrotesk-Bold.ttf"; path = "../src/assets/fonts/SpaceGrotesk-Bold.ttf"; sourceTree = "<group>"; };
+		BFC48AF61FA04AAA8226FA82 /* Pretendard-Regular.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Pretendard-Regular.otf"; path = "../src/assets/fonts/Pretendard-Regular.otf"; sourceTree = "<group>"; };
 		C33D8B96DFDE46499D4515BE /* SpaceGrotesk-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "SpaceGrotesk-Medium.ttf"; path = "../src/assets/fonts/SpaceGrotesk-Medium.ttf"; sourceTree = "<group>"; };
 		E5109159F6E524CAE0ABC455 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		EF4A3E6775B849DB98D3A2D8 /* Pretendard-Bold.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Pretendard-Bold.otf"; path = "../src/assets/fonts/Pretendard-Bold.otf"; sourceTree = "<group>"; };
+		FD743F28033E494BAEF2C794 /* Pretendard-SemiBold.otf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Pretendard-SemiBold.otf"; path = "../src/assets/fonts/Pretendard-SemiBold.otf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +135,11 @@
 				C33D8B96DFDE46499D4515BE /* SpaceGrotesk-Medium.ttf */,
 				AFA8CBFBE10649BF8EE91763 /* SpaceGrotesk-Bold.ttf */,
 				15AF9D430445489E905C00B6 /* GowunBatang-Regular.ttf */,
+				BFC48AF61FA04AAA8226FA82 /* Pretendard-Regular.otf */,
+				41C3E88D18B642E2B10594C6 /* Pretendard-Medium.otf */,
+				23977B4023C64838B28FC5A7 /* Pretendard-Light.otf */,
+				EF4A3E6775B849DB98D3A2D8 /* Pretendard-Bold.otf */,
+				FD743F28033E494BAEF2C794 /* Pretendard-SemiBold.otf */,
 			);
 			name = Resources;
 			path = "";
@@ -269,6 +289,11 @@
 				582460DA8FF7408AAA6DB9D0 /* SpaceGrotesk-Bold.ttf in Resources */,
 				44A5730D44AB4994AD066848 /* GowunBatang-Regular.ttf in Resources */,
 				450A12F9E5C238D7DEF05C5A /* PrivacyInfo.xcprivacy in Resources */,
+				FE0DC0AE44704A0997C8528D /* Pretendard-Regular.otf in Resources */,
+				1E6DD0D9EDA44A6982A1FBAD /* Pretendard-Medium.otf in Resources */,
+				C7A7CE1489FD4C269AF4BE67 /* Pretendard-Light.otf in Resources */,
+				69A7C061F8144513AFF722A7 /* Pretendard-Bold.otf in Resources */,
+				D362CFF10C1A4AAEB965BDC5 /* Pretendard-SemiBold.otf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -276,28 +301,17 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				66A4FA5DBB4B459F851BA80B /* Pretendard-Regular.otf in Resources */,
+				80E6396F1853402D9A532AD5 /* Pretendard-Medium.otf in Resources */,
+				D67BB49A20984E58B4F5EDD5 /* Pretendard-Light.otf in Resources */,
+				35EEDAB91E1F4DD8A1848CD4 /* Pretendard-Bold.otf in Resources */,
+				0BBC6A2000DB4D0083D63560 /* Pretendard-SemiBold.otf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		D0C0FFEE3E544DAD4FDE099C /* Guard: no mock archive */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/../.env",
-			);
-			name = "Guard: no mock archive";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# 아카이브(ACTION=install)할 때 .env가 목 서버 모드면 빌드를 멈춘다 — 목 빌드가 TestFlight/App Store로 나가는 것 방지\nif [ \"$ACTION\" = \"install\" ] && grep -qE '^USE_MOCK=true' \"$SRCROOT/../.env\" 2>/dev/null; then\n  echo \"error: .env가 USE_MOCK=true예요. 목 서버 빌드는 아카이브할 수 없어요 (USE_MOCK=false로 바꾸고 npm run env:sync).\"\n  exit 1\nfi\n";
-			showEnvVarsInLog = 0;
-		};
 		00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -351,6 +365,22 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		D0C0FFEE3E544DAD4FDE099C /* Guard: no mock archive */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../.env",
+			);
+			name = "Guard: no mock archive";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# 아카이브(ACTION=install)할 때 .env가 목 서버 모드면 빌드를 멈춘다 — 목 빌드가 TestFlight/App Store로 나가는 것 방지\nif [ \"$ACTION\" = \"install\" ] && grep -qE '^USE_MOCK=true' \"$SRCROOT/../.env\" 2>/dev/null; then\n  echo \"error: .env가 USE_MOCK=true예요. 목 서버 빌드는 아카이브할 수 없어요 (USE_MOCK=false로 바꾸고 npm run env:sync).\"\n  exit 1\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 		E235C05ADACE081382539298 /* [CP] Copy Pods Resources */ = {

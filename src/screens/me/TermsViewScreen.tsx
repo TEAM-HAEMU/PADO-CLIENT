@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/endpoints';
 import { Empty, T, TopBar } from '@/components/ui';
+import { Wave } from '@/components/ui/Wave';
 import { TERMS } from '@/content/terms';
 import type { RootScreen } from '@/navigation/types';
 import { colors } from '@/theme/tokens';
@@ -21,15 +22,16 @@ export default function TermsViewScreen({ navigation, route }: RootScreen<'Terms
   const version = server?.version ?? doc?.version;
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
+      <Wave scale={1.2} style={{ position: 'absolute', left: -110, right: 0, bottom: -103 }} />
       <TopBar title={title} onBack={navigation.goBack} />
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 12 }}>
-        {version ? <T v="caption" c="ink3">시행일 {version}</T> : null}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 28, paddingTop: 12, paddingBottom: insets.bottom + 32, gap: 8 }}>
+        {version ? <T v="caption" style={{ fontSize: 13, color: '#BFBFBF' }}>시행일 {version}</T> : null}
         {doc?.body ? (
-          <View style={{ gap: 4 }}>
+          <View>
             {doc.body.split('\n').map((line, i) =>
-              !line.trim() ? <View key={i} style={{ height: 10 }} />
-              : HEADING.test(line) ? <T key={i} v="bodyStrong" selectable style={{ marginTop: 4 }}>{line.replace(/^# /, '')}</T>
-              : <T key={i} v="body" c="ink2" selectable>{line}</T>,
+              !line.trim() ? <View key={i} style={{ height: 8 }} />
+              : HEADING.test(line) ? <T key={i} v="bodyStrong" selectable style={{ color: '#2F2F2F' }}>{line.replace(/^# /, '')}</T>
+              : <T key={i} v="body" selectable style={{ color: '#B2B2B2' }}>{line}</T>,
             )}
           </View>
         ) : (

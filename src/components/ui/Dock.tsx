@@ -1,50 +1,65 @@
-/** 하단 도크 — Figma "B/Dock": 지도 · 플리 · (가운데 원형 드랍 버튼) · 알림 · 프로필 */
+/** 하단 바 — Figma 'bottom bar': 반투명 알약 안에 홈(지도) · 플리 · 드랍(+) · 프로필. 알림은 프로필 화면 오른쪽 위 종 아이콘으로 옮김 */
 import React from 'react';
-import { View, Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import { BlurView } from '@react-native-community/blur';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, glow } from '@/theme/tokens';
-import { useUnreadCount } from '@/hooks/api';
-import { Icon, type IconName } from './Icon';
+import Svg, { Path } from 'react-native-svg';
 import { Press } from './index';
 
-const LABELS: Record<string, string> = { Map: '지도', Playlists: '플리', Notifications: '알림', Profile: '프로필' };
+const ON = '#2BD1FF';
+const OFF = '#C9CDD2'; // Figma #E7E7E7은 흰 지도 위에서 거의 안 보여 한 단계 진하게
+const SIZE = 22;
 
-const ICONS: Record<string, IconName> = { Map: 'map', Playlists: 'playlist', Notifications: 'bell', Profile: 'user' };
+/** Figma bottom bar 아이콘 패스 그대로 (채움형) */
+const GLYPHS = {
+  home: { vb: '0 0 12 13.625', d: 'M0 11.875V4.875C0 4.64097 0.0520833 4.41931 0.15625 4.21C0.260417 4.00056 0.409722 3.81944 0.604167 3.66667L5.10417 0.291667C5.38194 0.0972222 5.68056 0 6 0C6.31944 0 6.61806 0.0972222 6.89583 0.291667L11.3958 3.66667C11.5903 3.81944 11.7396 4.00056 11.8438 4.21C11.9479 4.41931 12 4.64097 12 4.875V11.875C12 12.3563 11.8287 12.7682 11.486 13.1108C11.1433 13.4536 10.7313 13.625 10.25 13.625H8.25C8.0375 13.625 7.85937 13.5531 7.71562 13.4094C7.57187 13.2656 7.5 13.0875 7.5 12.875V8.875C7.5 8.6625 7.42833 8.48438 7.285 8.34063C7.14153 8.19688 6.96382 8.125 6.75188 8.125H5.25542C5.04347 8.125 4.86458 8.19688 4.71875 8.34063C4.57292 8.48438 4.5 8.6625 4.5 8.875V12.875C4.5 13.0875 4.42813 13.2656 4.28438 13.4094C4.14062 13.5531 3.9625 13.625 3.75 13.625H1.75C1.26875 13.625 0.856805 13.4536 0.514167 13.1108C0.171389 12.7682 0 12.3563 0 11.875Z', w: 12, h: 13.625 },
+  // 플리 — Figma는 두 번째 칸도 지도 모양이라 첫 칸(지도)과 헷갈려, 같은 채움 스타일의 목록+음표로 대신
+  playlist: { vb: '0 0 16 14', d: 'M0.8 1H8.2C8.6418 1 9 1.3582 9 1.8C9 2.2418 8.6418 2.6 8.2 2.6H0.8C0.3582 2.6 0 2.2418 0 1.8C0 1.3582 0.3582 1 0.8 1ZM0.8 5.2H8.2C8.6418 5.2 9 5.5582 9 6C9 6.4418 8.6418 6.8 8.2 6.8H0.8C0.3582 6.8 0 6.4418 0 6C0 5.5582 0.3582 5.2 0.8 5.2ZM0.8 9.4H5.2C5.6418 9.4 6 9.7582 6 10.2C6 10.6418 5.6418 11 5.2 11H0.8C0.3582 11 0 10.6418 0 10.2C0 9.7582 0.3582 9.4 0.8 9.4ZM12.6 1.9C12.6 1.2 13.2 0.8 13.8 1L15.4 1.6C15.8 1.75 16 2.1 16 2.5V3.4C16 3.9 15.5 4.2 15 4L14.2 3.7V11.4H12.6ZM11.6 8.8C13.036 8.8 14.2 9.964 14.2 11.4C14.2 12.836 13.036 14 11.6 14C10.164 14 9 12.836 9 11.4C9 9.964 10.164 8.8 11.6 8.8Z', w: 16, h: 14 },
+  plus: { vb: '0 0 16 16', d: 'M7.25 8.75V11.25C7.25 11.4625 7.32146 11.6406 7.46438 11.7844C7.60729 11.9281 7.78438 12 7.99563 12C8.20688 12 8.38542 11.9281 8.53125 11.7844C8.67708 11.6406 8.75 11.4625 8.75 11.25V8.75H11.25C11.4625 8.75 11.6406 8.67854 11.7844 8.53563C11.9281 8.39271 12 8.21563 12 8.00438C12 7.79313 11.9281 7.61458 11.7844 7.46875C11.6406 7.32292 11.4625 7.25 11.25 7.25H8.75V4.75C8.75 4.5375 8.67854 4.35937 8.53563 4.21562C8.39271 4.07187 8.21563 4 8.00438 4C7.79313 4 7.61458 4.07187 7.46875 4.21562C7.32292 4.35937 7.25 4.5375 7.25 4.75V7.25H4.75C4.5375 7.25 4.35938 7.32146 4.21563 7.46438C4.07188 7.60729 4 7.78438 4 7.99563C4 8.20688 4.07188 8.38542 4.21563 8.53125C4.35938 8.67708 4.5375 8.75 4.75 8.75H7.25ZM8.00583 16C6.90472 16 5.86806 15.7917 4.89583 15.375C3.92361 14.9583 3.07292 14.3854 2.34375 13.6563C1.61458 12.9271 1.04167 12.0767 0.625 11.105C0.208333 10.1333 0 9.09514 0 7.99042C0 6.88569 0.208333 5.85069 0.625 4.88542C1.04167 3.92014 1.61458 3.07292 2.34375 2.34375C3.07292 1.61458 3.92333 1.04167 4.895 0.625C5.86667 0.208333 6.90486 0 8.00958 0C9.11431 0 10.1493 0.208333 11.1146 0.625C12.0799 1.04167 12.9271 1.61458 13.6563 2.34375C14.3854 3.07292 14.9583 3.92167 15.375 4.89C15.7917 5.85847 16 6.89319 16 7.99417C16 9.09528 15.7917 10.1319 15.375 11.1042C14.9583 12.0764 14.3854 12.9271 13.6563 13.6563C12.9271 14.3854 12.0783 14.9583 11.11 15.375C10.1415 15.7917 9.10681 16 8.00583 16Z', w: 16, h: 16 },
+  user: { vb: '0 0 16 16', d: 'M2.9375 12.0625C3.6875 11.5347 4.48958 11.1424 5.34375 10.8854C6.19792 10.6285 7.08333 10.5 8 10.5C8.91667 10.5 9.80208 10.6285 10.6563 10.8854C11.5104 11.1424 12.3125 11.5347 13.0625 12.0625C13.5486 11.4931 13.9097 10.8611 14.1458 10.1667C14.3819 9.47222 14.5 8.75 14.5 8C14.5 6.19444 13.8681 4.65972 12.6042 3.39583C11.3403 2.13194 9.80556 1.5 8 1.5C6.19444 1.5 4.65972 2.13194 3.39583 3.39583C2.13194 4.65972 1.5 6.19444 1.5 8C1.5 8.75 1.61806 9.47222 1.85417 10.1667C2.09028 10.8611 2.45139 11.4931 2.9375 12.0625ZM5.875 8.625C5.29167 8.04167 5 7.33333 5 6.5C5 5.66667 5.29167 4.95833 5.875 4.375C6.45833 3.79167 7.16667 3.5 8 3.5C8.83333 3.5 9.54167 3.79167 10.125 4.375C10.7083 4.95833 11 5.66667 11 6.5C11 7.33333 10.7083 8.04167 10.125 8.625C9.54167 9.20833 8.83333 9.5 8 9.5C7.16667 9.5 6.45833 9.20833 5.875 8.625ZM8 16C6.90278 16 5.86806 15.7917 4.89583 15.375C3.92361 14.9583 3.07292 14.3854 2.34375 13.6563C1.61458 12.9271 1.04167 12.0764 0.625 11.1042C0.208333 10.1319 0 9.09722 0 8C0 6.88889 0.208333 5.85069 0.625 4.88542C1.04167 3.92014 1.61458 3.07292 2.34375 2.34375C3.07292 1.61458 3.92361 1.04167 4.89583 0.625C5.86806 0.208333 6.90278 0 8 0C9.11111 0 10.1493 0.208333 11.1146 0.625C12.0799 1.04167 12.9271 1.61458 13.6563 2.34375C14.3854 3.07292 14.9583 3.92014 15.375 4.88542C15.7917 5.85069 16 6.88889 16 8C16 9.09722 15.7917 10.1319 15.375 11.1042C14.9583 12.0764 14.3854 12.9271 13.6563 13.6563C12.9271 14.3854 12.0799 14.9583 11.1146 15.375C10.1493 15.7917 9.11111 16 8 16Z', w: 16, h: 16 },
+} as const;
+
+/** Figma 20px 칸에 맞춘 비율 그대로 SIZE로 키운다 */
+function Glyph({ name, color }: { name: keyof typeof GLYPHS; color: string }) {
+  const g = GLYPHS[name];
+  const k = SIZE / 20;
+  return (
+    <View style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={g.w * k} height={g.h * k} viewBox={g.vb}><Path d={g.d} fill={color} /></Svg>
+    </View>
+  );
+}
+
+const TABS: { route: string; glyph: keyof typeof GLYPHS; label: string }[] = [
+  { route: 'Map', glyph: 'home', label: '지도' },
+  { route: 'Playlists', glyph: 'playlist', label: '플리' },
+  { route: 'Profile', glyph: 'user', label: '프로필' },
+];
 
 export function Dock({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const unread = useUnreadCount().data ?? 0;
-  const routes = state.routes;
-  const item = (i: number) => {
-    const r = routes[i];
-    const focused = state.index === i;
+  const current = state.routes[state.index]?.name;
+  const tab = (t: (typeof TABS)[number]) => {
+    const focused = current === t.route;
     return (
-      <Press key={r.key} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={`${LABELS[r.name] ?? r.name}${r.name === 'Notifications' && unread > 0 ? `, 읽지 않은 알림 ${unread}개` : ''}`} onPress={() => navigation.navigate(r.name)} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, height: 68 }}>
-        <View>
-          <Icon name={ICONS[r.name]} size={24} color={focused ? colors.primary : colors.ink3} />
-          {r.name === 'Notifications' && unread > 0 ? <View style={{ position: 'absolute', right: -1, top: 1, width: 7, height: 7, borderRadius: 4, backgroundColor: colors.primary, borderWidth: 1.5, borderColor: colors.card }} /> : null}
-        </View>
-        <View style={[{ width: 4, height: 4, borderRadius: 2, backgroundColor: colors.primary, opacity: focused ? 1 : 0 }, focused ? glow(0.9, 6) : null]} />
+      <Press key={t.route} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={t.label} hitSlop={8} onPress={() => navigation.navigate(t.route)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+        <Glyph name={t.glyph} color={focused ? ON : OFF} />
       </Press>
     );
   };
   return (
-    <View pointerEvents="box-none" style={{ position: 'absolute', left: 16, right: 16, bottom: Math.max(insets.bottom - 6, 12) }}>
-      <View style={{ height: 68, borderRadius: 34, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
+    <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: Math.max(insets.bottom - 4, 14), alignItems: 'center' }}>
+      <View style={{ height: 50, borderRadius: 999, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, gap: 6, shadowColor: '#FFFFFF', shadowOpacity: 0.25, shadowRadius: 20, shadowOffset: { width: 0, height: 0 } }}>
         {/* Android 실시간 블러는 아래 지도가 다시 그려질 때마다 비용이 커서 반투명 배경으로 대신 */}
-        {Platform.OS === 'ios' ? <BlurView blurType="xlight" blurAmount={24} reducedTransparencyFallbackColor={colors.card} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} /> : null}
-        <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: Platform.OS === 'ios' ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.96)' }} />
-        {item(0)}
-        {item(1)}
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Press accessibilityLabel="드랍하기" onPress={() => navigation.getParent()?.navigate('DropType')} style={[{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, glow(0.55, 20)]}>
-            <Icon name="plus" size={26} color={colors.onPrimary} />
-          </Press>
-        </View>
-        {item(2)}
-        {item(3)}
+        {Platform.OS === 'ios' ? <BlurView blurType="xlight" blurAmount={20} reducedTransparencyFallbackColor="#F6F9FA" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} /> : null}
+        <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: Platform.OS === 'ios' ? 'rgba(246,249,250,0.6)' : 'rgba(246,249,250,0.96)' }} />
+        {tab(TABS[0])}
+        {tab(TABS[1])}
+        <Press accessibilityLabel="드랍하기" hitSlop={8} onPress={() => navigation.getParent()?.navigate('DropType')} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+          <Glyph name="plus" color={OFF} />
+        </Press>
+        {tab(TABS[2])}
       </View>
     </View>
   );

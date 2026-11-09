@@ -4,9 +4,10 @@ import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/endpoints';
 import { ApiError, passwordResetErrorMessage } from '@/api/errors';
-import { PadoSymbol } from '@/components/ui/Brand';
+import { AuthButton, AuthHeader, AuthTitle } from '@/components/auth/AuthChrome';
 import { Field } from '@/components/ui/Field';
-import { IconButton, Press, PrimaryButton, T } from '@/components/ui';
+import { Press, T } from '@/components/ui';
+import { Wave } from '@/components/ui/Wave';
 import { env } from '@/config';
 import type { RootScreen } from '@/navigation/types';
 import { track } from '@/services/analytics';
@@ -93,50 +94,45 @@ export default function PasswordResetScreen({ navigation, route }: RootScreen<'P
 
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: colors.page }}>
-      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16 }}>
-        <IconButton name="chevronLeft" onPress={back} accessibilityLabel="뒤로" size={40} />
-      </View>
-      <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }} keyboardShouldPersistTaps="handled">
-        <PadoSymbol size={48} />
-        <View style={{ gap: 6 }}>
-          <T v="titleLarge">{title}</T>
-          <T v="body" c="ink2">{body(email)}</T>
-        </View>
-        <View style={{ height: 8 }} />
-
-        {step === 'email' && (
-          <Field
-            label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com"
-            textContentType="emailAddress" autoFocus onSubmitEditing={sendCode} error={error}
-            help="소셜 로그인으로 가입했다면 메일이 가지 않아요. 가입한 소셜 계정으로 로그인해주세요."
-          />
-        )}
-
-        {step === 'code' && (
-          <>
+      <Wave style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
+      <AuthHeader onBack={back} style={{ marginTop: insets.top + 12 }} />
+      <ScrollView contentContainerStyle={{ paddingTop: 39, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+        <AuthTitle title={title} desc={body(email)} />
+        <View style={{ paddingHorizontal: 24, paddingTop: 34, gap: 16 }}>
+          {step === 'email' && (
             <Field
-              label="인증번호" value={code} onChangeText={t => { setCode(t.replace(/\D/g, '').slice(0, 6)); setError(null); }}
-              keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="one-time-code" placeholder="6자리 숫자"
-              maxLength={6} autoFocus onSubmitEditing={verify} error={error}
-              help={MOCK_CODE ? `목 모드 인증번호: ${MOCK_CODE}` : '메일이 안 보이면 스팸함도 확인해주세요.'}
+              label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com"
+              textContentType="emailAddress" autoFocus onSubmitEditing={sendCode} error={error}
+              help="소셜 로그인으로 가입했다면 메일이 가지 않아요. 가입한 소셜 계정으로 로그인해주세요."
             />
-            <Press onPress={sendCode} disabled={cooldown > 0 || busy} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'flex-start' }}>
-              <T v="captionStrong" c={cooldown > 0 ? 'ink3' : 'primary'}>
-                {cooldown > 0 ? `인증번호 다시 받기 (${Math.floor(cooldown / 60)}:${String(cooldown % 60).padStart(2, '0')})` : '인증번호 다시 받기'}
-              </T>
-            </Press>
-          </>
-        )}
+          )}
 
-        {step === 'password' && (
-          <>
-            <Field label="새 비밀번호" value={password} onChangeText={setPassword} secure placeholder="8~20자" textContentType="newPassword" autoFocus />
-            <Field label="새 비밀번호 확인" value={confirm} onChangeText={setConfirm} secure placeholder="한 번 더 입력" textContentType="newPassword" onSubmitEditing={save} error={error} />
-          </>
-        )}
+          {step === 'code' && (
+            <>
+              <Field
+                label="인증번호" value={code} onChangeText={t => { setCode(t.replace(/\D/g, '').slice(0, 6)); setError(null); }}
+                keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="one-time-code" placeholder="6자리 숫자"
+                maxLength={6} autoFocus onSubmitEditing={verify} error={error}
+                help={MOCK_CODE ? `목 모드 인증번호: ${MOCK_CODE}` : '메일이 안 보이면 스팸함도 확인해주세요.'}
+              />
+              <Press onPress={sendCode} disabled={cooldown > 0 || busy} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'flex-end' }}>
+                <T v="caption" c={cooldown > 0 ? 'ink3' : 'primaryDeep'}>
+                  {cooldown > 0 ? `인증번호 다시 받기 (${Math.floor(cooldown / 60)}:${String(cooldown % 60).padStart(2, '0')})` : '인증번호 다시 받기'}
+                </T>
+              </Press>
+            </>
+          )}
+
+          {step === 'password' && (
+            <>
+              <Field label="새 비밀번호" value={password} onChangeText={setPassword} secure placeholder="8~20자" textContentType="newPassword" autoFocus />
+              <Field label="새 비밀번호 확인" value={confirm} onChangeText={setConfirm} secure placeholder="한 번 더 입력" textContentType="newPassword" onSubmitEditing={save} error={error} />
+            </>
+          )}
+        </View>
       </ScrollView>
       <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 16 }}>
-        <PrimaryButton
+        <AuthButton
           label={step === 'email' ? '인증번호 받기' : step === 'code' ? '확인' : '비밀번호 바꾸기'}
           onPress={submit} loading={busy} disabled={step === 'code' && code.length < 6}
         />

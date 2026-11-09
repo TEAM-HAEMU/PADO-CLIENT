@@ -1,5 +1,5 @@
 /**
- * B · Deep 모션 — Figma 재생 화면 키프레임(8초 루프)을 Reanimated로 재현.
+ * 모션 — 도는 디스크 · 숨 쉬는 링 · 퍼지는 파문 · 진행 바 (Reanimated). 파티클 파도는 예전 B · Deep 화면(로그인)용으로 남겨 둠.
  *  · 파티클 파도 3겹: 402px 주기 그래픽을 -402px 이동 (이음매 없는 루프)
  *  · 레코드판처럼 도는 디스크: 8초 1회전
  *  · 숨 쉬는 링 / 퍼지는 파문
@@ -106,6 +106,28 @@ export function DotProgress({ progress, width, dots = 44 }: { progress: number; 
     <View style={{ width, height: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
       {Array.from({ length: dots }, (_, i) => (
         <View key={i} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: i < filled ? colors.primary : colors.ink3, opacity: i < filled ? 1 : 0.5, shadowColor: colors.primary, shadowOpacity: i < filled ? 0.8 : 0, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } }} />
+      ))}
+    </View>
+  );
+}
+
+/** Figma 재생 화면 파형 막대 높이 (60px 기준 · 12개 주기) */
+const BAR_HEIGHTS = [46.5, 60, 46.5, 34, 22.6, 34, 46.5, 34, 22.6, 34, 46.5, 60];
+
+/**
+ * 막대 파형 진행 바 (0~1) — Figma '2.3 재생' 파형: 폭 5.3 · 간격 4.8 둥근 막대, 지난 부분 #00C9FF / 남은 부분 #F0FCFF.
+ * 남은 부분은 흰 바탕에서 거의 안 보여 한 단계 진한 #E1F6FF로.
+ */
+export function BarProgress({ progress, width, height = 60, color = '#00C9FF', rest = '#E1F6FF' }: { progress: number; width: number; height?: number; color?: string; rest?: string }) {
+  const bar = 5.3;
+  const step = 10.1;
+  const n = Math.max(8, Math.floor((width + step - bar) / step));
+  const lit = Math.round(Math.min(1, Math.max(0, progress)) * n);
+  const k = height / 60;
+  return (
+    <View style={{ width, height, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      {Array.from({ length: n }, (_, i) => (
+        <View key={i} style={{ width: bar, height: BAR_HEIGHTS[i % BAR_HEIGHTS.length] * k, borderRadius: bar / 2, backgroundColor: i < lit ? color : rest }} />
       ))}
     </View>
   );

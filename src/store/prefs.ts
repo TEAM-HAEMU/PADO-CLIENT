@@ -15,6 +15,8 @@ interface Prefs {
   /** 알림 설정 — 서버에 개별 설정 API가 없어 기기 로컬 (인앱 SSE 표시 여부) */
   notify: { like: boolean; comment: boolean; nearby: boolean };
   locationPrompted: boolean;
+  /** 처음 실행 소개 3장(온보딩)을 봤는지 — 본 뒤엔 로그인 화면부터 */
+  onboardingSeen: boolean;
   /** 설정 › 이용 데이터 분석 (Amplitude). 선택 동의 — 동의한 경우에만 켜짐 (기본 꺼짐) */
   analytics: boolean;
   /** 분석 동의를 한 번이라도 물어봤는지 (첫 실행 안내 1회) */
@@ -26,6 +28,7 @@ interface Prefs {
   setAutoplayNearby: (v: boolean) => void;
   setNotify: (k: keyof Prefs['notify'], v: boolean) => void;
   setLocationPrompted: () => void;
+  setOnboardingSeen: () => void;
 }
 
 const saved = kv.get<Partial<Prefs>>('prefs', {});
@@ -36,8 +39,8 @@ export const setOnAnalyticsEnabled = (fn: () => void) => { onAnalyticsEnabled = 
 
 export const usePrefs = create<Prefs>((set, get) => {
   const persist = () => {
-    const { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted, analytics, analyticsAsked } = get();
-    kv.set('prefs', { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted, analytics, analyticsAsked });
+    const { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted, onboardingSeen, analytics, analyticsAsked } = get();
+    kv.set('prefs', { service, rememberService, distanceMode, autoplayNearby, notify, locationPrompted, onboardingSeen, analytics, analyticsAsked });
   };
   const changed = (key: string, value: string | boolean | null) => {
     track('setting_changed', { key, value });
@@ -50,6 +53,7 @@ export const usePrefs = create<Prefs>((set, get) => {
     autoplayNearby: saved.autoplayNearby ?? true,
     notify: saved.notify ?? { like: true, comment: true, nearby: false },
     locationPrompted: saved.locationPrompted ?? false,
+    onboardingSeen: saved.onboardingSeen ?? false,
     // 예전 버전은 기본 켜짐이었음 → 직접 고른 적이 없으면(analyticsAsked 없음) 꺼진 것으로 본다 (설정에서 직접 켜야 수집)
     analytics: saved.analyticsAsked ? saved.analytics ?? false : false,
     analyticsAsked: saved.analyticsAsked ?? false,
@@ -64,5 +68,6 @@ export const usePrefs = create<Prefs>((set, get) => {
       initAnalytics({ optOut: false }).then(() => { setAnalyticsOptOut(false); changed('analytics', true); onAnalyticsEnabled?.(); });
     },
     setLocationPrompted: () => { set({ locationPrompted: true }); persist(); },
+    setOnboardingSeen: () => { if (!get().onboardingSeen) { set({ onboardingSeen: true }); persist(); } },
   };
 });
