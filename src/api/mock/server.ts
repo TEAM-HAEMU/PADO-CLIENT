@@ -70,7 +70,7 @@ addComment(drops[6], seoa, 'Let It Happen 들으면서 강 따라 걸으면 끝�
 const notifications: AppNotification[] = [
   { id: uid(), eventName: 'like-created', data: { likerUserId: hayun.id, likerUsername: hayun.username, droppingOwnerUserId: ME.id, droppingId: drops[4].summary.droppingId }, createdAt: new Date(Date.now() - 600_000).toISOString(), readAt: null },
   { id: uid(), eventName: 'comment-created', data: { commenterUserId: doyun.id, commenterUsername: doyun.username, droppingId: drops[4].summary.droppingId, content: '여기서 들으니까 더 좋네요' }, createdAt: new Date(Date.now() - 2_520_000).toISOString(), readAt: null },
-  { id: uid(), eventName: 'dropping-created', data: { droppingId: drops[3].summary.droppingId, username: minjae.username }, createdAt: new Date(Date.now() - 3_600_000).toISOString(), readAt: null },
+  { id: uid(), eventName: 'dropping-created', data: { userId: drops[3].summary.userId, songId: (drops[3].summary as MusicDropSummary).songId }, createdAt: new Date(Date.now() - 3_600_000).toISOString(), readAt: null },
   { id: uid(), eventName: 'like-created', data: { likerUserId: jiwoo.id, likerUsername: jiwoo.username, droppingOwnerUserId: ME.id, droppingId: drops[5].summary.droppingId }, createdAt: new Date(Date.now() - 86_400_000 * 3).toISOString(), readAt: new Date().toISOString() },
 ];
 

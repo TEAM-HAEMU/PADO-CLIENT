@@ -246,7 +246,7 @@ export type NotificationEvent = 'like-created' | 'comment-created' | 'dropping-c
 export interface AppNotification {
   id: UUID;
   eventName: NotificationEvent | string;
-  /** 이벤트마다 다름. like-created: likerUserId, likerUsername, droppingOwnerUserId, droppingId */
+  /** 이벤트마다 다름. like-created: likerUserId, likerUsername, droppingOwnerUserId, droppingId · dropping-created(실서버): userId, songId 뿐 (droppingId·이름 없음) */
   data: Record<string, unknown>;
   createdAt: string;
   readAt: string | null;
