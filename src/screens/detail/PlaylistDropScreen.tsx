@@ -91,12 +91,11 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
         }
         renderItem={({ item: s }) => (
           <DiscRow
-            art={s.albumImagePath}
+            song={{ id: s.songId, title: s.title, artist: s.artist, albumImagePath: s.albumImagePath }}
             title={s.title}
             artist={s.artist}
             active={playingKey === s.songId}
             onPress={() => open(s.songId)}
-            right={<Glyph name="playCircle" color={colors.accent} />}
           />
         )}
       />

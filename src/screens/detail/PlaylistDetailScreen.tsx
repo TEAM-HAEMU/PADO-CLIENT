@@ -1,4 +1,7 @@
-/** 내 플레이리스트 상세 — 재생·셔플·곡 메뉴·곡 추가·이름 변경·삭제 (Figma 'B 4.4 플레이리스트 상세') */
+/**
+ * 내 플레이리스트 상세 — 재생·셔플·곡 메뉴·곡 추가·이름 변경·삭제 (Figma 'B 4.4 플레이리스트 상세')
+ * 곡 앨범(CD)을 누르면 그 자리에서 미리듣기 켜고 끄기, 줄의 나머지를 누르면 곡 자세히 보기. 지금 미리듣기 중인 곡(미니 CD로 듣던 곡 포함)은 줄을 강조하고 CD가 돈다.
+ */
 import React from 'react';
 import { FlatList, View } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
@@ -7,11 +10,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { playlistApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import { Empty, Icon, IconButton, Press } from '@/components/ui';
-import { Glyph } from '@/components/detail/glyphs';
 import { AddSongRow, BgWave, DiscRow, PlaylistHero } from '@/components/detail/parts';
 import { usePlaylist } from '@/hooks/api';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
+import { usePreviewStore } from '@/services/preview';
+import { findItunes } from '@/services/itunes';
 import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
 import { formatDuration, formatTotal } from '@/utils/format';
@@ -23,6 +27,10 @@ export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const { data: p, error, refetch } = usePlaylist(playlistId);
+  const nowKey = usePreviewStore(st => st.key);
+  // 위쪽 몇 곡은 미리듣기 주소를 미리 찾아 둔다 — 처음 누를 때 몇 초 기다리지 않게 (요청 한도를 아끼려 3곡만, 순서대로)
+  const firstIds = p?.songs.slice(0, 3).map(x => x.id).join(',');
+  React.useEffect(() => { p?.songs.slice(0, 3).forEach(x => { findItunes(x.title, x.artist); }); }, [firstIds]); // eslint-disable-line react-hooks/exhaustive-deps
   // 새 플리 만들기에서 왔으면 곡 담기 화면을 한 번 자동으로 연다
   const openAdd = route.params.openAdd;
   React.useEffect(() => {
@@ -67,16 +75,14 @@ export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'
         ListEmptyComponent={<Empty icon="playlist" title="아직 담긴 곡이 없어요" desc="아래 곡 추가로 채워보세요." />}
         renderItem={({ item: s }) => (
           <DiscRow
-            art={s.albumImagePath}
+            song={s}
             title={s.title}
             artist={s.artist}
             duration={formatDuration(s.duration)}
             onPress={() => open(s.id)}
             onLongPress={() => navigation.navigate('TrackMenu', { playlistId, song: s })}
-            right={<>
-              <Glyph name="playCircle" color={colors.accent} />
-              <Press onPress={() => navigation.navigate('TrackMenu', { playlistId, song: s })} hitSlop={10} accessibilityLabel="곡 메뉴" style={{ marginLeft: -4 }}><Icon name="more" size={18} color="#C5C5C5" /></Press>
-            </>}
+            active={nowKey === s.id}
+            right={<Press onPress={() => navigation.navigate('TrackMenu', { playlistId, song: s })} hitSlop={10} accessibilityLabel="곡 메뉴"><Icon name="more" size={18} color="#C5C5C5" /></Press>}
           />
         )}
         ListFooterComponent={<AddSongRow onPress={() => navigation.navigate('AddSongs', { playlistId, existing: p.songs.map(s => s.id) })} />}

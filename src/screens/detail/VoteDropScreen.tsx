@@ -12,8 +12,6 @@ import { AddressPill, BgWave, CommentBar, DiscRow } from '@/components/detail/pa
 import { qk, useComments, useDrop, useLikeCount, useMyLikes, useToggleLike } from '@/hooks/api';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
-import { usePreviewStore } from '@/services/preview';
-import { findItunes } from '@/services/itunes';
 import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { useDropMenu } from '@/hooks/useDropMenu';
@@ -46,12 +44,6 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
     } catch (e) { toast(errorMessage(e), 'error'); } finally { voting.current = false; }
   };
 
-  const preview = async (title: string, artist: string, id: string) => {
-    const r = await findItunes(title, artist);
-    if (r.previewUrl) usePreviewStore.getState().play(id, r.previewUrl, { title, artist, image: d?.options.find(o => o.songId === id)?.albumImagePath });
-    else toast(r.unavailable ? '지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.' : '이 곡은 미리듣기를 지원하지 않아요.');
-  };
-
   const menu = useDropMenu(dropId, d?.userId, '투표 드랍');
   const more = menu.open;
 
@@ -74,7 +66,7 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
           {d.content ? <T v="captionStrong" c="ink2" style={{ fontFamily: fonts.regular }}>{d.content}</T> : null}
         </View>
         <View style={{ gap: 16, marginTop: 30 }}>
-          {d.options.map(o => <VoteRow key={o.songId} o={o} mine={d.userVotedOption === o.songId} voted={voted} pct={total ? Math.round((o.voteCount / total) * 100) : 0} onVote={() => vote(o.songId)} onPreview={() => preview(o.title, o.artist, o.songId)} />)}
+          {d.options.map(o => <VoteRow key={o.songId} o={o} mine={d.userVotedOption === o.songId} voted={voted} pct={total ? Math.round((o.voteCount / total) * 100) : 0} onVote={() => vote(o.songId)} />)}
         </View>
         <T v="caption" c="faint" style={{ marginTop: 14 }}>{total}명 참여 · {voted ? '다시 누르면 투표를 취소해요' : '마음에 드는 곡을 눌러 투표해보세요 (앨범을 누르면 미리듣기)'}</T>
 
@@ -102,21 +94,18 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
   );
 }
 
-/** 투표 후보 한 줄 — 투표 뒤에만 물결 채움·득표율이 보인다. 앨범을 누르거나 길게 누르면 미리듣기 */
-function VoteRow({ o, mine, voted, pct, onVote, onPreview }: { o: VoteOption; mine: boolean; voted: boolean; pct: number; onVote: () => void; onPreview: () => void }) {
+/** 투표 후보 한 줄 — 투표 뒤에만 물결 채움·득표율이 보인다. 앨범(CD)을 누르면 미리듣기 (듣는 중이면 CD가 돈다) */
+function VoteRow({ o, mine, voted, pct, onVote }: { o: VoteOption; mine: boolean; voted: boolean; pct: number; onVote: () => void }) {
   const [w, setW] = React.useState(0);
   // Figma 시안: 물결 모양 채움의 오른쪽 끝이 득표율만큼 들어옴 (0%여도 꼬리는 살짝 보이게)
   const right = w ? Math.min(w, 24 + (w - 24) * (pct / 100) * 1.35) : 0;
   return (
     <View onLayout={e => setW(e.nativeEvent.layout.width)}>
       <DiscRow
-        art={o.albumImagePath}
+        song={{ id: o.songId, title: o.title, artist: o.artist, albumImagePath: o.albumImagePath }}
         title={o.title}
         artist={o.artist}
         onPress={onVote}
-        onLongPress={onPreview}
-        onArt={onPreview}
-        artLabel={`${o.title} 미리듣기`}
         active={mine}
         style={{ backgroundColor: mine ? '#F6FFFF' : '#F8FAFB', borderWidth: mine ? 1 : 0, borderColor: colors.accent }}
         right={<>
