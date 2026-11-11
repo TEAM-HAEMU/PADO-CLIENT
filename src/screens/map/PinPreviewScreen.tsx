@@ -27,7 +27,7 @@ import { startPreview, usePreview, usePreviewProgress } from '@/services/preview
 import { useDropMenu } from '@/hooks/useDropMenu';
 import { colors, fonts } from '@/theme/tokens';
 import { artUrl } from '@/utils/artUrl';
-import { formatDateTime } from '@/utils/format';
+import { formatRelative } from '@/utils/format';
 
 const SERVICE_ORDER: ServiceId[] = ['spotify', 'appleMusic', 'youtubeMusic'];
 // Figma 한마디 카드 뒤로 겹친 띠 (위에서부터)
@@ -60,7 +60,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const liked = qc.getQueryData<boolean>(['liked', dropId]) ?? !!myLikes?.some(x => x.droppingId === dropId);
   const toggleLike = useToggleLike(dropId);
   const authed = useAuth(s => s.status === 'authed');
-  const menu = useDropMenu(dropId, d?.userId, '드랍', d && 'username' in d ? d.username : undefined);
+  const menu = useDropMenu(dropId, d?.userId, '드랍', d && 'username' in d ? d.username : undefined, song.data);
   const address = useDropAddress(dropId);
 
   React.useEffect(() => {
@@ -93,7 +93,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
           {song.data ? <ProgressRing songId={song.data.id} width={ringW} height={ringW * (364 / 358)} top={capH + RING_GAP - ringW * (364 / 358)} /> : null}
           <View style={{ width: capW, height: capH, borderRadius: capW / 2, borderWidth: 8, borderColor: '#FFFFFF', overflow: 'hidden', backgroundColor: colors.card2 }}>
             {art ? <Image source={{ uri: artUrl(art, capH)! }} style={{ position: 'absolute', left: 0, top: 0, width: capW - 16, height: capH - 16 }} resizeMode="cover" /> : null}
-            <LinearGradient pointerEvents="none" colors={['rgba(4,9,22,0.35)', 'rgba(4,9,22,0)']} style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 110 }} />
+            <LinearGradient pointerEvents="none" colors={['rgba(4,9,22,0.55)', 'rgba(4,9,22,0.25)', 'rgba(4,9,22,0)']} locations={[0, 0.55, 1]} style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 120 }} />
             {/* 알약 전체 탭 = 재생 화면 (가운데 재생 버튼은 따로) */}
             <Press accessibilityLabel="재생 화면 열기" onPress={openPlayer} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} />
             <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 20, alignItems: 'center', gap: 6, paddingHorizontal: 24 }}>
@@ -103,7 +103,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
                   <T v="tiny" numberOfLines={1} style={{ color: '#2BD1FF', flexShrink: 1 }}>{address}</T>
                 </View>
               ) : null}
-              <T v="captionStrong" numberOfLines={1} style={{ fontSize: 14, color: '#FFFFFF', textShadowColor: 'rgba(4,9,22,0.45)', textShadowRadius: 8 }}>
+              <T v="captionStrong" numberOfLines={1} style={{ fontSize: 14, color: '#FFFFFF', textShadowColor: 'rgba(4,9,22,0.75)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } }}>
                 {song.data ? `${song.data.title} · ${song.data.artist}` : ' '}
               </T>
             </View>
@@ -134,7 +134,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Avatar name={music.username} size={24} />
             <T v="caption" numberOfLines={1} style={{ fontFamily: fonts.medium, color: '#000000', flexShrink: 1 }}>{music.username}</T>
-            <T v="tiny" style={{ color: '#BBBBBB' }}>{formatDateTime(music.createdAt)}</T>
+            <T v="tiny" style={{ color: '#BBBBBB' }}>{formatRelative(music.createdAt)}</T>
           </View>
           {music.content ? <T v="body" style={{ fontSize: 14, lineHeight: 22, color: '#1E1E1E' }}>{music.content}</T> : null}
         </View>

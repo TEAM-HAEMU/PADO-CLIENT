@@ -8,13 +8,15 @@ import MapView, { Circle, Marker, Polygon, PROVIDER_DEFAULT, PROVIDER_GOOGLE } f
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { useIsFocused } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { dropApi } from '@/api/endpoints';
 import type { DropSummary, MusicDropSummary } from '@/api/types';
 import { DropPin, MeMarker, PIN_SIZE } from '@/components/map/DropPin';
 import { Art, Icon, Press, T } from '@/components/ui';
 import { env, NEARBY_RADIUS_KM } from '@/config';
-import { useNearbyDrops } from '@/hooks/api';
+import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useMiniDiscActions } from '@/components/music/MiniDisc';
 import { usePreviewStore } from '@/services/preview';
@@ -145,6 +147,12 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     return () => { alive = false; };
   }, [dropIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 투표·플리는 미리보기 시트 없이 바로 전체 화면으로 가서 상세를 기다리는 동안 빈 화면이 된다 → 주변 목록이 오면 미리 받아둔다
+  const qc = useQueryClient();
+  useEffect(() => {
+    drops.filter(d => d.type !== 'MUSIC').slice(0, 8).forEach(d => qc.prefetchQuery({ queryKey: qk.drop(d.droppingId), queryFn: () => dropApi.get(d.droppingId), staleTime: 30_000 }));
+  }, [dropIds]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const sorted = useMemo(() => drops.map(d => ({ d, m: distanceM(here, d) })).sort((a, b) => a.m - b.m), [drops, here]);
   const nearestId = sorted[0]?.d.droppingId;
 
@@ -172,11 +180,27 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const region = { latitude: here.latitude - 0.0012, longitude: here.longitude, latitudeDelta: 0.018, longitudeDelta: 0.012 };
 
   // 위치를 처음 받으면 그 자리로 카메라 이동 (그 전엔 기준 좌표를 보여줌)
+  // 그 뒤로는 걸어서 움직이면 카메라도 따라간다 — 사용자가 지도를 직접 끌어 둘러보는 중이면 멈추고, 동 이름을 누르면 다시 따라간다
   const centered = useRef(false);
+  const follow = useRef(true);
+  const followedAt = useRef<{ latitude: number; longitude: number } | null>(null);
+  const recenter = () => {
+    follow.current = true;
+    if (coords) followedAt.current = coords;
+    mapRef.current?.animateToRegion(region, 500);
+  };
   useEffect(() => {
-    if (!coords || centered.current) return;
-    centered.current = true;
-    mapRef.current?.animateToRegion({ ...region, latitude: coords.latitude - 0.0012, longitude: coords.longitude }, 400);
+    if (!coords) return;
+    if (!centered.current) {
+      centered.current = true;
+      followedAt.current = coords;
+      mapRef.current?.animateToRegion({ ...region, latitude: coords.latitude - 0.0012, longitude: coords.longitude }, 400);
+      return;
+    }
+    if (!follow.current || (followedAt.current && distanceM(followedAt.current, coords) < 15)) return;
+    followedAt.current = coords;
+    // 줌은 사용자가 맞춘 그대로 두고 가운데만 옮긴다
+    mapRef.current?.animateCamera({ center: { latitude: coords.latitude - 0.0012, longitude: coords.longitude } }, { duration: 600 });
   }, [coords]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -194,12 +218,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         showsBuildings={false}
         toolbarEnabled={false}
         pitchEnabled={false}
+        onPanDrag={() => { follow.current = false; }}
       >
         {/* Apple 지도는 스타일을 못 바꾸므로 넓은 하늘빛 막을 깔아 디자인 톤에 맞춘다 (오버레이라 핀 아래에 그려짐) */}
         {!useGoogle ? <Polygon coordinates={tintArea(here)} fillColor="rgba(120,200,232,0.22)" strokeWidth={0} strokeColor="transparent" tappable={false} /> : null}
         {distanceMode === 'radius' && coords && <Circle center={coords} radius={NEARBY_RADIUS_KM * 1000} strokeColor="rgba(43,156,255,0.75)" fillColor="rgba(79,209,255,0.10)" lineDashPattern={[6, 6]} />}
         {coords ? (
-          <Marker coordinate={coords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={tracks}>
+          <Marker coordinate={coords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={tracks} tappable={false} zIndex={0}>
             <MeMarker />
           </Marker>
         ) : null}
@@ -214,6 +239,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
               coordinate={{ latitude: d.latitude, longitude: d.longitude }}
               anchor={{ x: box.tipX / box.w, y: box.tipY / box.h }}
               tracksViewChanges={tracks || animated}
+              zIndex={active ? 3 : 2}
               opacity={fade}
               onPress={() => openDrop(d)}
             >
@@ -224,8 +250,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       </MapView>
 
       {/* 상단 페이드 + 동 이름 */}
-      <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.7)', 'rgba(255,255,255,0)']} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 80 }} />
-      <Press onPress={() => mapRef.current?.animateToRegion(region, 500)} style={{ position: 'absolute', top: insets.top + 12, left: 20, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.96)', 'rgba(255,255,255,0.85)', 'rgba(255,255,255,0)']} locations={[0, insets.top / (insets.top + 96), 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 96 }} />
+      <Press onPress={recenter} accessibilityHint="내 위치로 지도를 다시 맞춰요" style={{ position: 'absolute', top: insets.top + 12, left: 20, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
         <T v="title">{coords ? label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
         <Caret />
       </Press>

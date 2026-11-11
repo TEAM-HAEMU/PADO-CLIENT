@@ -40,7 +40,8 @@ export type ColorName = keyof typeof colors;
 interface TProps extends TextProps { v?: TypeName; c?: ColorName; className?: string }
 export function T({ v = 'body', c = 'ink', style, ...rest }: TProps) {
   // 시스템 글자 크기를 따르되, 고정 높이 레이아웃이 깨지지 않게 1.2배까지만
-  return <Text maxFontSizeMultiplier={1.2} {...rest} style={[type[v], { color: colors[c] }, style]} />;
+  // iOS 기본 줄바꿈은 한글을 글자 단위로 끊어 '남/겨요'처럼 되므로 어절 단위로 (Android엔 같은 옵션이 없어 그대로)
+  return <Text maxFontSizeMultiplier={1.2} lineBreakStrategyIOS="hangul-word" {...rest} style={[type[v], { color: colors[c] }, style]} />;
 }
 
 // ── Screen

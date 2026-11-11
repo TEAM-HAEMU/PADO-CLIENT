@@ -2,10 +2,12 @@
  * 바텀시트 레이아웃 — transparentModal 라우트에서 사용 (배경 탭 → 닫기). Figma 새 디자인: 흰 카드 · 위 모서리 32 · 손잡이 #7482AE · 검정 20% 배경.
  * 열림: 배경 페이드 + 시트가 아래에서 부드럽게 올라옴 / 닫힘: 반대로 내려감.
  * goBack·배경 탭·제스처 등 어떤 경로로 닫혀도 beforeRemove에서 닫힘 애니메이션을 먼저 재생한다.
+ * 시트를 아래로 쓸어내려도 닫힌다 (충분히 내리거나 빠르게 튕기면 닫고, 아니면 제자리로).
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Pressable, View, type ViewStyle } from 'react-native';
 import { CommonActions, type NavigationState, useNavigation, useRoute } from '@react-navigation/native';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -66,7 +68,22 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
   }), [nav, progress, route.key]);
 
   const backdrop = useAnimatedStyle(() => ({ opacity: progress.value }));
-  const panel = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - progress.value) * height }] }));
+  // 쓸어내리기 — 위로 끌거나 옆으로 밀면 무시 (안쪽 가로 스크롤·버튼 탭은 그대로)
+  const drag = useSharedValue(0);
+  const pan = usePanGesture({
+    enabled: dismissible,
+    activeOffsetY: 12,
+    failOffsetY: -10,
+    failOffsetX: [-20, 20],
+    onUpdate: e => { 'worklet'; drag.value = Math.max(0, e.translationY); },
+    onDeactivate: e => {
+      'worklet';
+      if (e.translationY > 110 || e.velocityY > 900) scheduleOnRN(close);
+      else drag.value = withTiming(0, OPEN);
+    },
+  });
+
+  const panel = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - progress.value) * height + drag.value }] }));
 
   return (
     <KeyboardAvoidingView behavior="padding" pointerEvents={closingNow ? 'none' : 'auto'} style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -74,6 +91,7 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
         <Pressable style={{ flex: 1 }} onPress={dismissible ? close : undefined} accessible={dismissible} accessibilityLabel="닫기" />
       </Animated.View>
       {/* maxHeight 같은 %값은 화면 기준이어야 하므로 래퍼에, 카드는 그 안에서 줄어든다 */}
+      <GestureDetector gesture={pan}>
       <Animated.View onLayout={e => setHeight(e.nativeEvent.layout.height + 40)} style={[{ maxHeight: style?.maxHeight, height: style?.height }, panel]}>
         {/* 헤더 줄은 화면 폭 전체라 카드 윗부분과 겹친다 → 헤더 요소 말고는 터치를 카드로 넘긴다 (예: 핀 미리보기 ⋯ 버튼) */}
         {header ? <View pointerEvents="box-none" style={{ alignItems: 'center', marginBottom: -headerOverlap, zIndex: 2, elevation: 2 }}>{header}</View> : null}
@@ -82,6 +100,7 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
           {children}
         </View>
       </Animated.View>
+      </GestureDetector>
       {/* 이 시트 위에서 여는 확인창·메뉴 (iOS는 시트 위에 루트 Modal을 띄울 수 없음) */}
       <DialogHost scope="sheet" />
     </KeyboardAvoidingView>

@@ -64,14 +64,18 @@ export default function NotificationsScreen() {
     if (!n.readAt) notificationApi.read(n.id).then(refresh).catch(() => {});
     const dropId = str(n.data.droppingId) ?? findNearbyDrop(n.data);
     if (dropId) nav.navigate('PinPreview', { dropId });
-    else if (n.eventName === 'dropping-created') nav.navigate('Tabs', { screen: 'Map' }); // 이미 사라졌거나 주변 목록에 없으면 지도로
+    else if (n.eventName === 'dropping-created') {
+      // 이미 사라졌거나 지금 주변(반경 밖)에 없으면 — 말없이 지도로 보내면 고장처럼 보이니 이유를 알린다
+      toast('이 드랍은 지금 근처에 없거나 사라졌어요.');
+      nav.navigate('Tabs', { screen: 'Map' });
+    }
   };
 
-  /** '새 드랍' 알림엔 droppingId가 없어 지금 불러온 주변 드랍 중 같은 사람·같은 곡을 찾는다 */
+  /** '새 드랍' 알림엔 droppingId가 없어 지금 불러온 주변 드랍·내 드랍 중 같은 사람·같은 곡을 찾는다 */
   const findNearbyDrop = (d: Record<string, unknown>) => {
     const songId = str(d.songId);
     if (!songId) return undefined;
-    const all = qc.getQueriesData<DropSummary[]>({ queryKey: ['nearby'] }).flatMap(([, list]) => list ?? []);
+    const all = [['nearby'], ['myDrops']].flatMap(key => qc.getQueriesData<DropSummary[]>({ queryKey: key }).flatMap(([, list]) => (Array.isArray(list) ? list : [])));
     return all.find(x => x.type === 'MUSIC' && x.songId === songId && (!d.userId || x.userId === d.userId))?.droppingId;
   };
 

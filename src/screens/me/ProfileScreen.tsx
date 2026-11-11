@@ -1,6 +1,6 @@
 /** 5.1 프로필 — 내 드랍 지도 · 드랍 기록 · 좋아요 (오른쪽 위 종 아이콘 → 알림) */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, ScrollView, View, Image } from 'react-native';
+import { Platform, ScrollView, View, Image, useWindowDimensions } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
 import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useQueryClient, useQueries } from '@tanstack/react-query';
@@ -22,9 +22,13 @@ import { googleMapStyle } from '@/theme/mapStyle';
 import { colors, fonts } from '@/theme/tokens';
 
 const useGoogle = !!env.googleMapsKey || Platform.OS === 'android';
+/** '내 드랍 지도' 칸 높이 · 핀 전체 키 (아트 55 + 막대 19) */
+const DROP_MAP_H = 120;
+const PIN_H = 74;
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const nav = useNavigation();
   const qc = useQueryClient();
   const me = useMe().data;
@@ -48,20 +52,35 @@ export default function ProfileScreen() {
     });
     return () => { alive = false; clearTimeout(t); };
   }, [drops, tab]);
-  const likes = useMyLikes().data ?? [];
+  const likesQ = useMyLikes();
+  const likes = likesQ.data ?? [];
   const myLikeCount = useMyLikeCount().data;
-  // 디자인: '받은 좋아요' = 내 드랍들이 받은 좋아요 합계 (드랍별 좋아요 수 캐시를 공유)
+  // 탭 숫자는 아래 목록과 같아야 한다 — 서버 개수(/likes/count/user)는 사라진 드랍의 좋아요까지 세어 목록보다 클 수 있어, 목록을 받았으면 목록 길이로
+  const likeTotal = likesQ.data ? likes.length : myLikeCount;
+  // 디자인: '받은 좋아요' = 내 드랍들이 받은 좋아요 합계 (드랍별 좋아요 수 캐시를 공유) — 내가 내 드랍에 누른 좋아요는 빼고
   const likeCounts = useQueries({ queries: drops.map(d => ({ queryKey: qk.likeCount(d.droppingId), queryFn: () => likeApi.countForDrop(d.droppingId) })) });
-  const receivedLikes = likeCounts.reduce((a, q) => a + (q.data ?? 0), 0);
+  const myDropIds = new Set(drops.map(d => d.droppingId));
+  const selfLikes = likes.filter(l => myDropIds.has(l.droppingId)).length;
+  const receivedLikes = Math.max(0, likeCounts.reduce((a, q) => a + (q.data ?? 0), 0) - selfLikes);
   const playlists = useMyPlaylists().data ?? [];
   const unread = useUnreadCount().data ?? 0;
 
+  // 핀은 좌표(바닥 점)에서 위로 74pt 솟아 있어, 좌표 범위에 딱 맞추면 가장 북쪽 핀이 지도 칸 위로 잘려 나간다
+  // → 칸 높이에서 핀 키만큼 위를 비워 두고 남는 높이에 좌표 범위를 넣는다 (옆도 핀 반 폭만큼)
+  const mapW = width - 40;
   const region = useMemo(() => {
     if (!drops.length) return null;
     const lats = drops.map(d => d.latitude), lngs = drops.map(d => d.longitude);
-    const pad = 0.004;
-    return { latitude: (Math.min(...lats) + Math.max(...lats)) / 2, longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2, latitudeDelta: Math.max(0.01, Math.max(...lats) - Math.min(...lats) + pad), longitudeDelta: Math.max(0.01, Math.max(...lngs) - Math.min(...lngs) + pad) };
-  }, [drops]);
+    const minLat = Math.min(...lats), latSpan = Math.max(...lats) - minLat;
+    const lngSpan = Math.max(...lngs) - Math.min(...lngs);
+    const room = DROP_MAP_H - PIN_H - 8; // 좌표들이 들어갈 세로 픽셀
+    const latitudeDelta = Math.max(0.01, (latSpan * DROP_MAP_H) / room);
+    const longitudeDelta = Math.max(0.01, (lngSpan * mapW) / (mapW - 64));
+    // 남는 세로 여백은 위아래 반씩 — 가장 남쪽 좌표가 아래에서 bottomPx 위에 오게
+    const bottomPx = (DROP_MAP_H - PIN_H - (latSpan / latitudeDelta) * DROP_MAP_H) / 2;
+    const latitude = minLat - (bottomPx / DROP_MAP_H) * latitudeDelta + latitudeDelta / 2;
+    return { latitude, longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2, latitudeDelta, longitudeDelta };
+  }, [drops, mapW]);
 
   const openDrop = (d: DropSummary) => nav.navigate(d.type === 'VOTE' ? 'VoteDrop' : d.type === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: d.droppingId });
   const removeDrop = (d: DropSummary) => dialog.alert('드랍을 삭제할까요?', `'${dropTitle(d)}' 드랍이 지도에서 사라지고 되돌릴 수 없어요.`, [
@@ -105,13 +124,13 @@ export default function ProfileScreen() {
         {/* Figma 'tag' 칩 탭 (높이 30) — 고른 탭이 채워진 파랑 */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 30 }}>
           <TabTag label="드랍 기록" glyph="drop" on={tab === 'drops'} onPress={() => setTab('drops')} />
-          <TabTag label={myLikeCount ? `좋아요 ${myLikeCount}` : '좋아요'} glyph="heart" on={tab === 'likes'} onPress={() => setTab('likes')} />
+          <TabTag label={likeTotal ? `좋아요 ${likeTotal}` : '좋아요'} glyph="heart" on={tab === 'likes'} onPress={() => setTab('likes')} />
         </View>
 
         {tab === 'drops' ? (
           <View style={{ marginTop: 30 }}>
             {region ? (
-              <View style={{ height: 120, marginHorizontal: 20, marginBottom: 20, borderRadius: 16, overflow: 'hidden' }}>
+              <View style={{ height: DROP_MAP_H, marginHorizontal: 20, marginBottom: 20, borderRadius: 16, overflow: 'hidden' }}>
                 <MapView style={{ flex: 1 }} provider={useGoogle ? PROVIDER_GOOGLE : PROVIDER_DEFAULT} customMapStyle={useGoogle ? googleMapStyle : undefined} userInterfaceStyle="light" initialRegion={region} scrollEnabled={false} zoomEnabled={false} rotateEnabled={false} pitchEnabled={false}>
                   {drops.map(d => (
                     <Marker key={`${d.droppingId}:${artEpoch}`} coordinate={d} tracksViewChanges={tracks} anchor={{ x: 0.5, y: 1 }}>

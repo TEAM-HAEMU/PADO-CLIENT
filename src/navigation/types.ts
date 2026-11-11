@@ -35,7 +35,7 @@ export type RootStackParamList = {
   Note: undefined;
   VoteCreate: undefined;
   PlaylistDropCreate: undefined;
-  DropSuccess: { art: string | null; content: string };
+  DropSuccess: { art: string | null; content: string; kind?: 'MUSIC' | 'VOTE' | 'PLAYLIST' };
   // 상세
   VoteDrop: { dropId: UUID };
   PlaylistDrop: { dropId: UUID };

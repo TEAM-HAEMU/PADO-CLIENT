@@ -1,15 +1,18 @@
-/** 드랍 ⋯ 메뉴 — 내 드랍이면 삭제, 남의 드랍이면 드랍 신고·사용자 신고·차단 (핀 미리보기·상세·재생 화면 공용) */
+/**
+ * 드랍 ⋯ 메뉴 — 내 드랍이면 삭제, 남의 드랍이면 드랍 신고·사용자 신고·차단 (핀 미리보기·상세·재생 화면 공용)
+ * song을 넘기면(음악 드랍) 맨 위에 '내 플리에 담기'.
+ */
 import { useNavigation } from '@react-navigation/native';
 import { dialog } from '@/components/ui/Dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { dropApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
-import type { UUID } from '@/api/types';
+import type { Song, UUID } from '@/api/types';
 import { toast } from '@/store/toast';
 import { useIsMyDrop } from './api';
 import { useBlockUser } from './useBlockUser';
 
-export function useDropMenu(dropId: UUID | undefined, ownerId: UUID | undefined, title = '드랍', ownerName?: string) {
+export function useDropMenu(dropId: UUID | undefined, ownerId: UUID | undefined, title = '드랍', ownerName?: string, song?: Song) {
   const navigation = useNavigation();
   const blockUser = useBlockUser();
   const qc = useQueryClient();
@@ -39,6 +42,7 @@ export function useDropMenu(dropId: UUID | undefined, ownerId: UUID | undefined,
   const open = () => {
     if (!dropId) return;
     dialog.menu(title, [
+      ...(song ? [{ text: '내 플리에 담기', icon: 'plus' as const, onPress: () => navigation.navigate('PlaylistPicker', { song }) }] : []),
       ...(mine
         ? [{ text: '드랍 삭제', style: 'destructive' as const, icon: 'trash' as const, onPress: remove }]
         : [

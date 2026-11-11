@@ -1,4 +1,4 @@
-/** 다른 플리에 담기 (시트) — 곡 메뉴에서 내 다른 플레이리스트를 골라 한 곡 추가 (Figma 'B 4.7 다른 플리에 담기 (시트)') */
+/** 다른 플리에 담기 (시트) — 곡 메뉴에서 내 다른 플레이리스트를 골라 한 곡 추가 (Figma 'B 4.7 다른 플리에 담기 (시트)'). 드랍 ⋯ 메뉴의 '내 플리에 담기'도 이 시트 (excludeId 없음) */
 import React, { useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -26,7 +26,7 @@ export default function PlaylistPickerScreen({ navigation, route }: RootScreen<'
     setBusy(id);
     try {
       await playlistApi.addSongs(id, [song.id]);
-      track('playlist_songs_added', { playlist_id: id, count: 1, source: 'track_menu', song_id: song.id });
+      track('playlist_songs_added', { playlist_id: id, count: 1, source: excludeId ? 'track_menu' : 'drop_menu', song_id: song.id });
       qc.invalidateQueries({ queryKey: ['playlist', id] });
       qc.invalidateQueries({ queryKey: ['playlists'] });
       toast(`'${name}'에 담았어요.`, 'success');
@@ -40,11 +40,11 @@ export default function PlaylistPickerScreen({ navigation, route }: RootScreen<'
 
   return (
     <Sheet style={{ maxHeight: '70%', paddingHorizontal: 25 }}>
-      <View style={{ marginBottom: 20 }}><SheetTitle title="다른 플레이리스트에 담기" desc={`${song.title} · ${song.artist}`} /></View>
+      <View style={{ marginBottom: 20 }}><SheetTitle title={excludeId ? '다른 플레이리스트에 담기' : '내 플레이리스트에 담기'} desc={`${song.title} · ${song.artist}`} /></View>
       {isLoading ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} /> : isError ? (
         <Empty icon="alert" title="플레이리스트를 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} />
       ) : !lists.length ? (
-        <Empty icon="playlist" title="담을 수 있는 다른 플리가 없어요" desc="플리 탭의 + 로 새 플레이리스트를 만들어보세요." />
+        <Empty icon="playlist" title={excludeId ? '담을 수 있는 다른 플리가 없어요' : '아직 플레이리스트가 없어요'} desc="플리 탭의 + 로 새 플레이리스트를 만들어보세요." />
       ) : (
         <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8 }}>
           {lists.map(p => (

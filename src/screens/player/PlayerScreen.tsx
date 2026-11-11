@@ -41,7 +41,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const song = songQ.data;
   const drop = useDrop(dropId).data;
   const preview = usePreview(song);
-  const menu = useDropMenu(dropId, drop?.userId, '드랍', drop && 'username' in drop ? drop.username : undefined);
+  const menu = useDropMenu(dropId, drop?.userId, '드랍', drop && 'username' in drop ? drop.username : undefined, song);
   const likeCount = useLikeCount(dropId).data;
   const comments = useComments(dropId).data;
   const myLikes = useMyLikes().data;

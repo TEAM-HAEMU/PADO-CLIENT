@@ -11,6 +11,9 @@ import { useLocation } from '@/services/location';
 import { fonts } from '@/theme/tokens';
 import { track } from '@/services/analytics';
 
+/** 드랍 종류별 문구 — Figma는 음악 기준이라 투표·플리는 바꿔 부른다 */
+const WHAT = { MUSIC: '음악을', VOTE: '투표를', PLAYLIST: '플리를' } as const;
+
 /** Figma Ripple 1~5 — 지름 152/204/256/308/360, #4FD1FF 1.2px, 바깥으로 갈수록 옅게 */
 const RINGS = [
   { size: 152, opacity: 0.63 },
@@ -34,7 +37,7 @@ function Ring({ size, opacity, index, scale }: { size: number; opacity: number; 
 
 export default function DropSuccessScreen({ navigation, route }: RootScreen<'DropSuccess'>) {
   const insets = useSafeAreaInsets();
-  const { art, content } = route.params;
+  const { art, content, kind = 'MUSIC' } = route.params;
   const { label, address } = useLocation();
   const { height } = useWindowDimensions();
   const k = height < 740 ? 0.8 : 1; // iPhone SE 등 작은 화면은 파문·아트를 조금 줄인다
@@ -52,7 +55,7 @@ export default function DropSuccessScreen({ navigation, route }: RootScreen<'Dro
       </View>
       <View style={{ alignItems: 'center', gap: 20, marginTop: height < 740 ? 0 : 14, paddingHorizontal: 24 }}>
         {place ? <PlacePill label={place} /> : null}
-        <T style={{ textAlign: 'center', fontFamily: fonts.semibold, fontSize: 24, lineHeight: 33.6, letterSpacing: -0.48, color: '#090909' }}>{'해당 음악을\n바다에 떨어뜨렸어요.'}</T>
+        <T style={{ textAlign: 'center', fontFamily: fonts.semibold, fontSize: 24, lineHeight: 33.6, letterSpacing: -0.48, color: '#090909' }}>{`${kind === 'MUSIC' ? '해당 음악을' : WHAT[kind]}\n바다에 떨어뜨렸어요.`}</T>
       </View>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         {/* Figma 'wave' 인스턴스 — 파문 뒤, 아트보다 조금 아래에 깔림 */}
@@ -65,7 +68,7 @@ export default function DropSuccessScreen({ navigation, route }: RootScreen<'Dro
       <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 26, gap: 16 }}>
         {/* 디자인 문구는 '알려드릴게요'지만 푸시 알림이 없으므로 앱 안 알림 목록 기준으로 */}
         <T style={{ textAlign: 'center', fontFamily: fonts.regular, fontSize: 12, lineHeight: 16.8, letterSpacing: -0.24, color: '#AFAFAF' }}>좋아요나 댓글이 달리면 알림에서 볼 수 있어요.</T>
-        <PrimaryButton label="공유" onPress={() => (track('share_opened', { kind: 'drop' }), Share.share({ message: `PADO — ${label || '이곳'}에 음악을 남겼어요. ${content ? `“${content}”` : ''}` }))} />
+        <PrimaryButton label="공유" onPress={() => (track('share_opened', { kind: 'drop' }), Share.share({ message: `PADO — ${label || '이곳'}에 ${WHAT[kind]} 남겼어요. ${content ? `“${content}”` : ''}` }))} />
       </View>
     </View>
   );

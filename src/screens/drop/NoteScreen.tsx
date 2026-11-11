@@ -15,6 +15,7 @@ import { usePreviewStore } from '@/services/preview';
 import { draftArt, useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
+import { josa } from '@/utils/josa';
 import { track } from '@/services/analytics';
 
 const MAX = 255; // 명세: content 최대 255자
@@ -30,12 +31,13 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   useEffect(() => { useDraft.getState().set({ content: text }); }, [text]);
   const create = useCreateDrop();
   const art = draftArt(draft);
-  // 'GANADARA 를 고르셨군요! / 음악을 바다에 빠뜨려보세요.'
+  // 'GANADARA를 고르셨군요! / 음악을 바다에 빠뜨려보세요.' — 조사는 곡·플리 이름 받침에 맞춘다
   const head = useMemo(() => {
-    if (draft.type === 'MUSIC') return { name: draft.song?.title ?? '', tail: ' 를 고르셨군요!', what: '음악을' };
+    if (draft.type === 'MUSIC') { const name = draft.song?.title ?? ''; return { name, tail: `${josa(name, '을', '를')} 고르셨군요!`, what: '음악을' }; }
     if (draft.type === 'VOTE') return { name: draft.topic, tail: ` · 후보 ${draft.options.length}곡`, what: '투표를' };
     const p = draft.playlist;
-    return { name: p?.name ?? '', tail: p?.kind === 'new' ? ` · ${p.songs.length}곡` : ' 를 고르셨군요!', what: '플리를' };
+    const name = p?.name ?? '';
+    return { name, tail: p?.kind === 'new' ? ` · ${p.songs.length}곡` : `${josa(name, '을', '를')} 고르셨군요!`, what: '플리를' };
   }, [draft]);
 
   // 곡 고르기에서 틀어 둔 미리듣기 — 여기서도 계속 재생
@@ -58,7 +60,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
     create.mutate(body, {
       onSuccess: () => {
         track('drop_created', { type: body.type, note_length: body.content.length, song_id: 'songId' in body ? body.songId : undefined, option_count: 'options' in body ? body.options.length : undefined, playlist_new: 'playlistName' in body, address: body.address, lat: body.latitude, lng: body.longitude });
-        draft.reset(); navigation.reset({ index: 1, routes: [{ name: 'Tabs' }, { name: 'DropSuccess', params: { art, content: body.content } }] }); },
+        draft.reset(); navigation.reset({ index: 1, routes: [{ name: 'Tabs' }, { name: 'DropSuccess', params: { art, content: body.content, kind: body.type } }] }); },
       onError: e => toast(errorMessage(e), 'error'),
     });
   };

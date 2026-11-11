@@ -5,15 +5,16 @@ import { dialog } from '@/components/ui/Dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { commentApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
-import type { Comment } from '@/api/types';
+import { type Comment, isPlaylistDetail, isVoteDetail } from '@/api/types';
 import { Avatar, Empty, Icon, Press, SecondaryButton, T } from '@/components/ui';
 import { Sheet } from '@/components/ui/Sheet';
-import { qk, useComments, useMe } from '@/hooks/api';
+import { qk, useComments, useDrop, useMe } from '@/hooks/api';
 import { useBlockUser } from '@/hooks/useBlockUser';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { track } from '@/services/analytics';
+import { formatRelative } from '@/utils/format';
 import { MoreGlyph, SendGlyph } from '@/components/player/glyphs';
 
 const SEND = '#12214A'; // Figma 보내기 버튼 남색
@@ -27,6 +28,12 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
   const [text, setText] = useState('');
   const [editing, setEditing] = useState<Comment | null>(null);
   const [busy, setBusy] = useState(false);
+  // 댓글이 칸에 다 들어가면 목록 스크롤을 꺼서, 목록 위에서 쓸어내려도 시트가 닫히게 (스크롤이 켜져 있으면 목록이 제스처를 가져감)
+  const [listH, setListH] = useState(0);
+  const [contentH, setContentH] = useState(0);
+  // 투표·플리 드랍의 댓글이면 '이 곡에'가 아니라 그 드랍을 부른다 (상세는 앞 화면에서 이미 불러와 캐시에 있음)
+  const drop = useDrop(dropId).data;
+  const target = drop && isVoteDetail(drop) ? '이 투표에' : drop && isPlaylistDetail(drop) ? '이 플리에' : '이 곡에';
 
   const refresh = () => { qc.invalidateQueries({ queryKey: qk.comments(dropId) }); qc.invalidateQueries({ queryKey: ['commentCount', dropId] }); };
   const submit = async () => {
@@ -80,8 +87,11 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
         data={list}
         keyExtractor={c => c.id}
         style={{ flexGrow: 0 }}
+        scrollEnabled={contentH > listH + 1}
+        onLayout={e => setListH(e.nativeEvent.layout.height)}
+        onContentSizeChange={(_, h) => setContentH(h)}
         contentContainerStyle={{ paddingHorizontal: 24, gap: 20, paddingBottom: 16 }}
-        ListEmptyComponent={isLoading ? <ActivityIndicator color={colors.primary} /> : isError ? <Empty icon="alert" title="댓글을 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} /> : <Empty icon="comment" title="아직 댓글이 없어요" desc="이 곡에 첫 한마디를 남겨보세요." />}
+        ListEmptyComponent={isLoading ? <ActivityIndicator color={colors.primary} /> : isError ? <Empty icon="alert" title="댓글을 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} /> : <Empty icon="comment" title="아직 댓글이 없어요" desc={`${target} 첫 한마디를 남겨보세요.`} />}
         renderItem={({ item: c }) => {
           const mine = !!me && c.username === me.username;
           return (
@@ -91,6 +101,7 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <T v="caption" style={{ fontFamily: fonts.medium, color: '#000000' }}>{c.username}</T>
                   {mine ? <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: colors.primarySoft }}><T v="tiny" c="primary">나</T></View> : null}
+                  {c.createdAt ? <T v="tiny" style={{ color: '#BBBBBB' }}>{formatRelative(c.createdAt)}</T> : null}
                 </View>
                 <T v="caption" style={{ lineHeight: 22, color: '#000000' }}>{c.content}</T>
               </View>
@@ -101,7 +112,7 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
       />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 24, paddingTop: 12 }}>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 18, paddingRight: 8, height: 38, borderRadius: 99, backgroundColor: '#F7F7F7', borderWidth: editing ? 1 : 0, borderColor: colors.primaryDeep }}>
-          <TextInput value={text} onChangeText={t => setText(t.slice(0, 100))} placeholder={editing ? '댓글 수정' : '이 곡에 한마디'} placeholderTextColor="#BABABA" style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 14 }} onSubmitEditing={submit} returnKeyType="send" selectionColor={colors.primary} />
+          <TextInput value={text} onChangeText={t => setText(t.slice(0, 100))} placeholder={editing ? '댓글 수정' : `${target} 한마디`} placeholderTextColor="#BABABA" style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 14 }} onSubmitEditing={submit} returnKeyType="send" selectionColor={colors.primary} />
           {editing ? <Press onPress={() => { setEditing(null); setText(''); }} hitSlop={8} accessibilityLabel="수정 취소"><Icon name="close" size={16} color={colors.ink3} /></Press> : null}
         </View>
         <Press onPress={submit} disabled={!text.trim() || busy} hitSlop={8} accessibilityLabel="보내기" style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: SEND, opacity: text.trim() ? 1 : 0.35, alignItems: 'center', justifyContent: 'center' }}>

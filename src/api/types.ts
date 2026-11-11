@@ -238,6 +238,8 @@ export interface Comment {
   username: string;
   /** 작성자 ID — 백엔드가 주면 댓글 메뉴에 '차단하기'가 보임 (현재 CommentResponse엔 없음) */
   userId?: UUID;
+  /** 작성 시각 — 백엔드가 주면 댓글 옆에 'n분 전'으로 표시 (현재 CommentResponse엔 없음) */
+  createdAt?: string;
 }
 
 // ── 알림
