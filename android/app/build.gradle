@@ -143,6 +143,8 @@ android {
 }
 
 dependencies {
+    // 투명 캐릭터 영상(AlphaVideoView) — react-native-video와 같은 버전
+    implementation "androidx.media3:media3-exoplayer:1.8.0"
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
