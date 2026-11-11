@@ -3,7 +3,7 @@
  * 약관 목록은 GET /terms 응답으로 구성 (SERVICE·PRIVACY·LOCATION 필수, MARKETING 선택).
  */
 import React, { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/endpoints';
@@ -13,6 +13,7 @@ import { Field, formatBirth, GenderSelect, ListenAppSelect, validBirth } from '@
 import { AUTH_PAGES, AuthButton, AuthHeader, AuthTitle, CheckBox } from '@/components/auth/AuthChrome';
 import { Icon, Press, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
+import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
 import { type ServiceId, usePrefs } from '@/store/prefs';
@@ -110,23 +111,25 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
   // 이메일 가입은 디자인 문구('환영합니다!'), 소셜 가입은 마무리 단계라 '거의 다 됐어요'
   const title = useMemo(() => (social ? '거의 다 됐어요' : '환영합니다!'), [social]);
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
+  // 버튼은 바닥 고정 대신 내용 끝에 — 키보드 위로 따라 올라와 입력칸을 가리지 않게. 키보드가 뜨면 입력 중인 칸에 맞춰 스크롤
+  const scroll = useFocusedInputScroll();
 
   return (
-    <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: colors.page }}>
+    <View style={{ flex: 1, backgroundColor: colors.page }}>
       <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.goBack} style={{ marginTop: insets.top + 12 }} />
-      <ScrollView contentContainerStyle={{ paddingTop: 39, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: insets.bottom + 16 }} keyboardShouldPersistTaps="handled">
         {/* 파도는 입력칸 뒤에 깔린 채 함께 스크롤 (디자인 474/1140) */}
         <Wave style={{ position: 'absolute', left: 0, right: 0, top: 377 }} />
         <AuthTitle title={title} desc={social ? '몇 가지만 확인하면 바로 시작할 수 있어요.' : '몇 가지만 알려주면 바로 시작할 수 있어요.'} />
         <View style={{ paddingHorizontal: 24, paddingTop: 24, gap: 16 }}>
           <Field
-            label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" disabled={!!providerEmail}
+            label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" disabled={!!providerEmail} onFocus={scroll.onFocus}
             help={providerEmail ? '소셜 계정의 이메일로 가입돼요' : undefined} error={errors.email}
             right={emailOk && !errors.email ? <Icon name="check" size={16} color={colors.primaryDeep} strokeWidth={2.2} /> : undefined}
           />
-          {!social && <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="비밀번호를 입력하세요" help="8~20자" error={errors.password} />}
-          <Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} placeholder="지도에 표시될 이름" help="지도에 표시될 이름이에요 (최대 15자)" error={errors.username} right={<T v="caption" c="lineStrong">{username.length}/15</T>} />
-          <Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={errors.birth} />
+          {!social && <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="비밀번호를 입력하세요" help="8~20자" error={errors.password} onFocus={scroll.onFocus} />}
+          <Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} placeholder="지도에 표시될 이름" help="지도에 표시될 이름이에요 (최대 15자)" error={errors.username} onFocus={scroll.onFocus} right={<T v="caption" c="lineStrong">{username.length}/15</T>} />
+          <Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={errors.birth} onFocus={scroll.onFocus} />
           <GenderSelect optional value={gender} onChange={setGender} />
           <ListenAppSelect value={listenApp} onChange={setListenApp} />
 
@@ -149,8 +152,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
             ))}
           </View>
         </View>
-      </ScrollView>
-      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 16, paddingTop: 8, gap: 10 }}>
+        <View style={{ paddingHorizontal: 24, paddingTop: 24, gap: 10 }}>
         <AuthButton label="가입하고 시작하기" onPress={submit} loading={busy} disabled={!requiredOk} />
         {social ? null : (
           <Press onPress={() => navigation.popTo('EmailLogin', {})} hitSlop={8} style={{ alignSelf: 'center', flexDirection: 'row', gap: 6 }} accessibilityRole="link">
@@ -158,7 +160,8 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
             <T v="caption" c="primaryDeep">로그인</T>
           </Press>
         )}
-      </View>
-    </KeyboardAvoidingView>
+        </View>
+      </ScrollView>
+    </View>
   );
 }

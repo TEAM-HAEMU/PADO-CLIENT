@@ -1,6 +1,9 @@
-/** 1.2 이메일 로그인 (Figma B 1.4 이메일 로그인) */
+/**
+ * 1.2 이메일 로그인 (Figma B 1.4 이메일 로그인)
+ * 로그인 버튼은 바닥에 고정하지 않고 입력칸 아래 흐름에 둔다 — 키보드 위에 붙어 올라오면 입력칸을 가림. 키보드가 뜨면 입력 중인 칸에 맞춰 스크롤.
+ */
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
@@ -9,6 +12,7 @@ import { Field } from '@/components/ui/Field';
 import { Press, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
 import { env } from '@/config';
+import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
 import { colors } from '@/theme/tokens';
@@ -23,6 +27,7 @@ export default function EmailLoginScreen({ navigation, route }: RootScreen<'Emai
   const [password, setPassword] = useState(env.useMock && !route.params?.email ? MOCK_ACCOUNT.password : '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const scroll = useFocusedInputScroll();
   // 가입 화면에서 돌아올 때 이메일을 채워준다 (이미 떠 있던 화면이면 초기값이 안 바뀌므로)
   useEffect(() => { if (route.params?.email) { setEmail(route.params.email); setPassword(''); } }, [route.params?.email]);
   // 비밀번호 재설정에서 돌아오면 안내 (자동 로그인하지 않음)
@@ -39,28 +44,28 @@ export default function EmailLoginScreen({ navigation, route }: RootScreen<'Emai
   };
 
   return (
-    <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: colors.page }}>
+    <View style={{ flex: 1, backgroundColor: colors.page }}>
       <Wave style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
       <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.goBack} style={{ marginTop: insets.top + 12 }} />
-      <ScrollView contentContainerStyle={{ paddingTop: 39, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
         <AuthTitle title="다시 만나서 반가워요." desc="이메일로 로그인하고 내 주변의 바다를 탐색해요." />
         <View style={{ paddingHorizontal: 24, paddingTop: 34, gap: 16 }}>
           {notice && <T v="captionStrong" c="positive" accessibilityLiveRegion="polite">{notice}</T>}
-          <Field label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" textContentType="emailAddress" />
-          <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="비밀번호를 입력하세요" textContentType="password" onSubmitEditing={submit} error={error} />
+          <Field label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" textContentType="emailAddress" onFocus={scroll.onFocus} />
+          <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="비밀번호를 입력하세요" textContentType="password" onSubmitEditing={submit} error={error} onFocus={scroll.onFocus} />
           <Press onPress={() => navigation.navigate('PasswordReset', { email: email.trim() || undefined })} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'flex-end' }}>
             <T v="caption" c="ink2">비밀번호를 잊으셨나요?</T>
           </Press>
         </View>
+        <View style={{ paddingHorizontal: 24, paddingTop: 28, gap: 10, alignItems: 'center' }}>
+          <AuthButton label="로그인" onPress={submit} loading={busy} style={{ alignSelf: 'stretch' }} />
+          <Press onPress={() => navigation.navigate('Signup', { mode: 'email' })} hitSlop={8} style={{ flexDirection: 'row', gap: 6 }}>
+            <T v="caption" c="ink2">처음이신가요?</T>
+            <T v="caption" c="primaryDeep">계정 만들기</T>
+          </Press>
+        </View>
       </ScrollView>
-      <View style={{ paddingHorizontal: 24, gap: 10, alignItems: 'center' }}>
-        <AuthButton label="로그인" onPress={submit} loading={busy} style={{ alignSelf: 'stretch' }} />
-        <Press onPress={() => navigation.navigate('Signup', { mode: 'email' })} hitSlop={8} style={{ flexDirection: 'row', gap: 6 }}>
-          <T v="caption" c="ink2">처음이신가요?</T>
-          <T v="caption" c="primaryDeep">계정 만들기</T>
-        </Press>
-      </View>
       <AuthDisclaimer style={{ paddingTop: 40, paddingBottom: insets.bottom + 16 }} />
-    </KeyboardAvoidingView>
+    </View>
   );
 }

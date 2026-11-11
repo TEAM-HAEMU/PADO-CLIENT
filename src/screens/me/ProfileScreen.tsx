@@ -8,10 +8,11 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dropApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
-import type { DropSummary } from '@/api/types';
+import { type DropSummary, isPlaylistDetail } from '@/api/types';
 import { Art, Avatar, Empty, Press, T, PrimaryButton } from '@/components/ui';
 import { MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
+import { Collage } from '@/components/music/Collage';
 import { env } from '@/config';
 import { qk, useLikeCount, useMe, useMyDrops, useMyLikeCount, useMyLikes, useMyPlaylists, useUnreadCount } from '@/hooks/api';
 import { likeApi } from '@/api/endpoints';
@@ -35,23 +36,31 @@ export default function ProfileScreen() {
   const EMPTY: never[] = [];
   const myDrops = useMyDrops().data;
   const drops = useMemo(() => myDrops ?? EMPTY, [myDrops]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 플리 드랍 핀은 플리 상세와 같은 4칸 커버 — 요약엔 첫 곡 아트뿐이라 드랍 상세의 곡 아트를 쓴다
+  const playlistDrops = drops.filter(d => d.type === 'PLAYLIST');
+  const plDetails = useQueries({ queries: playlistDrops.map(d => ({ queryKey: qk.drop(d.droppingId), queryFn: () => dropApi.get(d.droppingId), staleTime: 5 * 60_000 })) });
+  const covers: Record<string, (string | null)[]> = {};
+  playlistDrops.forEach((d, i) => { const det = plDetails[i]?.data; if (det && isPlaylistDetail(det)) covers[d.droppingId] = det.songs.map(x => x.albumImagePath); });
+  const pinArts = (d: DropSummary) => covers[d.droppingId] ?? [dropArt(d)];
   // 앨범 아트가 로드될 시간을 준 뒤 마커 스냅샷 고정 (Google 지도는 추적을 끄면 그 순간 모습으로 굳는다)
+  // 목록을 다시 받을 때마다(같은 내용이어도) 다시 그리면 겹친 핀이 번쩍이며 순서가 바뀌므로, 핀 구성·그림이 바뀔 때만
   const [tracks, setTracks] = useState(true);
   const [tab, setTab] = useState<'drops' | 'likes'>('drops');
   const [artEpoch, setArtEpoch] = useState(0);
+  const pinKey = drops.map(d => `${d.droppingId}=${pinArts(d).slice(0, 4).join('|')}`).join(',');
   useEffect(() => {
     let alive = true;
     setTracks(true);
     let t: ReturnType<typeof setTimeout> = setTimeout(() => setTracks(false), 5000);
     // Android 마커 이미지는 미리 받아둔 뒤 다시 만들어야 보인다
-    const urls = drops.map(d => artUrl(dropArt(d), 49)).filter((u): u is string => !!u);
+    const urls = drops.flatMap(d => (covers[d.droppingId] ? covers[d.droppingId].slice(0, 4) : [artUrl(dropArt(d), 49)])).filter((u): u is string => !!u);
     Promise.all(urls.map(u => Image.prefetch(u).catch(() => false))).then(() => {
       if (!alive) return;
       if (Platform.OS === 'android') setArtEpoch(e => e + 1);
       setTracks(true); clearTimeout(t); t = setTimeout(() => setTracks(false), 2500);
     });
     return () => { alive = false; clearTimeout(t); };
-  }, [drops, tab]);
+  }, [pinKey, tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const likesQ = useMyLikes();
   const likes = likesQ.data ?? [];
   const myLikeCount = useMyLikeCount().data;
@@ -132,11 +141,11 @@ export default function ProfileScreen() {
             {region ? (
               <View style={{ height: DROP_MAP_H, marginHorizontal: 20, marginBottom: 20, borderRadius: 16, overflow: 'hidden' }}>
                 <MapView style={{ flex: 1 }} provider={useGoogle ? PROVIDER_GOOGLE : PROVIDER_DEFAULT} customMapStyle={useGoogle ? googleMapStyle : undefined} userInterfaceStyle="light" initialRegion={region} scrollEnabled={false} zoomEnabled={false} rotateEnabled={false} pitchEnabled={false}>
-                  {drops.map(d => (
-                    <Marker key={`${d.droppingId}:${artEpoch}`} coordinate={d} tracksViewChanges={tracks} anchor={{ x: 0.5, y: 1 }}>
+                  {drops.map((d, i) => (
+                    <Marker key={`${d.droppingId}:${artEpoch}`} coordinate={d} tracksViewChanges={tracks} anchor={{ x: 0.5, y: 1 }} zIndex={drops.length - i}>
                       {/* Figma 'stay music' 핀 — #FAFAFA 3px 테두리 앨범 아트 55 + 가는 막대 + 바닥 점 */}
                       <View style={{ alignItems: 'center', width: 55 }}>
-                        <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: '#FAFAFA', backgroundColor: '#FFFFFF', overflow: 'hidden' }}><Art uri={dropArt(d)} size={49} radius={9} /></View>
+                        <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: '#FAFAFA', backgroundColor: '#FFFFFF', overflow: 'hidden' }}><Collage images={pinArts(d)} size={49} radius={9} /></View>
                         <View style={{ width: 8, height: 19, alignItems: 'center' }}>
                           <View style={{ width: 1, height: 16, borderBottomLeftRadius: 1, borderBottomRightRadius: 1, backgroundColor: 'rgba(250,250,250,0.7)' }} />
                           <View style={{ position: 'absolute', top: 12, width: 8, height: 7, borderRadius: 4, backgroundColor: 'rgba(250,250,250,0.7)' }} />

@@ -3,13 +3,16 @@
  * 열림: 배경 페이드 + 시트가 아래에서 부드럽게 올라옴 / 닫힘: 반대로 내려감.
  * goBack·배경 탭·제스처 등 어떤 경로로 닫혀도 beforeRemove에서 닫힘 애니메이션을 먼저 재생한다.
  * 시트를 아래로 쓸어내려도 닫힌다 (충분히 내리거나 빠르게 튕기면 닫고, 아니면 제자리로).
+ * 키보드(iOS): 시트를 통째로 들어 올리면 키보드 둥근 모서리 뒤로 어두운 배경이 비치고 흰 카드가 칼같이 끊긴다
+ *  → 카드의 흰 바탕을 화면 바닥까지 그대로 두고, 키보드 높이만큼 안쪽 여백만 키보드와 같은 박자로 늘린다 (반투명 키보드가 흰 바탕 위에 얹힘).
+ *  Android는 창이 키보드만큼 줄어드는(adjustResize) 방식이라 따로 할 일이 없다.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Pressable, View, type ViewStyle } from 'react-native';
+import { Keyboard, Platform, Pressable, View, type ViewStyle } from 'react-native';
 import { CommonActions, type NavigationState, useNavigation, useRoute } from '@react-navigation/native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { colors } from '@/theme/tokens';
 import { DialogHost } from './Dialog';
@@ -31,12 +34,16 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
   const route = useRoute();
   const closing = useRef(false);
   const [closingNow, setClosingNow] = useState(false);
-  const [kb, setKb] = useState(false); // 키보드가 떠 있으면 하단 안전영역 여백은 필요 없다
+  const [kb, setKb] = useState(false); // (Android) 키보드가 떠 있으면 하단 안전영역 여백은 필요 없다
   useEffect(() => {
     const a = Keyboard.addListener('keyboardDidShow', () => setKb(true));
     const b = Keyboard.addListener('keyboardDidHide', () => setKb(false));
     return () => { a.remove(); b.remove(); };
-  }, []); // 닫히는 동안 시트 안 버튼이 다시 눌리지 않게
+  }, []);
+  // (iOS) 키보드 높이를 키보드 애니메이션과 같은 박자로 — 카드 바닥 여백(안전영역)을 넘는 만큼만 더 띄운다
+  const keyboard = useAnimatedKeyboard();
+  const baseBottom = Math.max(insets.bottom, 16) + 12;
+  const kbSpacer = useAnimatedStyle(() => ({ height: Platform.OS === 'ios' ? Math.max(0, keyboard.height.value - baseBottom + 12) : 0 }));
   const allow = useRef(false); // 애니메이션 뒤 우리가 직접 보내는 제거 동작은 통과
   const unlocked = useRef(dismissible);
   if (closeRef) closeRef.current = () => { unlocked.current = true; nav.goBack(); };
@@ -86,7 +93,7 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
   const panel = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - progress.value) * height + drag.value }] }));
 
   return (
-    <KeyboardAvoidingView behavior="padding" pointerEvents={closingNow ? 'none' : 'auto'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+    <View pointerEvents={closingNow ? 'none' : 'auto'} style={{ flex: 1, justifyContent: 'flex-end' }}>
       <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: `rgba(0,0,0,${dim * 0.4})` }, backdrop]}>
         <Pressable style={{ flex: 1 }} onPress={dismissible ? close : undefined} accessible={dismissible} accessibilityLabel="닫기" />
       </Animated.View>
@@ -95,14 +102,15 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
       <Animated.View onLayout={e => setHeight(e.nativeEvent.layout.height + 40)} style={[{ maxHeight: style?.maxHeight, height: style?.height }, panel]}>
         {/* 헤더 줄은 화면 폭 전체라 카드 윗부분과 겹친다 → 헤더 요소 말고는 터치를 카드로 넘긴다 (예: 핀 미리보기 ⋯ 버튼) */}
         {header ? <View pointerEvents="box-none" style={{ alignItems: 'center', marginBottom: -headerOverlap, zIndex: 2, elevation: 2 }}>{header}</View> : null}
-        <View style={[{ flexShrink: 1, backgroundColor: colors.page, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 16, paddingTop: 10, paddingBottom: kb ? 12 : Math.max(insets.bottom, 16) + 12 }, style, { maxHeight: undefined, height: undefined }, style?.height ? { flex: 1 } : null]}>
+        <View style={[{ flexShrink: 1, backgroundColor: colors.page, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 16, paddingTop: 10, paddingBottom: Platform.OS === 'android' && kb ? 12 : baseBottom }, style, { maxHeight: undefined, height: undefined }, style?.height ? { flex: 1 } : null]}>
           <View style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: colors.ink2, marginBottom: 16 }} />
           {children}
+          <Animated.View style={kbSpacer} />
         </View>
       </Animated.View>
       </GestureDetector>
       {/* 이 시트 위에서 여는 확인창·메뉴 (iOS는 시트 위에 루트 Modal을 띄울 수 없음) */}
       <DialogHost scope="sheet" />
-    </KeyboardAvoidingView>
+    </View>
   );
 }

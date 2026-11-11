@@ -2,6 +2,7 @@
  * 30초 미리듣기 — iTunes previewUrl을 앱 안에서 재생 (전체 곡은 '전체 듣기'로 고른 음악 앱에 딥링크, services/listen.ts).
  * 앱 전체에 오디오 플레이어 하나만 두고(PreviewHost), 화면은 usePreview 훅으로 제어한다.
  * 앱을 내려도 계속 재생 + 잠금화면/알림 컨트롤 (iOS UIBackgroundModes audio, Android 미디어 재생 서비스).
+ * 처음 듣는 곡은 미리듣기 주소 조회(iTunes)와 첫 버퍼링에 몇 초 걸린다 → 누르는 즉시 pending/buffering으로 미니 디스크에 '불러오는 중'을 보여 준다.
  */
 import React, { useEffect, useState } from 'react';
 import { Platform, Settings } from 'react-native';
@@ -23,11 +24,16 @@ interface PreviewState {
   paused: boolean;
   position: number;
   duration: number;
+  /** 누른 곡의 미리듣기 주소를 찾는 중 (아직 재생 전) — 미니 디스크가 곧바로 그 곡으로 '불러오는 중'을 보여 준다 */
+  pending: { key: string; meta: PreviewMeta } | null;
+  /** 재생을 시작했지만 아직 소리가 나기 전 (첫 버퍼링) */
+  buffering: boolean;
   play: (key: string, url: string, meta?: PreviewMeta) => void;
   toggle: () => void;
   stop: () => void;
   _progress: (pos: number, dur: number) => void;
   _ended: () => void;
+  _ready: () => void;
 }
 
 /**
@@ -36,25 +42,36 @@ interface PreviewState {
  */
 let intent = 0;
 let intentKey: string | null = null;
-const begin = (key: string) => { intentKey = key; return ++intent; };
+const begin = (key: string, meta?: PreviewMeta) => {
+  intentKey = key;
+  usePreviewStore.setState({ pending: meta ? { key, meta } : null });
+  return ++intent;
+};
 const current = (token: number) => token === intent;
-const cancelIntent = (key?: string | null) => { if (!key || intentKey === key) { intent++; intentKey = null; } };
+const cancelIntent = (key?: string | null) => {
+  if (!key || intentKey === key) { intent++; intentKey = null; usePreviewStore.setState({ pending: null }); }
+};
+/** 주소를 못 찾았을 때(미리듣기 없음·확인 불가) '불러오는 중' 표시를 거둔다 */
+const settle = (token: number) => { if (current(token)) usePreviewStore.setState({ pending: null }); };
 
-const IDLE = { key: null, url: null, meta: null, paused: true, position: 0 };
+const IDLE = { key: null, url: null, meta: null, paused: true, position: 0, buffering: false };
 
 export const usePreviewStore = create<PreviewState>((set, get) => ({
   ...IDLE,
   endedKey: null,
   duration: 30,
+  pending: null,
+  buffering: false,
   play: (key, url, meta) => {
     if (intentKey !== key) cancelIntent(); // 다른 곡의 대기 중인 재생 요청은 버린다
     if (get().key !== key) track('preview_started', { song_id: key, title: meta?.title, artist: meta?.artist });
-    set(get().key === key ? { paused: false, endedKey: null } : { key, url, meta: meta ?? null, paused: false, position: 0, duration: 30, endedKey: null });
+    set(get().key === key ? { paused: false, endedKey: null, pending: null } : { key, url, meta: meta ?? null, paused: false, position: 0, duration: 30, endedKey: null, pending: null, buffering: true });
   },
   toggle: () => { const paused = !get().paused; track(paused ? 'preview_paused' : 'preview_resumed', { song_id: get().key, position: Math.round(get().position) }); set({ paused }); },
   stop: () => { cancelIntent(); set({ ...IDLE, endedKey: null }); },
   _progress: (position, duration) => set({ position, duration: duration || 30 }),
   _ended: () => { track('preview_completed', { song_id: get().key }); set({ ...IDLE, endedKey: get().key }); },
+  _ready: () => { if (get().buffering) set({ buffering: false }); },
 }));
 
 // UI 테스트는 `-PADO_MUTE YES` 실행 인자를 넘긴다 → 미리듣기를 무음으로 (화면 동작은 그대로)
@@ -67,6 +84,7 @@ export function PreviewHost() {
   const _progress = usePreviewStore(st => st._progress);
   const stop = usePreviewStore(st => st.stop);
   const ended = usePreviewStore(st => st._ended);
+  const ready = usePreviewStore(st => st._ready);
   if (!url) return null;
   return (
     <Video
@@ -80,7 +98,10 @@ export function PreviewHost() {
       showNotificationControls
       ignoreSilentSwitch="ignore"
       progressUpdateInterval={250}
-      onProgress={e => _progress(e.currentTime, e.seekableDuration || e.playableDuration)}
+      // 30초짜리라 넉넉히 받아 둘 필요 없음 — 조금이라도 받으면 바로 소리를 낸다
+      automaticallyWaitsToMinimizeStalling={false}
+      onLoad={ready}
+      onProgress={e => { if (e.currentTime > 0) ready(); _progress(e.currentTime, e.seekableDuration || e.playableDuration); }}
       onEnd={ended}
       onError={stop}
       style={{ width: 0, height: 0 }}
@@ -113,11 +134,10 @@ const metaOf = (s: PreviewSong): PreviewMeta => ({ title: s.title, artist: s.art
 export async function startPreview(song: PreviewSong): Promise<'ok' | 'none' | 'unavailable' | 'cancelled'> {
   const st = usePreviewStore.getState();
   if (st.key === song.id) { if (st.paused) st.toggle(); return 'ok'; }
-  const token = begin(song.id);
-  const r = await findItunes(song.title, song.artist);
+  const token = begin(song.id, metaOf(song));
+  const r = await findItunes(song.title, song.artist, { priority: true });
   if (!current(token)) return 'cancelled';
-  if (r.unavailable) return 'unavailable';
-  if (!r.previewUrl) return 'none';
+  if (r.unavailable || !r.previewUrl) { settle(token); return r.unavailable ? 'unavailable' : 'none'; }
   usePreviewStore.getState().play(song.id, r.previewUrl, metaOf(song));
   return 'ok';
 }
@@ -141,7 +161,7 @@ export function usePreview(song: PreviewSong | null | undefined, opts: { lazy?: 
     let alive = true;
     if (!song || opts.lazy) return;
     const id = song.id;
-    findItunes(song.title, song.artist).then(r => { if (alive) setFound({ id, url: r.unavailable ? false : r.previewUrl }); });
+    findItunes(song.title, song.artist, { priority: true }).then(r => { if (alive) setFound({ id, url: r.unavailable ? false : r.previewUrl }); });
     return () => { alive = false; };
   }, [song?.id, song?.title, song?.artist]); // eslint-disable-line react-hooks/exhaustive-deps
   return {
@@ -153,15 +173,15 @@ export function usePreview(song: PreviewSong | null | undefined, opts: { lazy?: 
       if (!song) return;
       const st = usePreviewStore.getState();
       if (st.key === song.id) return st.toggle();
-      const token = begin(song.id);
+      const token = begin(song.id, metaOf(song));
       let u = url;
       if (!u) {
         setLooking(true);
-        const r = await findItunes(song.title, song.artist).finally(() => setLooking(false));
+        const r = await findItunes(song.title, song.artist, { priority: true }).finally(() => setLooking(false));
         if (!current(token)) return; // 기다리는 사이 화면을 떠났거나 다른 곡을 누름
-        if (r.unavailable) return toast('지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.', 'error');
+        if (r.unavailable) { settle(token); return toast('지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.', 'error'); }
         setUrl(r.previewUrl);
-        if (!r.previewUrl) return toast('이 곡은 미리듣기를 지원하지 않아요.');
+        if (!r.previewUrl) { settle(token); return toast('이 곡은 미리듣기를 지원하지 않아요.'); }
         u = r.previewUrl;
       }
       usePreviewStore.getState().play(song.id, u, metaOf(song));

@@ -1,6 +1,6 @@
 /** 3.5 플리 드랍 만들기 — 내 플레이리스트 선택 또는 새로 구성 (명세: playlistId | playlistName+songIds 1~50) · Figma '3.4 플리 드랍' */
 import React, { useCallback, useState, useEffect } from 'react';
-import { KeyboardAvoidingView, ScrollView, View, type ViewStyle } from 'react-native';
+import { ScrollView, View, type ViewStyle } from 'react-native';
 import { useQueries } from '@tanstack/react-query';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { Empty, Loading, Press, PrimaryButton, T, SecondaryButton } from '@/comp
 import { Field } from '@/components/ui/Field';
 import { Wave } from '@/components/ui/Wave';
 import { useMyPlaylists } from '@/hooks/api';
+import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
 import { useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
@@ -31,6 +32,7 @@ const META = { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18, letterSp
 
 export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'PlaylistDropCreate'>) {
   const insets = useSafeAreaInsets();
+  const scroll = useFocusedInputScroll();
   const { playlist, picked, set } = useDraft();
   const { data: mine, isLoading, isError, refetch } = useMyPlaylists();
   const details = useQueries({ queries: (mine ?? []).map(p => ({ queryKey: ['playlist', p.id], queryFn: () => playlistApi.get(p.id) })) });
@@ -59,11 +61,12 @@ export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'Pla
   const isNew = mode === 'new';
 
   return (
-    <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
+      {/* 아래 버튼은 키보드를 따라 올라오지 않는다 (올라오면 입력칸을 가림) — 키보드가 뜨면 이름 칸에 맞춰 스크롤 */}
       {/* Figma 'wave' 인스턴스 — 화면 아래쪽에 깔림 */}
       <Wave scale={1.2} style={{ position: 'absolute', left: -79, right: -79, bottom: -34 }} />
       <DropTopBar title="플리 드랍하기" onBack={navigation.goBack} onNext={next} nextEnabled={ready} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: insets.bottom + 110, gap: 30 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: insets.bottom + 110, gap: 30 }} keyboardShouldPersistTaps="handled">
         <T style={{ fontFamily: fonts.semibold, fontSize: 20, lineHeight: 28, letterSpacing: -0.4, color: '#090909' }}>{'바다에 떨어뜨릴\n플리를 골라요.'}</T>
         <View style={{ gap: 20 }}>
           {isLoading ? <Loading style={{ height: 120 }} /> : isError ? <Empty icon="alert" title="플레이리스트를 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} /> : !mine?.length ? <Empty icon="playlist" title="아직 플레이리스트가 없어요" desc="아래에서 새 플리를 만들어 바로 드랍할 수 있어요." /> : null}
@@ -93,7 +96,7 @@ export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'Pla
                 </View>
                 <RadioGlyph on />
               </View>
-              <Field value={newName} onChangeText={t => setNewName(t.slice(0, 30))} placeholder="플레이리스트 이름" accessibilityLabel="플레이리스트 이름" />
+              <Field value={newName} onChangeText={t => setNewName(t.slice(0, 30))} placeholder="플레이리스트 이름" accessibilityLabel="플레이리스트 이름" onFocus={scroll.onFocus} />
               <AddLink label="곡 고르기" onPress={() => navigation.navigate('AddSongs', { picker: 'newPlaylist', existing: newSongs.map(s => s.id) })} />
             </View>
           ) : (
@@ -104,6 +107,6 @@ export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'Pla
       <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 26 }}>
         <PrimaryButton label="다음 한마디 남기기" disabled={!ready} onPress={next} />
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }

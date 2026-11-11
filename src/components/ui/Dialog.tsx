@@ -141,7 +141,7 @@ export function DialogHost({ scope = 'root' }: { scope?: 'root' | 'sheet' }) {
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={cancel}>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} accessibilityViewIsModal>
-        <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: shown.kind === 'alert' ? 'rgba(15,27,56,0.42)' : 'rgba(15,27,56,0.16)' }, backdrop]}>
+        <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: shown.kind === 'alert' ? 'rgba(15,27,56,0.42)' : 'transparent' }, backdrop]}>
           <Pressable style={{ flex: 1 }} onPress={cancel} accessible={shown.dismissible} accessibilityLabel="닫기" />
         </Animated.View>
 
@@ -174,11 +174,13 @@ export function DialogHost({ scope = 'root' }: { scope?: 'root' | 'sheet' }) {
             onLayout={e => { if (!menuH) setMenuH(e.nativeEvent.layout.height); }}
             accessibilityLabel={shown.title}
             style={[
-              { position: 'absolute', left: menuLeft, top: menuTop, width: MENU_W, borderRadius: 18, backgroundColor: colors.card2, borderWidth: 1, borderColor: DIVIDER, overflow: 'hidden' },
+              // 화면을 회색으로 덮지 않고 메뉴만 그림자로 띄운다 (확인 창만 어둡게) — 그림자는 바깥, 둥근 자르기는 안쪽에서
+              { position: 'absolute', left: menuLeft, top: menuTop, width: MENU_W, borderRadius: 18, backgroundColor: colors.card2, shadowColor: '#12214A', shadowOpacity: 0.16, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 12 },
               menu,
               menuH ? null : { opacity: 0 }, // 높이를 재기 전엔 숨김 (위·아래 방향 결정 후 보여줌)
             ]}
           >
+            <View style={{ borderRadius: 18, borderWidth: 1, borderColor: DIVIDER, overflow: 'hidden' }}>
             {[...plain, ...danger].map((b, i) => (
               <Press
                 key={b.text}
@@ -195,6 +197,7 @@ export function DialogHost({ scope = 'root' }: { scope?: 'root' | 'sheet' }) {
                 {b.icon ? <Icon name={b.icon} size={18} color={b.style === 'destructive' ? colors.caution : colors.ink2} /> : null}
               </Press>
             ))}
+            </View>
           </Animated.View>
         )}
       </View>

@@ -1,7 +1,9 @@
 /**
  * iTunes Search (공개 API, 키 불필요) — 백엔드 곡 정보에 없는 두 가지를 보완한다.
  *  1) 30초 미리듣기 previewUrl   2) Apple Music 곡 링크 trackViewUrl
- * KR 스토어는 검색 API가 비어 있는 경우가 있어 US → KR 순으로 조회한다.
+ * KR 스토어는 검색 API가 비어 있는 경우가 있어 US·KR 둘 다 조회한다 (US 결과 우선).
+ * priority: 사용자가 방금 누른 곡 — 요청 간격 대기 없이 두 스토어를 동시에 묻는다 (처음 듣는 곡의 몇 초 지연을 줄임).
+ * 미리 받아 두기(prefetch)는 priority 없이 간격을 지켜 분당 한도를 아낀다.
  */
 import { kv } from '@/store/storage';
 
@@ -27,12 +29,16 @@ let blockedUntil = 0;
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 /** 결과 목록 또는 null(네트워크 오류·한도 초과 — 캐시하지 않음) */
-async function query(term: string, country: string): Promise<Row[] | null> {
+async function query(term: string, country: string, priority = false): Promise<Row[] | null> {
   if (Date.now() < blockedUntil) return null;
-  const slot = Math.max(Date.now(), nextSlot);
-  if (slot - Date.now() > MAX_QUEUE_MS) return null; // 대기열이 너무 길면 이번엔 포기 (사용자가 오래 기다리지 않게)
-  nextSlot = slot + MIN_GAP_MS;
-  if (slot > Date.now()) await wait(slot - Date.now());
+  if (priority) {
+    nextSlot = Math.max(Date.now(), nextSlot) + MIN_GAP_MS; // 바로 보내되, 뒤따르는 미리 받기는 그만큼 미룬다
+  } else {
+    const slot = Math.max(Date.now(), nextSlot);
+    if (slot - Date.now() > MAX_QUEUE_MS) return null; // 대기열이 너무 길면 이번엔 포기 (사용자가 오래 기다리지 않게)
+    nextSlot = slot + MIN_GAP_MS;
+    if (slot > Date.now()) await wait(slot - Date.now());
+  }
   if (Date.now() < blockedUntil) return null; // 기다리는 사이 차단됐으면 보내지 않는다 (차단 연장 방지)
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10_000);
@@ -73,12 +79,15 @@ function persist(key: string, value: ItunesMatch) {
   kv.set('itunes:index', index);
 }
 
-async function lookup(key: string, title: string, artist: string): Promise<ItunesMatch> {
+async function lookup(key: string, title: string, artist: string, priority: boolean): Promise<ItunesMatch> {
   let result: ItunesMatch = { previewUrl: null, appleMusicUrl: null };
   let failed = false;
   let fuzzy: Row | null = null;
-  for (const country of ['us', 'kr']) {
-    const list = await query(`${title} ${artist}`, country);
+  const term = `${title} ${artist}`;
+  // priority면 두 스토어를 동시에 (기다리는 시간이 한 번으로), 아니면 US에서 찾으면 KR은 묻지 않는다
+  const both = priority ? [query(term, 'us', true), query(term, 'kr', true)] : null;
+  for (const [i, country] of ['us', 'kr'].entries()) {
+    const list = both ? await both[i] : await query(term, country);
     if (list === null) { failed = true; continue; }
     const best = pick(list, title, artist, false);
     if (best) { result = { previewUrl: best.previewUrl ?? null, appleMusicUrl: best.trackViewUrl ?? null }; break; }
@@ -97,14 +106,14 @@ async function lookup(key: string, title: string, artist: string): Promise<Itune
 /** 테스트용 */
 export const pickForTest = pick;
 
-export async function findItunes(title: string, artist: string): Promise<ItunesMatch> {
+export async function findItunes(title: string, artist: string, opts: { priority?: boolean } = {}): Promise<ItunesMatch> {
   const key = `itunes:${norm(title)}:${norm(artist)}`;
   const hit = mem.get(key) ?? kv.get<ItunesMatch | null>(key, null);
   if (hit) { mem.set(key, hit); return hit; }
   // 같은 곡을 여러 행이 동시에 물어도 요청은 한 번 (iTunes 분당 요청 제한)
   let p = inflight.get(key);
   if (!p) {
-    p = lookup(key, title, artist).finally(() => inflight.delete(key));
+    p = lookup(key, title, artist, !!opts.priority).finally(() => inflight.delete(key));
     inflight.set(key, p);
   }
   return p;

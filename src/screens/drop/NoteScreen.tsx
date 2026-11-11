@@ -1,6 +1,6 @@
 /** 3.3 한마디 남기기 — Figma 'B 3.3 한마디 남기기' (고른 곡 · 한마디 입력 · 추천 문구) → POST /droppings */
 import React, { useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { errorMessage } from '@/api/errors';
 import type { CreateDropBody } from '@/api/types';
@@ -9,6 +9,7 @@ import { DiscArt } from '@/components/drop/parts';
 import { Chip, PrimaryButton, T, TopBar } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
 import { useCreateDrop } from '@/hooks/api';
+import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
 import { useLocation } from '@/services/location';
 import { usePreviewStore } from '@/services/preview';
@@ -30,6 +31,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   // 뒤로 갔다 와도 쓰던 메모가 남도록 초안에도 저장 (렌더 중이 아니라 반영 뒤에)
   useEffect(() => { useDraft.getState().set({ content: text }); }, [text]);
   const create = useCreateDrop();
+  const scroll = useFocusedInputScroll();
   const art = draftArt(draft);
   // 'GANADARA를 고르셨군요! / 음악을 바다에 빠뜨려보세요.' — 조사는 곡·플리 이름 받침에 맞춘다
   const head = useMemo(() => {
@@ -66,26 +68,27 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   };
 
   return (
-    <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       {/* Figma 'wave' 인스턴스 — 화면 아래쪽에 깔림 */}
       <Wave scale={1.2} style={{ position: 'absolute', left: -79, right: -79, bottom: -34 }} />
       <TopBar title="한마디 남기기" onBack={navigation.goBack} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24, gap: 36 }} keyboardShouldPersistTaps="handled">
+      {/* 버튼은 바닥에 고정하지 않고 내용 흐름 끝에 둔다 — 키보드 위로 따라 올라와 입력칸을 가리지 않게. 키보드가 뜨면 입력칸에 맞춰 스크롤 */}
+      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: insets.bottom + 26, gap: 36 }} keyboardShouldPersistTaps="handled">
         <View style={{ gap: 20 }}>
           {/* 곡 고르기에서 틀어 둔 미리듣기가 있으면 아트를 눌러 일시정지/재개 */}
           <DiscArt uri={art} size={100} mark={songLoaded} playing={songPlaying} onToggle={songLoaded ? () => usePreviewStore.getState().toggle() : undefined} style={{ alignSelf: 'flex-start' }} />
           <View style={{ gap: 6 }}>
-            <T numberOfLines={2} style={TXT12}>
-              <T style={[TXT12, { color: colors.primary }]}>{head.name}</T>{head.tail}
+            <T numberOfLines={2} style={TXT14}>
+              <T style={[TXT14, { color: colors.primary }]}>{head.name}</T>{head.tail}
             </T>
-            <T style={{ fontFamily: fonts.medium, fontSize: 16, lineHeight: 22, letterSpacing: -0.32, color: '#090909' }}>{head.what} 바다에 빠뜨려보세요.</T>
+            <T style={{ fontFamily: fonts.medium, fontSize: 18, lineHeight: 25, letterSpacing: -0.36, color: '#090909' }}>{head.what} 바다에 빠뜨려보세요.</T>
           </View>
         </View>
         <View style={{ height: 206, borderRadius: 4, backgroundColor: '#FAFBFC', borderWidth: 1, borderColor: focus ? colors.primaryDeep : '#FAFBFC', paddingHorizontal: 12, paddingTop: 10, paddingBottom: 26 }}>
           <TextInput
             value={text}
             onChangeText={t => setText(t.slice(0, MAX))}
-            onFocus={() => setFocus(true)}
+            onFocus={() => { setFocus(true); scroll.onFocus(); }}
             onBlur={() => setFocus(false)}
             multiline
             placeholder={`최대 ${MAX}자 입력 · 비워둬도 괜찮아요`}
@@ -102,16 +105,17 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
             {SUGGEST.map(s => <Chip key={s} label={s} onPress={() => setText(t => (t ? `${t} ${s}` : s).slice(0, MAX))} />)}
           </View>
         </View>
-      </ScrollView>
-      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 26, gap: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-          <PinGlyph />
-          <T v="caption" c="ink2" numberOfLines={1}>지금 서 있는 {address || label || '이곳'}에 남겨져요</T>
+        <View style={{ flex: 1 }} />
+        <View style={{ gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+            <PinGlyph height={13} />
+            <T v="captionStrong" c="ink2" numberOfLines={1} style={{ fontFamily: fonts.regular }}>지금 서 있는 {address || label || '이곳'}에 남겨져요</T>
+          </View>
+          <PrimaryButton label="여기 빠뜨리기" onPress={submit} loading={create.isPending} />
         </View>
-        <PrimaryButton label="여기 빠뜨리기" onPress={submit} loading={create.isPending} />
-      </View>
-    </KeyboardAvoidingView>
+      </ScrollView>
+    </View>
   );
 }
 
-const TXT12 = { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, letterSpacing: -0.24, color: '#090909' } as const;
+const TXT14 = { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, letterSpacing: -0.28, color: '#090909' } as const;
