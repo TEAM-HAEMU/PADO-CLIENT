@@ -143,6 +143,8 @@ android {
 }
 
 dependencies {
+    // MainApplication에서 카카오 SDK를 직접 초기화 (버전은 @react-native-seoul/kakao-login과 같게)
+    implementation "com.kakao.sdk:v2-common:2.24.0"
     // 투명 캐릭터 영상(AlphaVideoView) — react-native-video와 같은 버전
     implementation "androidx.media3:media3-exoplayer:1.8.0"
     // The version of react-native is set by the React Native Gradle Plugin

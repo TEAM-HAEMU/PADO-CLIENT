@@ -24,6 +24,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       GMSServices.provideAPIKey(mapsKey)
     }
 
+    // 카카오 SDK는 앱이 뜨자마자 초기화한다 — 카카오톡이 로그인 결과를 들고 앱을 '새로 실행'시키면
+    // JS 모듈(RNKakaoLogins)이 아직 안 떠서 SDK가 비어 있고, 아래 open url 처리에서 fatal error가 난다
+    if let kakaoKey = Bundle.main.object(forInfoDictionaryKey: "KAKAO_APP_KEY") as? String, !kakaoKey.isEmpty {
+      KakaoSDK.initSDK(appKey: kakaoKey)
+    }
+
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
@@ -44,9 +50,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
   // 소셜 로그인 앱 전환 복귀 처리 (카카오톡 / Google)
   func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-    // 카카오 SDK는 키로 초기화되기 전에 호출하면 fatal error — 키가 있고 kakao 스킴일 때만 넘긴다
-    let kakaoKey = (Bundle.main.object(forInfoDictionaryKey: "KAKAO_APP_KEY") as? String) ?? ""
-    if !kakaoKey.isEmpty, url.scheme?.hasPrefix("kakao") == true, AuthApi.isKakaoTalkLoginUrl(url) {
+    // 카카오 SDK는 초기화 전에 호출하면 fatal error — 초기화됐고 kakao 스킴일 때만 넘긴다
+    if url.scheme?.hasPrefix("kakao") == true, (try? KakaoSDK.shared.appKey()) != nil, AuthApi.isKakaoTalkLoginUrl(url) {
       return AuthController.handleOpenUrl(url: url)
     }
     if url.scheme?.hasPrefix("com.googleusercontent.apps") == true, GIDSignIn.sharedInstance.handle(url) {
