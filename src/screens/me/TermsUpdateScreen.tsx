@@ -48,15 +48,15 @@ export default function TermsUpdateScreen({ route }: RootScreen<'TermsUpdate'>) 
           <T v="title" style={{ color: '#000000' }}>약관이 개정됐어요</T>
           <T v="caption" style={{ fontSize: 13, color: '#A4A4A4' }}>서비스를 계속 이용하시면 개정된 약관에 동의한 것으로 봐요.</T>
         </View>
-        <View style={{ gap: 10 }}>
+        <View>
           {changed.filter(c => c.type !== 'MARKETING').map(c => (
-            <View key={c.type} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 14, borderRadius: 16, backgroundColor: colors.card }}>
+            <View key={c.type} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 14, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: colors.divider }}>
               <T v="bodyStrong" style={{ flex: 1, color: INK }} numberOfLines={1}>{title(c.type)}</T>
               <T v="captionStrong" style={{ lineHeight: 16, letterSpacing: 0, color: PALE }}>{c.latestVersion}</T>
             </View>
           ))}
           {marketing ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, backgroundColor: colors.card }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 6 }}>
               <View style={{ flex: 1, gap: 2 }}>
                 <T v="bodyStrong" style={{ color: INK }}>{title('MARKETING')} (선택)</T>
                 <T v="caption" style={{ fontSize: 13, color: PALE }}>이벤트·새 기능 소식을 받아볼래요</T>

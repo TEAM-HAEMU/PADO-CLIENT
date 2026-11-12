@@ -55,7 +55,7 @@ const ANIMATED_PINS = 4;
 // 하단 도크(높이 50, Dock.tsx) 위로 띄우는 간격
 const dockTop = (bottomInset: number) => Math.max(bottomInset - 4, 14) + 50;
 // '가까운 드랍' 카드(상태 안내) 공통 모양 — 짙은 페이드 위 흰 카드
-const card = { marginHorizontal: 20, padding: 16, borderRadius: 18, backgroundColor: 'rgba(251,251,251,0.96)', flexDirection: 'row', alignItems: 'center', gap: 12 } as const;
+const card = { marginHorizontal: 20, padding: 16, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.97)', borderWidth: 1, borderColor: colors.divider, flexDirection: 'row', alignItems: 'center', gap: 12 } as const;
 
 export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabParamList, 'Map'>) {
   const insets = useSafeAreaInsets();

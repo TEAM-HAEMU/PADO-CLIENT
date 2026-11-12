@@ -46,15 +46,15 @@ export default function ReportScreen({ navigation, route }: RootScreen<'Report'>
           <T v="title" style={{ color: '#000000' }}>{withObjectParticle(label ?? '이 콘텐츠')} 신고할까요?</T>
           <T v="caption" style={{ fontSize: 13, color: GREY }}>신고 내용은 운영자만 확인해요. 같은 대상은 한 번만 신고할 수 있어요.</T>
         </View>
-        <View style={{ borderRadius: 20, backgroundColor: colors.card, overflow: 'hidden' }}>
+        <View>
           {REASONS.map(([k, l], i) => (
-            <Press key={k} onPress={() => setReason(k)} accessibilityRole="radio" accessibilityState={{ checked: reason === k }} accessibilityLabel={l} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: i < REASONS.length - 1 ? 1 : 0, borderBottomColor: colors.card2 }}>
+            <Press key={k} onPress={() => setReason(k)} accessibilityRole="radio" accessibilityState={{ checked: reason === k }} accessibilityLabel={l} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, paddingVertical: 14, borderBottomWidth: i < REASONS.length - 1 ? 1 : 0, borderBottomColor: colors.divider }}>
               <T v="body" style={{ color: '#000000' }}>{l}</T>
               <ReportRadio on={reason === k} />
             </Press>
           ))}
         </View>
-        <TextInput value={detail} onChangeText={t => setDetail(t.slice(0, 500))} placeholder="자세한 내용 (선택, 500자)" placeholderTextColor={GREY} multiline maxFontSizeMultiplier={1.2} selectionColor={colors.primary} style={{ minHeight: 64, borderRadius: 16, padding: 14, paddingTop: 14, backgroundColor: colors.card, color: colors.ink, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, textAlignVertical: 'top' }} />
+        <TextInput value={detail} onChangeText={t => setDetail(t.slice(0, 500))} placeholder="자세한 내용 (선택, 500자)" placeholderTextColor={GREY} multiline maxFontSizeMultiplier={1.2} selectionColor={colors.primary} style={{ minHeight: 64, borderRadius: 16, padding: 14, paddingTop: 14, backgroundColor: colors.field, borderWidth: 1, borderColor: colors.lineStrong, color: colors.ink, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, textAlignVertical: 'top' }} />
         {userId ? (
           <Press onPress={() => setBlock(b => !b)} accessibilityRole="checkbox" accessibilityState={{ checked: block }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, paddingVertical: 2 }}>
             <View style={{ width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: block ? colors.primary : 'transparent', borderWidth: block ? 0 : 1.5, borderColor: '#E7E7E7' }}>

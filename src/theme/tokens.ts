@@ -8,6 +8,7 @@ export const colors = {
   ink3: '#8D9BC4', // 더 옅은 보조 (color/ink-2)
   faint: '#C7C7C7', // 안내 문구·설명 한 줄
   line: '#F4F4F4', // 목록 구분선
+  divider: '#EAEAEA', // 흰 바탕 위 회색 구분선 — 메뉴·목록·묶음 (회색 카드 대신)
   lineStrong: '#BDC7DC', // 입력칸 테두리·플레이스홀더
   field: '#FDFDFF', // 입력칸 바탕
   deep: '#F0FCFF',

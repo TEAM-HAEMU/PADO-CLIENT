@@ -83,12 +83,12 @@ export default function DropTypeScreen({ navigation }: RootScreen<'DropType'>) {
           </View>
         ) : null}
       </View>
-      <View style={{ gap: 12, marginTop: 12 }}>
-        {TYPES.map(t => (
+      <View style={{ marginTop: 12 }}>
+        {TYPES.map((t, i) => (
           <Press
             key={t.type}
             onPress={() => { start(t.type); navigation.replace(t.route as 'SongSearch'); }}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 16, padding: 16, borderRadius: 22, backgroundColor: colors.card }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 18, paddingHorizontal: 6, borderTopWidth: i ? 1 : 0, borderTopColor: colors.divider }}
           >
             <Illustration type={t.type} />
             <View style={{ flex: 1, gap: 4 }}>

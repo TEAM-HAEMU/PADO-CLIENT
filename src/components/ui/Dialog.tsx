@@ -30,8 +30,8 @@ interface DialogReq {
   at?: { x: number; y: number };
 }
 
-/** 카드 안 칸막이 — card2 위에서 보이는 선 */
-const DIVIDER = '#D8E4F4';
+/** 흰 바탕 위 회색 구분선 — 메뉴·확인 창의 테두리와 칸막이 */
+const DIVIDER = colors.divider;
 
 // ── 마지막 터치 위치 — 메뉴를 누른 자리 옆에 펼치기 위해 앱 루트에서 기록 (터치를 가로채지 않음)
 let lastTouch: { x: number; y: number } | undefined;
@@ -146,7 +146,7 @@ export function DialogHost({ scope = 'root' }: { scope?: 'root' | 'sheet' }) {
         </Animated.View>
 
         {shown.kind === 'alert' ? (
-          <Animated.View style={[{ width: 300, maxWidth: '84%', borderRadius: 22, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' }, card]}>
+          <Animated.View style={[{ width: 300, maxWidth: '84%', borderRadius: 22, backgroundColor: colors.page, borderWidth: 1, borderColor: DIVIDER, overflow: 'hidden' }, card]}>
             <View style={{ paddingHorizontal: 20, paddingTop: 22, paddingBottom: 18, alignItems: 'center', gap: 6 }}>
               <T v="headline" style={{ textAlign: 'center' }} accessibilityRole="header">{shown.title}</T>
               {shown.message ? <T v="caption" c="ink2" style={{ textAlign: 'center' }}>{shown.message}</T> : null}
@@ -175,7 +175,7 @@ export function DialogHost({ scope = 'root' }: { scope?: 'root' | 'sheet' }) {
             accessibilityLabel={shown.title}
             style={[
               // 화면을 회색으로 덮지 않고 메뉴만 그림자로 띄운다 (확인 창만 어둡게) — 그림자는 바깥, 둥근 자르기는 안쪽에서
-              { position: 'absolute', left: menuLeft, top: menuTop, width: MENU_W, borderRadius: 18, backgroundColor: colors.card2, shadowColor: '#12214A', shadowOpacity: 0.16, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 12 },
+              { position: 'absolute', left: menuLeft, top: menuTop, width: MENU_W, borderRadius: 18, backgroundColor: colors.page, shadowColor: '#12214A', shadowOpacity: 0.16, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 12 },
               menu,
               menuH ? null : { opacity: 0 }, // 높이를 재기 전엔 숨김 (위·아래 방향 결정 후 보여줌)
             ]}
@@ -189,8 +189,8 @@ export function DialogHost({ scope = 'root' }: { scope?: 'root' | 'sheet' }) {
                 accessibilityLabel={b.text}
                 style={[
                   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, height: 50 },
-                  // 일반 동작과 위험한 동작 사이는 두꺼운 칸막이, 나머지는 얇은 선
-                  i === 0 ? null : plain.length && i === plain.length ? { borderTopWidth: 6, borderTopColor: colors.card } : { borderTopWidth: 1, borderTopColor: colors.line },
+                  // 흰 바탕에 줄마다 얇은 회색 선 (위험한 동작은 글자색으로만 구분)
+                  i === 0 ? null : { borderTopWidth: 1, borderTopColor: DIVIDER },
                 ]}
               >
                 <T v="body" c={b.style === 'destructive' ? 'caution' : 'ink'} numberOfLines={1} style={{ flexShrink: 1 }}>{b.text}</T>

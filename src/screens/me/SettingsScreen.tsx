@@ -33,17 +33,17 @@ function Squircle({ glyph, tint, size = 18 }: { glyph: MeGlyphName; tint: string
 }
 /** 묶음 제목 — 12 Medium #7482AE, 자간 6% */
 const GroupLabel = ({ title }: { title: string }) => <T v="label" c="ink2" style={{ paddingLeft: 6 }}>{title}</T>;
-/** 묶음 — 제목 + #FBFBFB 카드(r22), 행 사이 #F4F4F4 구분선 */
+/** 묶음 — 제목 + 흰 바탕 행, 행 사이 회색 구분선 (회색 카드 없음) */
 const Group = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <View style={{ gap: 8 }}>
     <GroupLabel title={title} />
-    <View style={{ borderRadius: 22, backgroundColor: colors.card, overflow: 'hidden' }}>{children}</View>
+    <View>{children}</View>
   </View>
 );
 /** 설명 한 줄 — 11 Medium 옅은 회색 */
 const SUB = { color: '#CECECE' };
 const Row = ({ glyph, tint, title, sub, right, onPress, last }: { glyph: MeGlyphName; tint: string; title: string; sub?: string; right?: React.ReactNode; onPress?: () => void; last?: boolean }) => (
-  <Press onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, minHeight: 54, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.line }}>
+  <Press onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 6, paddingVertical: 10, minHeight: 54, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.divider }}>
     <Squircle glyph={glyph} tint={tint} />
     <View style={{ flex: 1, gap: 1 }}>
       <T v="bodyStrong" style={{ color: '#000000' }}>{title}</T>
@@ -52,9 +52,9 @@ const Row = ({ glyph, tint, title, sub, right, onPress, last }: { glyph: MeGlyph
     {right}
   </Press>
 );
-/** '재생' 묶음 행 — Figma는 행마다 따로 r12 카드, 아이콘은 #D0F4FF 바탕 r8 위 24px */
-const PlayRow = ({ glyph, title, sub, right, onPress }: { glyph: MeGlyphName; title: string; sub: string; right: React.ReactNode; onPress?: () => void }) => (
-  <Press onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.card }}>
+/** '재생' 묶음 행 — 아이콘은 #D0F4FF 바탕 r8 위 24px, 행 사이 회색 구분선 */
+const PlayRow = ({ glyph, title, sub, right, onPress, last }: { glyph: MeGlyphName; title: string; sub: string; right: React.ReactNode; onPress?: () => void; last?: boolean }) => (
+  <Press onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, paddingVertical: 12, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.divider }}>
     <View style={{ padding: 5, borderRadius: 8, backgroundColor: colors.iconTint }}><MeGlyph name={glyph} size={24} /></View>
     <View style={{ flex: 1, gap: 1 }}>
       <T v="bodyStrong" style={{ color: '#000000' }}>{title}</T>
@@ -109,7 +109,7 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, gap: 20, paddingBottom: insets.bottom + 32 }}>
         {/* Figma: 설정 가운데쯤(안전·약관 뒤)에 wave가 깔린다 */}
         <Wave scale={1.2} style={{ position: 'absolute', left: -78, right: 0, top: 770 }} />
-        <Press onPress={() => navigation.navigate('ProfileEdit')} style={{ flexDirection: 'row', alignItems: 'center', gap: 18, height: 80, paddingHorizontal: 10, borderRadius: 12, backgroundColor: colors.card }}>
+        <Press onPress={() => navigation.navigate('ProfileEdit')} style={{ flexDirection: 'row', alignItems: 'center', gap: 18, height: 80, paddingHorizontal: 6 }}>
           <Avatar uri={me?.profileImageUrl} name={me?.username} size={62} />
           <View style={{ flex: 1, gap: 4 }}>
             <T v="bodyStrong" style={{ fontSize: 14, lineHeight: 20, letterSpacing: 0, color: '#000000' }}>{me?.username ?? ' '}</T>
@@ -120,14 +120,16 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
 
         <View style={{ gap: 8 }}>
           <GroupLabel title="재생" />
+          <View>
           <PlayRow glyph="autoplay" title="주변 곡 자동 재생" sub="지도에서 가까운 드랍의 미리듣기를 차례로 들려줘요" right={<Toggle label="주변 곡 자동 재생" value={prefs.autoplayNearby} onChange={prefs.setAutoplayNearby} />} />
-          <PlayRow glyph="play" title="기본 재생 앱" sub="전체 듣기를 누르면 이 앱으로 열려요" onPress={chooseService} right={
+          <PlayRow glyph="play" title="기본 재생 앱" sub="전체 듣기를 누르면 이 앱으로 열려요" last onPress={chooseService} right={
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {prefs.service ? <ServiceGlyph service={prefs.service} size={18} /> : null}
               <T v="captionStrong" c="ink3">{prefs.service ? SERVICES[prefs.service].label : '매번 선택'}</T>
               <Chevron />
             </View>
           } />
+          </View>
         </View>
 
         <Group title="알림">

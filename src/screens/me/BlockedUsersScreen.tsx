@@ -28,11 +28,11 @@ export default function BlockedUsersScreen({ navigation }: RootScreen<'BlockedUs
         <FlatList
           data={data}
           keyExtractor={b => b.userId}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: insets.bottom + 32, gap: 16 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: insets.bottom + 32 }}
           ListEmptyComponent={isError ? <Empty icon="alert" title="차단 목록을 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} /> : <Empty icon="block" title="차단한 사용자가 없어요" desc="차단하면 그 사람의 드랍과 댓글이 보이지 않아요." />}
           ListFooterComponent={data.length ? <T v="captionStrong" style={{ fontFamily: fonts.regular, color: '#C1C6D2' }}>차단하면 그 사람의 드랍과 댓글이 보이지 않아요.</T> : undefined}
           renderItem={({ item: b }) => (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, paddingHorizontal: 10, paddingVertical: 9, borderRadius: 12, backgroundColor: colors.card }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, paddingHorizontal: 6, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.divider }}>
               <Avatar uri={b.profileImageUrl} name={b.username} size={62} />
               <View style={{ flex: 1, gap: 4 }}>
                 <T v="bodyStrong" numberOfLines={1} style={{ fontSize: 14, lineHeight: 20, letterSpacing: 0, color: '#000000' }}>{b.username}</T>
