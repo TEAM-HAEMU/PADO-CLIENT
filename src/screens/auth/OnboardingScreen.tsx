@@ -22,9 +22,6 @@ const PAGES = [
   { title: '바다에 남겨진 흔적을 주워,\n그 안에 담긴 음악을 들어요.', desc: '다른 사용자들이 바다에 남겨둔 음악과 편지를 발견하고,\n그 안에 담긴 각자의 취향과 이야기를 만나보세요.' },
 ] as const;
 
-/** 마지막 장에서 이만큼 더 끌면 로그인으로 (iOS 바운스) */
-const PULL_TO_FINISH = 48;
-
 /** 캐릭터가 글씨에 비해 움직이는 비율 */
 const PARALLAX = 0.6;
 
@@ -70,8 +67,12 @@ export default function OnboardingScreen({ navigation }: RootScreen<'Onboarding'
     const i = Math.round(pos.value);
     if (i !== page && i >= 0 && i < PAGES.length) setPage(i);
   };
-  const onEndDrag = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (e.nativeEvent.contentOffset.x > (PAGES.length - 1) * width + PULL_TO_FINISH) finish();
+  // 마지막 장 뒤의 빈 장까지 넘기면 로그인으로 — 튕김(bounce)에 기대지 않아 Android·iOS 모두 보통 넘기듯 밀면 된다.
+  // 로그인 화면에서 '뒤로' 오면 마지막 장이 보이게 제자리로 돌려 둔다
+  const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (e.nativeEvent.contentOffset.x < PAGES.length * width - width / 2) return;
+    finish();
+    setTimeout(() => pager.current?.scrollTo({ x: (PAGES.length - 1) * width, animated: false }), 400);
   };
 
   return (
@@ -81,7 +82,7 @@ export default function OnboardingScreen({ navigation }: RootScreen<'Onboarding'
       <AuthHeader page={page} onBack={page > 0 ? () => go(page - 1) : undefined} onNext={() => go(page + 1)} style={{ marginTop: insets.top + 12 }} />
       <ScrollView
         ref={pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} bounces
-        onScroll={onScroll} scrollEventThrottle={16} onScrollEndDrag={onEndDrag} onLayout={e => setPagerY(e.nativeEvent.layout.y)} style={{ flex: 1 }}
+        onScroll={onScroll} scrollEventThrottle={16} onMomentumScrollEnd={onMomentumEnd} onLayout={e => setPagerY(e.nativeEvent.layout.y)} style={{ flex: 1 }}
       >
         {PAGES.map((p, i) => (
           <View key={i} style={{ width, flex: 1 }} accessibilityElementsHidden={i !== page} importantForAccessibility={i === page ? 'auto' : 'no-hide-descendants'}>
@@ -90,6 +91,8 @@ export default function OnboardingScreen({ navigation }: RootScreen<'Onboarding'
             <View style={{ flex: 1 }} onLayout={i === 0 ? e => setArt({ y: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height }) : undefined} />
           </View>
         ))}
+        {/* 로그인으로 넘어가는 빈 장 */}
+        <View style={{ width }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
       </ScrollView>
       {art ? (
         <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: pagerY + art.y, height: art.h }}>
