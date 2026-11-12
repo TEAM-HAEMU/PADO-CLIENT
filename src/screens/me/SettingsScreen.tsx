@@ -1,4 +1,4 @@
-/** 5.4 설정 — 프로필 카드 · 재생 앱 · 거리 표시 · 알림 · 마케팅 동의 · 차단 · 계정 */
+/** 5.4 설정 — 프로필 카드 · 재생 앱 · 알림 · 마케팅 동의 · 차단 · 계정 */
 import React from 'react';
 import { Linking, ScrollView, View } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
@@ -9,7 +9,7 @@ import { userApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import { ServiceGlyph } from '@/components/ui/Brand';
 import { Avatar, Press, T, Toggle, TopBar } from '@/components/ui';
-import { Chevron, DistancePreview, MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
+import { Chevron, MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
 import { env } from '@/config';
 import { OPERATOR } from '@/content/terms';
@@ -18,7 +18,7 @@ import type { UserAgreement } from '@/api/types';
 import type { RootScreen } from '@/navigation/types';
 import { SERVICES } from '@/services/musicLinks';
 import { useAuth } from '@/store/auth';
-import { type DistanceMode, usePrefs } from '@/store/prefs';
+import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 
@@ -66,7 +66,6 @@ const PlayRow = ({ glyph, title, sub, right, onPress }: { glyph: MeGlyphName; ti
 /** Figma 약관·로그아웃 바탕색 (연보라) */
 const LAVENDER = '#6F94FF';
 
-const MODES: { k: DistanceMode; label: string }[] = [{ k: 'plain', label: '기본' }, { k: 'radius', label: '반경' }, { k: 'gradient', label: '그라데이션' }];
 
 /** 스토어에 올라간 실제 버전 (iOS MARKETING_VERSION · Android versionName) */
 const APP_VERSION = getVersion();
@@ -130,32 +129,6 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
             </View>
           } />
         </View>
-
-        <Group title="지도">
-          <View style={{ padding: 14, gap: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Squircle glyph="map" tint="#9BE7FF" size={20} />
-              <View style={{ flex: 1, gap: 1 }}>
-                <T v="bodyStrong" style={{ color: '#000000' }}>거리 표시 방식</T>
-                <T v="micro" style={{ color: '#D1D1D1' }}>핀까지의 거리를 지도에 어떻게 보여줄지 골라요</T>
-              </View>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {MODES.map(m => {
-                const on = prefs.distanceMode === m.k;
-                return (
-                  <Press key={m.k} onPress={() => prefs.setDistanceMode(m.k)} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={m.label} style={[{ flex: 1, alignItems: 'center', gap: 8, paddingTop: 8, paddingBottom: 10, borderRadius: 16, backgroundColor: colors.card2, borderWidth: on ? 1.5 : 1, borderColor: on ? colors.accent : '#FFFFFF' }, on ? { shadowColor: colors.accent, shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } } : {}]}>
-                    <DistancePreview mode={m.k} />
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      {on ? <MeGlyph name="checkCircle" size={15} /> : null}
-                      <T v="captionStrong" style={{ color: on ? colors.accent : colors.ink3 }}>{m.label}</T>
-                    </View>
-                  </Press>
-                );
-              })}
-            </View>
-          </View>
-        </Group>
 
         <Group title="알림">
           <Row glyph="like" tint={colors.like} title="좋아요" sub="내 드랍을 누가 좋아하면" right={<Toggle label="좋아요 알림" value={prefs.notify.like} onChange={v => prefs.setNotify('like', v)} />} />

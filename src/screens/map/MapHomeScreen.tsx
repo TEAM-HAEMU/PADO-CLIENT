@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Linking, Platform, ScrollView, View, Image } from 'react-native';
-import MapView, { Circle, Marker, Polygon, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polygon, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { useIsFocused } from '@react-navigation/native';
@@ -15,14 +15,13 @@ import { dropApi } from '@/api/endpoints';
 import type { DropSummary, MusicDropSummary } from '@/api/types';
 import { DropPin, MeMarker, PIN_SIZE } from '@/components/map/DropPin';
 import { Art, Icon, Press, T } from '@/components/ui';
-import { env, NEARBY_RADIUS_KM } from '@/config';
+import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useMiniDiscActions } from '@/components/music/MiniDisc';
 import { usePreviewStore } from '@/services/preview';
 import { useTermsUpdateCheck } from '@/hooks/useTermsUpdateCheck';
 import { distanceM, FALLBACK, formatDistance, useLocation } from '@/services/location';
-import { usePrefs } from '@/store/prefs';
 import { googleMapStyle } from '@/theme/mapStyle';
 import { colors, fonts, glow } from '@/theme/tokens';
 import type { TabParamList } from '@/navigation/types';
@@ -62,7 +61,6 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const { coords, fix, reason, label, setPlace, start, refreshPermission, requestPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission })));
-  const distanceMode = usePrefs(s => s.distanceMode);
   const here = coords ?? FALLBACK;
   const nearby = useNearbyDrops(coords);
   const drops = useMemo(() => nearby.data ?? [], [nearby.data]);
@@ -222,7 +220,6 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       >
         {/* Apple 지도는 스타일을 못 바꾸므로 넓은 하늘빛 막을 깔아 디자인 톤에 맞춘다 (오버레이라 핀 아래에 그려짐) */}
         {!useGoogle ? <Polygon coordinates={tintArea(here)} fillColor="rgba(120,200,232,0.22)" strokeWidth={0} strokeColor="transparent" tappable={false} /> : null}
-        {distanceMode === 'radius' && coords && <Circle center={coords} radius={NEARBY_RADIUS_KM * 1000} strokeColor="rgba(43,156,255,0.75)" fillColor="rgba(79,209,255,0.10)" lineDashPattern={[6, 6]} />}
         {coords ? (
           <Marker coordinate={coords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={tracks} tappable={false} zIndex={0}>
             <MeMarker />
@@ -232,7 +229,6 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
           const active = d.droppingId === nearestId;
           const animated = animatePins && i < ANIMATED_PINS;
           const box = active ? PIN_SIZE.active : PIN_SIZE.normal;
-          const fade = distanceMode === 'gradient' ? Math.max(0.35, 1 - m / (NEARBY_RADIUS_KM * 1000)) : 1;
           return (
             <Marker
               key={`${d.droppingId}:${artEpoch}`}
@@ -240,7 +236,6 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
               anchor={{ x: box.tipX / box.w, y: box.tipY / box.h }}
               tracksViewChanges={tracks || animated}
               zIndex={active ? 3 : 2}
-              opacity={fade}
               onPress={() => openDrop(d)}
             >
               <DropPin type={d.type} art={dropArt(d)} active={active} animated={animated} onImageLoad={onPinImage} title={dropTitle(d)} subtitle={`${d.type === 'MUSIC' ? d.artist : dropSub(d)} · ${formatDistance(m)}`} count={d.type === 'PLAYLIST' ? d.songIds.length : undefined} />
