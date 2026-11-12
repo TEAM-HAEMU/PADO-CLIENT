@@ -28,6 +28,12 @@ interface PreviewState {
   pending: { key: string; meta: PreviewMeta } | null;
   /** 재생을 시작했지만 아직 소리가 나기 전 (첫 버퍼링) */
   buffering: boolean;
+  /**
+   * 지금 곡이 끝나면 곧바로 이어 틀 곡 (주변 곡 자동 재생이 미리 채운다).
+   * 곡이 끝날 때 플레이어를 내리지 않고 주소만 바꿔 끼운다 — 백그라운드에서 소리가 한 번 끊기면 iOS가 앱을 재워 다음 곡을 못 틀기 때문
+   */
+  upNext: { key: string; url: string; meta: PreviewMeta } | null;
+  setUpNext: (next: PreviewState['upNext']) => void;
   play: (key: string, url: string, meta?: PreviewMeta) => void;
   toggle: () => void;
   stop: () => void;
@@ -62,15 +68,27 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
   duration: 30,
   pending: null,
   buffering: false,
+  upNext: null,
+  setUpNext: upNext => set({ upNext }),
   play: (key, url, meta) => {
     if (intentKey !== key) cancelIntent(); // 다른 곡의 대기 중인 재생 요청은 버린다
     if (get().key !== key) track('preview_started', { song_id: key, title: meta?.title, artist: meta?.artist });
-    set(get().key === key ? { paused: false, endedKey: null, pending: null } : { key, url, meta: meta ?? null, paused: false, position: 0, duration: 30, endedKey: null, pending: null, buffering: true });
+    set(get().key === key ? { paused: false, endedKey: null, pending: null } : { key, url, meta: meta ?? null, paused: false, position: 0, duration: 30, endedKey: null, pending: null, buffering: true, upNext: null });
   },
   toggle: () => { const paused = !get().paused; track(paused ? 'preview_paused' : 'preview_resumed', { song_id: get().key, position: Math.round(get().position) }); set({ paused }); },
-  stop: () => { cancelIntent(); set({ ...IDLE, endedKey: null }); },
+  stop: () => { cancelIntent(); set({ ...IDLE, endedKey: null, upNext: null }); },
   _progress: (position, duration) => set({ position, duration: duration || 30 }),
-  _ended: () => { track('preview_completed', { song_id: get().key }); set({ ...IDLE, endedKey: get().key }); },
+  _ended: () => {
+    const { key, upNext } = get();
+    track('preview_completed', { song_id: key });
+    // 이어 틀 곡이 있으면 플레이어를 내리지 않고 바로 다음 곡으로 (endedKey로 끝난 곡을 알린다)
+    if (upNext && upNext.key !== key) {
+      track('preview_started', { song_id: upNext.key, title: upNext.meta.title, artist: upNext.meta.artist });
+      set({ key: upNext.key, url: upNext.url, meta: upNext.meta, paused: false, position: 0, duration: 30, endedKey: key, pending: null, buffering: true, upNext: null });
+      return;
+    }
+    set({ ...IDLE, endedKey: key, upNext: null });
+  },
   _ready: () => { if (get().buffering) set({ buffering: false }); },
 }));
 
