@@ -62,7 +62,10 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
     create.mutate(body, {
       onSuccess: () => {
         track('drop_created', { type: body.type, note_length: body.content.length, song_id: 'songId' in body ? body.songId : undefined, option_count: 'options' in body ? body.options.length : undefined, playlist_new: 'playlistName' in body, address: body.address, lat: body.latitude, lng: body.longitude });
-        draft.reset(); navigation.reset({ index: 1, routes: [{ name: 'Tabs' }, { name: 'DropSuccess', params: { art, content: body.content, kind: body.type } }] }); },
+        // 공유 카드용 — 제목 줄은 곡명 · 아티스트 (투표는 주제 · 후보 수, 플리는 이름 · 곡 수)
+        const sub = draft.type === 'MUSIC' ? draft.song?.artist ?? '' : draft.type === 'VOTE' ? `후보 ${draft.options.length}곡` : draft.playlist?.kind === 'new' ? `${draft.playlist.songs.length}곡` : '플레이리스트';
+        const card = { art, title: head.name, sub, place: body.address, note: body.content };
+        draft.reset(); navigation.reset({ index: 1, routes: [{ name: 'Tabs' }, { name: 'DropSuccess', params: { art, content: body.content, kind: body.type, card } }] }); },
       onError: e => toast(errorMessage(e), 'error'),
     });
   };

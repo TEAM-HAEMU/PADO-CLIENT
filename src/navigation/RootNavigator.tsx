@@ -32,6 +32,7 @@ import NoteScreen from '@/screens/drop/NoteScreen';
 import VoteCreateScreen from '@/screens/drop/VoteCreateScreen';
 import PlaylistDropCreateScreen from '@/screens/drop/PlaylistDropCreateScreen';
 import DropSuccessScreen from '@/screens/drop/DropSuccessScreen';
+import ShareCardScreen from '@/screens/drop/ShareCardScreen';
 import VoteDropScreen from '@/screens/detail/VoteDropScreen';
 import PlaylistDropScreen from '@/screens/detail/PlaylistDropScreen';
 import PlaylistDetailScreen from '@/screens/detail/PlaylistDetailScreen';
@@ -115,6 +116,7 @@ export function RootNavigator() {
           <Stack.Screen name="VoteCreate" component={VoteCreateScreen} />
           <Stack.Screen name="PlaylistDropCreate" component={PlaylistDropCreateScreen} />
           <Stack.Screen name="DropSuccess" component={DropSuccessScreen} options={{ animation: FADE, gestureEnabled: false }} />
+          <Stack.Screen name="ShareCard" component={ShareCardScreen} options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="VoteDrop" component={VoteDropScreen} />
           <Stack.Screen name="PlaylistDrop" component={PlaylistDropScreen} />
           <Stack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />

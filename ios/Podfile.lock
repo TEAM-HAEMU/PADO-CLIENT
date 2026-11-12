@@ -1711,6 +1711,28 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-view-shot (6.2.1):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-bridging
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - React-NativeModulesApple (0.87.1):
     - hermes-engine
     - React-bridging
@@ -2332,6 +2354,28 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNShare (12.3.1):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-bridging
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - RNSVG (15.15.5):
     - hermes-engine
     - RCTRequired
@@ -2517,6 +2561,7 @@ DEPENDENCIES:
   - react-native-maps/Google (from `../node_modules/react-native-maps`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - react-native-video (from `../node_modules/react-native-video`)
+  - react-native-view-shot (from `../node_modules/react-native-view-shot`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-networking (from `../node_modules/react-native/ReactCommon/react/networking`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
@@ -2563,6 +2608,7 @@ DEPENDENCIES:
   - RNPermissions (from `../node_modules/react-native-permissions`)
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNScreens (from `../node_modules/react-native-screens`)
+  - RNShare (from `../node_modules/react-native-share`)
   - RNSVG (from `../node_modules/react-native-svg`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
   - SocketRocket (from `build/rndeps-facades/SocketRocket`)
@@ -2711,6 +2757,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-safe-area-context"
   react-native-video:
     :path: "../node_modules/react-native-video"
+  react-native-view-shot:
+    :path: "../node_modules/react-native-view-shot"
   React-NativeModulesApple:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"
   React-networking:
@@ -2801,6 +2849,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-reanimated"
   RNScreens:
     :path: "../node_modules/react-native-screens"
+  RNShare:
+    :path: "../node_modules/react-native-share"
   RNSVG:
     :path: "../node_modules/react-native-svg"
   RNWorklets:
@@ -2888,6 +2938,7 @@ SPEC CHECKSUMS:
   react-native-maps: a55816709b91d52802306bd7a9918f6f11e72e04
   react-native-safe-area-context: b3e507b0dbfb44dfadb29f7a31e884ac13789723
   react-native-video: 60ae0731a9603d2ac0867f64724b752c68ea9460
+  react-native-view-shot: 56ac079f2e25f828c3fb3abfa340058c24812846
   React-NativeModulesApple: adb1dd8361dff80e9f6652fb3fdbf033cfbe2a89
   React-networking: c00b437c4408f0640ba0d4158357133488521eca
   React-oscompat: 3175a287dd7175d1a20fdce5048a4b9e11f4b915
@@ -2934,6 +2985,7 @@ SPEC CHECKSUMS:
   RNPermissions: 1458cae9939566e8bd3db4a5aa04b1d0067a8ed7
   RNReanimated: 03d30327bc1ec6e611c283c7fb24572e416f7a03
   RNScreens: 038dc998fe1ab34778d9e8f4a33318a6c7a5bde8
+  RNShare: 17b29dee409f837fad3971a41e6fed5c929e1dab
   RNSVG: 6c9bcbf53822153be6f6c1484f6b0b57c0040d21
   RNWorklets: 941265f848d4f2a906a0ed4ba64e6671cf54d34e
   SocketRocket: 37aec555668fb852ec12e3c0de59a86ca58f0871

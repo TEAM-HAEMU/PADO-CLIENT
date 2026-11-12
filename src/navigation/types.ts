@@ -1,5 +1,6 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { ShareCardData } from '@/components/share/StoryCard';
 import type { AgreementType, ReportTarget, SocialProfile, SocialProvider, Song, UserAgreement, UUID } from '@/api/types';
 
 export type TabParamList = {
@@ -35,7 +36,10 @@ export type RootStackParamList = {
   Note: undefined;
   VoteCreate: undefined;
   PlaylistDropCreate: undefined;
-  DropSuccess: { art: string | null; content: string; kind?: 'MUSIC' | 'VOTE' | 'PLAYLIST' };
+  /** card: 공유 카드에 넣을 곡·장소 (없으면 공유 버튼이 텍스트 공유) */
+  DropSuccess: { art: string | null; content: string; kind?: 'MUSIC' | 'VOTE' | 'PLAYLIST'; card?: ShareCardData };
+  /** 인스타 스토리 · 다른 앱 공유 카드 */
+  ShareCard: ShareCardData;
   // 상세
   VoteDrop: { dropId: UUID };
   PlaylistDrop: { dropId: UUID };

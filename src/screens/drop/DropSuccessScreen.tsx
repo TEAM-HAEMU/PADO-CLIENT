@@ -37,7 +37,7 @@ function Ring({ size, opacity, index, scale }: { size: number; opacity: number; 
 
 export default function DropSuccessScreen({ navigation, route }: RootScreen<'DropSuccess'>) {
   const insets = useSafeAreaInsets();
-  const { art, content, kind = 'MUSIC' } = route.params;
+  const { art, content, kind = 'MUSIC', card } = route.params;
   const { label, address } = useLocation();
   const { height } = useWindowDimensions();
   const k = height < 740 ? 0.8 : 1; // iPhone SE 등 작은 화면은 파문·아트를 조금 줄인다
@@ -68,7 +68,11 @@ export default function DropSuccessScreen({ navigation, route }: RootScreen<'Dro
       <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 26, gap: 16 }}>
         {/* 디자인 문구는 '알려드릴게요'지만 푸시 알림이 없으므로 앱 안 알림 목록 기준으로 */}
         <T style={{ textAlign: 'center', fontFamily: fonts.regular, fontSize: 12, lineHeight: 16.8, letterSpacing: -0.24, color: '#AFAFAF' }}>좋아요나 댓글이 달리면 알림에서 볼 수 있어요.</T>
-        <PrimaryButton label="공유" onPress={() => (track('share_opened', { kind: 'drop' }), Share.share({ message: `PADO — ${label || '이곳'}에 ${WHAT[kind]} 남겼어요. ${content ? `“${content}”` : ''}` }))} />
+        <PrimaryButton label="공유" onPress={() => {
+          track('share_opened', { kind: 'drop' });
+          if (card) navigation.navigate('ShareCard', card);
+          else Share.share({ message: `파도 — ${label || '이곳'}에 ${WHAT[kind]} 남겼어요. ${content ? `“${content}” ` : ''}paado.app` });
+        }} />
       </View>
     </View>
   );
