@@ -82,3 +82,7 @@ yarn-error.log
 /CHANGELOG-overnight.md
 /legal-site/
 /store/design/
+
+# 홍보 영상 — 녹화 프레임과 렌더 결과는 크고 다시 만들 수 있어 제외
+/design/promo/footage/
+/design/promo/out/

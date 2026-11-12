@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>파도 소개 영상</title>
+<!-- 9:16 세로. film.html?v=45 · ?v=60. 실제 화면은 footage/<장면>/60/f00001.jpg (1080×2348, iPhone 시뮬레이터 녹화) -->
+<script>window.SIZE = { w: 1080, h: 1920 };</script>
+<script src="lib.js"></script>
+<script src="footage/frames.js" onerror="window.FRAMES = {}"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  /* 파도 토큰 (src/theme/tokens.ts) */
+  :root { --ink: #03101F; --blue: #2B9CFF; --acc: #4FD1FF; --sky: #C8E8FF; --pale: #F0FCFF; --btnInk: #0B1535; }
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #fff; color: var(--ink); font-family: Pretendard, -apple-system, sans-serif; }
+  .scene { position: absolute; inset: 0; overflow: hidden; opacity: 0; background: #fff; transform-origin: 50% 50%; }
+  .cam { position: absolute; left: 0; top: 0; width: 1080px; height: 2348px; transform-origin: 0 0; }
+  .foot img { position: absolute; left: 0; top: 0; width: 1080px; height: 2348px; }
+  .foot .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 64px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #8EA3BF, #3B4F6B); }
+  .abs { position: absolute; left: 0; top: 0; }
+  .cd { position: absolute; border-radius: 50%; background: center / cover; box-shadow: 0 24px 60px rgba(18, 33, 74, .25); }
+  .cd::before { content: ""; position: absolute; inset: 12%; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .4); }
+  .cd::after { content: ""; position: absolute; left: 50%; top: 50%; width: 16%; height: 16%; transform: translate(-50%, -50%); border-radius: 50%; background: #fff; box-shadow: inset 0 0 0 8px #E9ECF0; }
+  .pinsq { position: absolute; border: 12px solid #fff; background: center / cover; box-shadow: 0 18px 40px rgba(18, 33, 74, .25); box-sizing: border-box; }
+  /* 끝 로고 */
+  #dot { position: absolute; left: 522px; top: 942px; width: 36px; height: 36px; border-radius: 50%; background: var(--blue); opacity: 0; z-index: 5; }
+  #mark { position: absolute; top: 840px; width: 240px; height: 240px; overflow: visible; opacity: 0; z-index: 5; }
+  #word { position: absolute; top: 868px; font-size: 168px; font-weight: 800; letter-spacing: -.04em; line-height: 1; color: var(--ink); white-space: nowrap; opacity: 0; z-index: 5; }
+  #white { position: absolute; inset: 0; background: #fff; opacity: 0; z-index: 4; }
+</style>
+</head>
+<body>
+<div class="scene foot" id="fs0"><div class="cam"></div></div>
+<div class="scene foot" id="fs1"><div class="cam"></div></div>
+<div class="scene" id="opener"></div>
+<div class="scene" id="land"></div>
+<div class="scene" id="listen"></div>
+<div class="scene" id="press"></div>
+<div class="scene" id="story"></div>
+<div id="white"></div>
+<div id="dot"></div>
+<svg id="mark" viewBox="0 0 100 100">
+  <defs>
+    <clipPath id="sqClip"><rect width="100" height="100" rx="22"/></clipPath>
+    <linearGradient id="mb" x1="0" y1="0" x2="100" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#D8F3FF"/></linearGradient>
+    <clipPath id="w1c"><rect id="w1r" x="0" y="0" width="0" height="100"/></clipPath>
+    <clipPath id="w2c"><rect id="w2r" x="0" y="0" width="0" height="100"/></clipPath>
+  </defs>
+  <rect id="mFill" width="100" height="100" rx="22" fill="#2B9CFF" opacity="0"/>
+  <g clip-path="url(#sqClip)">
+    <path clip-path="url(#w1c)" fill="#fff" opacity=".5" d="M8 56 Q 50 12 92 38 Q 52 40 8 56 Z"/>
+    <path clip-path="url(#w2c)" fill="url(#mb)" d="M8 84 Q 50 40 92 66 Q 52 68 8 84 Z"/>
+  </g>
+  <path id="mLine" d="M22 0H78A22 22 0 0 1 100 22V78A22 22 0 0 1 78 100H22A22 22 0 0 1 0 78V22A22 22 0 0 1 22 0Z" fill="none" stroke="#2B9CFF" stroke-width="2.4"/>
+</svg>
+<div id="word">파도</div>
+
+<script>
+  const V = new URLSearchParams(location.search).get("v");
+  const FPS = 60, TR = 0.6, W = 1080, H = 1920, FW = 1080, FH = 2348;
+  const ART = (n) => `img/art/s${String(n).padStart(2, "0")}.jpg`;
+  const PADO = ART(4), BUBBLE = ART(6);
+  const MAP_BG = "footage/map/60/f00120.jpg";
+  const el = (cls, parent, style = {}, html = "") => { const e = document.createElement("div"); e.className = cls; Object.assign(e.style, style); e.innerHTML = html; parent.appendChild(e); return e; };
+  const ring = (lt, at, dur) => { const k = p(lt, at, at + dur, ease.out); return { k, o: (1 - k) * Math.min(1, k * 6) }; };
+  // 화면 기본(가운데) — 녹화는 1080×2348이라 위아래가 조금 잘린다
+  const C0 = [540, 1174, 1];
+  const still = (x = 540, y = 1174, z = 1) => [[0, x, y, z], [1, x, y, z]];
+
+  // ── 컷 목록 (녹화 좌표: 1080×2348) ─────────────────────
+  // 실제 화면 { clip, len, from | [[컷 초, 녹화 초]…], cam: [[진행, x, y, 배율]…], cut }
+  const SHOTS_60 = [
+    { mg: "opener", len: 5.0 },
+    { clip: "type", len: 2.2, from: [[0, 0.4], [2.2, 2.6]], cam: [[0, 540, 1300, 1.12], [1, 540, 1500, 1.18]] },
+    { clip: "search", len: 3.4, from: [[0, 0.8], [0.9, 6.5], [1.3, 9.6], [3.4, 11.7]], cam: [[0, 540, 1100, 1.0], [0.5, 540, 1130, 1.12], [1, 540, 1150, 1.18]] },
+    { clip: "note", len: 2.6, from: [[0, 7.0], [1.4, 8.4], [1.7, 15.9], [2.6, 16.8]], cam: [[0, 540, 1300, 1.04], [0.6, 540, 1450, 1.08], [1, 540, 1900, 1.1]] },
+    { clip: "success", len: 3.8, from: 0.45, cam: [[0, 540, 1250, 1.0], [1, 540, 1290, 1.28]] },
+    { mg: "land", len: 4.4 },
+    { clip: "map", len: 3.0, from: 2.0, cam: [[0, 540, 1100, 1.25], [1, 500, 900, 1.38]] },
+    { clip: "preview", len: 3.6, from: 0.6, cam: [[0, 540, 1000, 1.05], [1, 540, 1080, 1.2]] },
+    { mg: "listen", len: 5.0 },
+    { clip: "player", len: 3.6, from: 5.7, cam: [[0, 540, 1150, 1.0], [1, 540, 1250, 1.18]] },
+    { clip: "share", len: 3.2, from: [[0, 3.0], [3.2, 6.4]], cam: [[0, 540, 1150, 1.0], [1, 540, 1300, 1.12]] },
+    { mg: "press", len: 2.4 },
+    { mg: "story", len: 7.6, cut: true },
+  ];
+  const SHOTS_45 = [
+    { mg: "opener", len: 4.0 },
+    { clip: "type", len: 1.8, from: [[0, 0.8], [1.8, 2.6]], cam: [[0, 540, 1300, 1.12], [1, 540, 1500, 1.18]] },
+    { clip: "search", len: 3.0, from: [[0, 0.8], [0.7, 7.0], [1.0, 9.8], [3.0, 11.8]], cam: [[0, 540, 1100, 1.0], [0.5, 540, 1130, 1.12], [1, 540, 1150, 1.18]] },
+    { clip: "note", len: 2.2, from: [[0, 7.2], [1.2, 8.4], [1.4, 16.0], [2.2, 16.8]], cam: [[0, 540, 1300, 1.04], [0.6, 540, 1450, 1.08], [1, 540, 1900, 1.1]] },
+    { clip: "success", len: 3.0, from: 0.45, cam: [[0, 540, 1250, 1.0], [1, 540, 1290, 1.25]] },
+    { mg: "land", len: 3.8 },
+    { clip: "preview", len: 3.0, from: 0.6, cam: [[0, 540, 1000, 1.05], [1, 540, 1080, 1.2]] },
+    { mg: "listen", len: 4.0 },
+    { clip: "player", len: 2.8, from: 5.8, cam: [[0, 540, 1150, 1.0], [1, 540, 1250, 1.15]] },
+    { clip: "share", len: 2.8, from: [[0, 3.0], [2.8, 6.2]], cam: [[0, 540, 1150, 1.0], [1, 540, 1300, 1.12]] },
+    { mg: "press", len: 2.2 },
+    { mg: "story", len: 6.4, cut: true },
+  ];
+  const VERSIONS = { 45: SHOTS_45, 60: SHOTS_60 };
+  const SHOTS = VERSIONS[V] ?? SHOTS_60;
+  const OUTRO = 4.6;
+
+  // ── 그린 장면 ──────────────────────────────────────
+  const MG = {};
+
+  // 여는 장면 — 내 위치 점이 숨 쉬다 노래(CD)가 되고, 바다에 떨어져 파문이 퍼진다
+  MG.opener = (() => {
+    const root = $("#opener"); let dot, halos, cd, sea, front, rings, drops;
+    const SURF = 1340;
+    const wave = (x, t, a = 1) => SURF + a * (14 * Math.sin(x / 150 + t * 1.5) + 6 * Math.sin(x / 61 - t * 2.2));
+    const path = (t, a, dy = 0) => { let d = `M-60 2000 L-60 ${wave(-60, t, a) + dy}`; for (let x = -60; x <= 1140; x += 30) d += ` L${x} ${(wave(x, t, a) + dy).toFixed(1)}`; return d + " L1140 2000 Z"; };
+    return {
+      el: root,
+      setup() {
+        root.style.background = "linear-gradient(180deg, #FFFFFF 0%, #F0FAFF 60%, #DDF1FF 100%)";
+        root.innerHTML = `<svg class="abs" width="1080" height="1920"><defs><linearGradient id="oSea" x1="0" y1="${SURF}" x2="0" y2="1920" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9FD8FF"/><stop offset="1" stop-color="#2B9CFF"/></linearGradient></defs>
+          <path id="oSea" fill="url(#oSea)"/><g id="oHalo"><circle fill="none" stroke="#2B9CFF" stroke-width="3"/><circle fill="none" stroke="#2B9CFF" stroke-width="3"/></g></svg>`;
+        sea = $("#oSea"); halos = $$("#oHalo circle");
+        cd = el("cd", root, { backgroundImage: `url(${PADO})` });
+        dot = el("abs", root, { width: "48px", height: "48px", borderRadius: "50%", background: "var(--blue)", boxShadow: "0 0 0 12px #fff, 0 10px 30px rgba(43,156,255,.45)" });
+        root.insertAdjacentHTML("beforeend", `<svg class="abs" width="1080" height="1920"><path id="oFront" fill="#BFE6FF" opacity=".6"/><g id="oRings">${"<ellipse fill='none' stroke='#fff' stroke-width='5'/>".repeat(4)}${"<circle fill='#fff'/>".repeat(10)}</g></svg>`);
+        front = $("#oFront"); rings = $$("#oRings ellipse"); drops = $$("#oRings circle");
+      },
+      draw(lt, len) {
+        const k = len / 4.6, T = (x) => x * k;
+        // 바다는 처음엔 화면 아래에 숨어 있다가 CD가 떨어질 때 올라온다
+        const rise = p(lt, T(1.6), T(2.8), ease.inOut), dy = lerp(700, 0, rise);
+        sea.setAttribute("d", path(lt, 1, dy)); front.setAttribute("d", path(lt + 0.5, 0.8, dy + 40));
+        const cx = 540, cy0 = 900;
+        const born = p(lt, 0.05, 0.5, ease.back);
+        halos.forEach((h, i) => { const f = ((lt + i * 0.55) % 1.1) / 1.1; h.setAttribute("cx", cx); h.setAttribute("cy", cy0); h.setAttribute("r", 24 + 90 * ease.out(f)); h.setAttribute("opacity", lt < T(1.1) ? (1 - f) * 0.5 : 0); });
+        set(dot, { left: cx - 24 + "px", top: cy0 - 24 + "px", transform: `scale(${born * (1 - p(lt, T(1.1), T(1.3)))})` });
+        // 점이 부풀어 CD가 되고, 잠깐 떠 있다가 바다로 떨어진다
+        const grow = p(lt, T(1.1), T(1.7), ease.spring), size = lerp(48, 420, grow);
+        const land = T(3.05), fall = p(lt, T(2.3), land, ease.in);
+        const bob = lt > land ? 8 * Math.sin((lt - land) * 3) : 0;
+        const y = lerp(cy0 - 60 * p(lt, T(1.3), T(2.2), ease.inOut), wave(cx, lt) + size * 0.08, fall) + bob;
+        const sink = lt > land ? lerp(30, 0, p(lt, land, land + 0.6, ease.out)) : 0;
+        set(cd, { width: size + "px", height: size + "px", left: cx - size / 2 + "px", top: y - size / 2 + sink + "px", transform: `rotate(${(lt - T(1.1)) * 160 * (1 - p(lt, land, land + 0.8))}deg)`, opacity: lt < T(1.15) ? 0 : 1 });
+        rings.forEach((e, i) => { const g = ring(lt, land + i * 0.16, 1.6); e.setAttribute("cx", cx); e.setAttribute("cy", wave(cx, lt) + 20); e.setAttribute("rx", lerp(170, 900, g.k)); e.setAttribute("ry", lerp(170, 900, g.k) * 0.2); e.setAttribute("opacity", lt < land ? 0 : g.o); });
+        drops.forEach((c, j) => { const u = lt - land, a = -Math.PI / 2 + (j - 4.5) * 0.28, v = 1500 * (0.75 + 0.25 * ((j * 7) % 3) / 2); c.setAttribute("cx", cx + Math.cos(a) * v * u); c.setAttribute("cy", SURF - (-Math.sin(a) * v * u - 2600 * u * u)); c.setAttribute("r", 11); c.setAttribute("opacity", u > 0 && u < 0.65 ? 1 - u / 0.65 : 0); });
+      },
+    };
+  })();
+
+  // 실제 지도 위에 떨어뜨리기 — 드랍 완료 화면의 CD가 지도로 떨어져 핀이 되고, 파문이 퍼진다
+  MG.land = (() => {
+    const root = $("#land"); let map, cd, pin, rings;
+    const SPOT = [700, 1250]; // 지도 녹화 좌표 (강가 빈자리)
+    return {
+      el: root,
+      setup() {
+        map = el("cam", root, { backgroundImage: `url(${MAP_BG})`, backgroundSize: "1080px 2348px" });
+        map.insertAdjacentHTML("beforeend", `<svg class="abs" width="1080" height="2348"><g id="lRings">${"<ellipse fill='none' stroke='#4FD1FF' stroke-width='5'/>".repeat(4)}</g></svg>`);
+        rings = $$("#lRings ellipse");
+        pin = el("pinsq", map, { backgroundImage: `url(${PADO})` });
+        pin.insertAdjacentHTML("beforeend", `<div style="position:absolute;left:50%;bottom:-34px;margin-left:-18px;border-left:18px solid transparent;border-right:18px solid transparent;border-top:22px solid #fff"></div>`);
+        cd = el("cd", root, { backgroundImage: `url(${PADO})` });
+      },
+      draw(lt, len) {
+        const k = len / 4.4, T = (x) => x * k;
+        // 카메라: 지도에 바짝 붙었다가 조금 물러난다
+        const z = lerp(1.55, 1.15, p(lt, T(1.6), len, ease.inOut));
+        const cx = lerp(SPOT[0], 560, p(lt, T(1.6), len, ease.inOut)), cy = lerp(SPOT[1] - 160, 1150, p(lt, T(1.6), len, ease.inOut));
+        const tx = clamp(W / 2 - cx * z, W - FW * z, 0), ty = clamp(H / 2 - cy * z, H - FH * z, 0);
+        map.style.transform = `translate(${tx}px, ${ty}px) scale(${z})`;
+        const sx = tx + SPOT[0] * z, sy = ty + SPOT[1] * z; // 화면 좌표
+        // 하늘에서 크게 보이던 CD가 땅으로 떨어지며 작아진다
+        const land = T(1.25), f = p(lt, 0, land, ease.in);
+        const size = lerp(620, 200 * z, f);
+        set(cd, { width: size + "px", height: size + "px", left: lerp(540, sx, f) - size / 2 + "px", top: lerp(820, sy - 110 * z, f) - size / 2 + "px", transform: `rotate(${(1 - f) * 260}deg)`, opacity: 1 - p(lt, land, land + 0.15) });
+        // 닿으면 둥근 CD가 네모난 지도 핀이 된다
+        const pk = p(lt, land, land + 0.5, ease.back), ps = 190;
+        set(pin, { width: ps + "px", height: ps + "px", left: SPOT[0] - ps / 2 + "px", top: SPOT[1] - ps - 40 + "px", borderRadius: lerp(95, 46, p(lt, land, land + 0.45)) + "px", transform: `scale(${pk})`, opacity: lt > land ? 1 : 0, transformOrigin: "50% 100%" });
+        rings.forEach((e, i) => { const g = ring(lt, land + 0.05 + i * 0.22, 1.7); e.setAttribute("cx", SPOT[0]); e.setAttribute("cy", SPOT[1]); e.setAttribute("rx", lerp(60, 380, g.k)); e.setAttribute("ry", lerp(60, 380, g.k) * 0.36); e.setAttribute("opacity", lt < land ? 0 : g.o * 0.9); });
+      },
+    };
+  })();
+
+  // 듣기 — 크게 다시 그린 재생: CD가 돌고, 소리가 동심원으로 퍼지고, 둘레 막대가 소리에 맞춰 뛴다
+  MG.listen = (() => {
+    const root = $("#listen"); let cd, svg, bars, ringEls, wave;
+    const C = [540, 820], R = 330, N = 64;
+    const level = (t, i) => 0.35 + 0.65 * Math.abs(Math.sin(t * 5.3 + i * 0.7) * Math.sin(t * 2.1 + i * 1.9) + 0.4 * Math.sin(t * 9 + i * 0.33)) / 1.4;
+    return {
+      el: root,
+      setup() {
+        root.style.background = "linear-gradient(180deg, #F0FCFF 0%, #FFFFFF 70%)";
+        root.innerHTML = `<svg class="abs" width="1080" height="1920" id="lsSvg"><g id="lsRings">${"<circle fill='none' stroke='#4FD1FF' stroke-width='3'/>".repeat(5)}</g><g id="lsBars">${Array.from({ length: N }, () => "<line stroke='#00C9FF' stroke-width='9' stroke-linecap='round'/>").join("")}</g><g id="lsWave">${Array.from({ length: 34 }, () => "<line stroke-width='16' stroke-linecap='round'/>").join("")}</g></svg>`;
+        ringEls = $$("#lsRings circle"); bars = $$("#lsBars line"); wave = $$("#lsWave line");
+        cd = el("cd", root, { width: 2 * R - 40 + "px", height: 2 * R - 40 + "px", left: C[0] - R + 20 + "px", top: C[1] - R + 20 + "px", backgroundImage: `url(${BUBBLE})` });
+      },
+      draw(lt, len) {
+        const on = p(lt, 0.1, 0.8, ease.out);
+        set(cd, { transform: `rotate(${lt * 40}deg) scale(${lerp(0.85, 1, on)})` });
+        // 소리가 CD에서 동심원으로 퍼져 나간다
+        ringEls.forEach((c, i) => { const f = ((lt * 0.9 + i / 5) % 1); c.setAttribute("cx", C[0]); c.setAttribute("cy", C[1]); c.setAttribute("r", R + 40 + 420 * ease.out(f)); c.setAttribute("opacity", (1 - f) * 0.55 * on); });
+        bars.forEach((b, i) => {
+          const a = (i / N) * Math.PI * 2 - Math.PI / 2, l = (14 + 70 * level(lt, i)) * on;
+          const r0 = R + 18;
+          b.setAttribute("x1", C[0] + Math.cos(a) * r0); b.setAttribute("y1", C[1] + Math.sin(a) * r0);
+          b.setAttribute("x2", C[0] + Math.cos(a) * (r0 + l)); b.setAttribute("y2", C[1] + Math.sin(a) * (r0 + l));
+          b.setAttribute("opacity", 0.35 + 0.65 * level(lt, i));
+        });
+        // 재생 화면의 파형 막대를 크게 — 재생된 만큼 하늘색으로 차오른다
+        const prog = p(lt, 0.4, len, ease.linear);
+        wave.forEach((b, i) => {
+          const x = 120 + i * (840 / 33), h = (30 + 70 * Math.abs(Math.sin(i * 1.7) * Math.cos(i * 0.6))) * (0.85 + 0.15 * Math.sin(lt * 6 + i));
+          b.setAttribute("x1", x); b.setAttribute("x2", x); b.setAttribute("y1", 1460 - h); b.setAttribute("y2", 1460 + h);
+          b.setAttribute("stroke", i / 33 < prog ? "#00C9FF" : "#DDF4FF"); b.setAttribute("opacity", p(lt, 0.2 + i * 0.012, 0.6 + i * 0.012));
+        });
+      },
+    };
+  })();
+
+  // 인스타 스토리에 올리기 — 앱의 버튼을 크게 다시 그려 누르고, 카드가 스토리 화면으로 날아오른다
+  const STORY_RECT = { x: 165, y: 170, w: 750, h: 1333 }; // 스토리 폰 화면 자리 (story 장면과 같음)
+  MG.press = (() => {
+    const root = $("#press"); let btn, card, touch;
+    return {
+      el: root,
+      setup() {
+        root.style.background = "#FFFFFF";
+        card = el("abs", root, { backgroundImage: "url(img/story_H.jpg)", backgroundSize: "cover", boxShadow: "0 30px 80px rgba(18,33,74,.22)" });
+        btn = el("abs", root, { left: "90px", top: "1440px", width: "900px", height: "150px", borderRadius: "75px", background: "#2B9CFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "54px", fontWeight: "600", color: "var(--btnInk)", letterSpacing: "-0.02em" }, "인스타 스토리에 올리기");
+        touch = el("abs", root, { width: "120px", height: "120px", borderRadius: "50%", background: "rgba(3,16,31,.18)", border: "4px solid rgba(255,255,255,.9)" });
+      },
+      draw(lt, len) {
+        const k = len / 2.4, T = (x) => x * k;
+        const tap = T(0.9), press = pulse(lt, tap - 0.05, tap + 0.3);
+        set(btn, { transform: `scale(${1 - 0.05 * press})`, opacity: 1 - p(lt, T(1.4), T(1.8)), filter: `brightness(${1 + 0.15 * press})` });
+        const tIn = p(lt, tap - 0.5, tap - 0.1, ease.out), tOut = p(lt, tap + 0.25, tap + 0.6);
+        set(touch, { left: 540 - 60 + (1 - tIn) * 80 + "px", top: 1515 - 60 + (1 - tIn) * 120 + "px", transform: `scale(${1 - 0.15 * press})`, opacity: tIn * (1 - tOut) });
+        // 카드: 공유 화면의 미리보기 자리에서 스토리 화면 자리로
+        const fly = p(lt, tap + 0.1, len, ease.inOut);
+        const a = { x: 270, y: 200, w: 540, h: 960 }, b = STORY_RECT;
+        set(card, { left: lerp(a.x, b.x, fly) + "px", top: lerp(a.y, b.y, fly) + "px", width: lerp(a.w, b.w, fly) + "px", height: lerp(a.h, b.h, fly) + "px", borderRadius: lerp(40, 64, fly) + "px", opacity: p(lt, 0, 0.3) });
+      },
+    };
+  })();
+
+  // 스토리 — 폰 속 스토리 화면. 진행 막대가 차고, 큐브처럼 돌아 다음 카드로 넘어간다
+  MG.story = (() => {
+    const root = $("#story"); let phone, faces, bars, chrome;
+    const IMGS = ["img/story_H.jpg", "img/story_E.jpg", "img/story_C.jpg"];
+    const R = STORY_RECT, BAR = 140; // 카드 아래 답장 칸 띠
+    return {
+      el: root,
+      setup() {
+        root.style.background = "linear-gradient(180deg, #FFFFFF 0%, #EAF6FF 100%)";
+        phone = el("abs", root, { left: R.x - 20 + "px", top: R.y - 20 + "px", width: R.w + 40 + "px", height: R.h + BAR + 40 + "px", borderRadius: "84px", background: "var(--ink)", boxShadow: "0 50px 120px rgba(18,33,74,.25)" });
+        const scr = el("abs", root, { left: R.x + "px", top: R.y + "px", width: R.w + "px", height: R.h + BAR + "px", borderRadius: "64px", overflow: "hidden", perspective: "2200px", background: "#000" });
+        faces = IMGS.map((src) => el("abs", scr, { width: R.w + "px", height: R.h + "px", backgroundImage: `url(${src})`, backgroundSize: "cover", backfaceVisibility: "hidden" }));
+        // 스토리 화면의 틀: 위 진행 막대 3칸 · 프로필 동그라미, 아래 답장 칸
+        chrome = el("abs", scr, { width: R.w + "px", height: R.h + BAR + "px", zIndex: 5 }, `
+          <div style="position:absolute;left:24px;right:24px;top:28px;display:flex;gap:8px">${IMGS.map(() => `<div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.4);overflow:hidden"><i style="display:block;height:100%;width:0;background:#fff"></i></div>`).join("")}</div>
+          <div style="position:absolute;left:28px;top:60px;width:64px;height:64px;border-radius:50%;background:url(img/art/s00.jpg) center/cover;box-shadow:0 0 0 4px #fff"></div>
+          <div style="position:absolute;left:28px;right:150px;bottom:28px;height:84px;border-radius:42px;border:3px solid rgba(255,255,255,.85)"></div>
+          <svg style="position:absolute;right:86px;bottom:44px" width="52" height="52" viewBox="0 0 24 24"><path d="M12 20.5S3 15 3 9.2C3 6.3 5.2 4.5 7.6 4.5c1.9 0 3.4 1.1 4.4 2.7 1-1.6 2.5-2.7 4.4-2.7 2.4 0 4.6 1.8 4.6 4.7 0 5.8-9 11.3-9 11.3z" fill="none" stroke="#fff" stroke-width="1.8"/></svg>
+          <svg style="position:absolute;right:26px;bottom:44px" width="52" height="52" viewBox="0 0 24 24"><path d="M4 12 20 4l-6 16-2.5-6.5z" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>`);
+        bars = $$("#story i");
+      },
+      draw(lt, len) {
+        const seg = (len - 0.4) / 3, TURN = 0.55;
+        const idx = Math.min(2, Math.floor(lt / seg)), into = lt - idx * seg;
+        set(chrome, { opacity: p(lt, 0, 0.4) });
+        bars.forEach((b, i) => set(b, { width: (i < idx ? 1 : i === idx ? clamp(into / seg) : 0) * 100 + "%" }));
+        // 다음 카드로 넘어갈 때 큐브처럼 돈다
+        faces.forEach((f, i) => {
+          let rot = 0, show = i === idx ? 1 : 0;
+          const turnAt = i * seg; // i번째 카드가 들어오는 순간
+          if (i > 0) { const k = p(lt, turnAt - TURN, turnAt, ease.inOut); if (lt >= turnAt - TURN && lt < turnAt) { rot = 90 * (1 - k); show = 1; } }
+          if (i < 2) { const k = p(lt, (i + 1) * seg - TURN, (i + 1) * seg, ease.inOut); if (lt >= (i + 1) * seg - TURN && lt < (i + 1) * seg) { rot = -90 * k; show = 1; } }
+          set(f, { transformOrigin: rot > 0 ? "0% 50%" : "100% 50%", transform: `translateX(${rot > 0 ? R.w * (rot / 90) : rot < 0 ? -R.w * (-rot / 90) : 0}px) rotateY(${rot}deg)`, opacity: show, zIndex: i === idx ? 2 : 1 });
+        });
+        set(phone, { opacity: p(lt, 0, 0.3) });
+        root.style.transform = `scale(${lerp(1, 1.04, p(lt, 0, len, ease.linear))})`;
+      },
+    };
+  })();
+
+  // ── 엔진 ─────────────────────────────────────────
+  const FRAMES = window.FRAMES || {};
+  let clock = 0, layer = 0;
+  const shots = SHOTS.map((s) => {
+    const shot = { ...s, start: clock, end: clock + s.len };
+    if (s.mg) shot.el = MG[s.mg].el;
+    else { shot.el = $("#fs" + (layer++ % 2)); shot.map = Array.isArray(s.from) ? smoothMap(s.from) : null; }
+    clock += s.len;
+    return shot;
+  });
+  const END = clock;
+  window.DURATION = END + OUTRO;
+  const clipTime = (shot, t) => (shot.map ? shot.map(t - shot.start) : shot.from + (t - shot.start));
+  const frameSrc = (clip, ct) => `footage/${clip}/${FPS}/f${String(Math.min(FRAMES[clip], Math.max(1, Math.floor(ct * FPS) + 1))).padStart(5, "0")}.jpg`;
+  const camT = ([cx, cy, z]) => `translate(${clamp(W / 2 - cx * z, W - FW * z, 0)}px, ${clamp(H / 2 - cy * z, H - FH * z, 0)}px) scale(${z})`;
+
+  const STACK = 6;
+  for (const id of ["#fs0", "#fs1"]) $(id + " .cam").innerHTML = Array.from({ length: STACK }, () => "<img>").join("") + '<div class="ph"></div>';
+  async function drawFoot(shot, t) {
+    const cam = shot.el.querySelector(".cam"), ph = cam.querySelector(".ph"), imgs = cam.querySelectorAll("img");
+    if (!FRAMES[shot.clip]) { ph.style.display = "flex"; ph.textContent = shot.clip; imgs.forEach((im) => (im.style.opacity = 0)); }
+    else {
+      ph.style.display = "none";
+      const ct = clipTime(shot, t);
+      const speed = Math.abs(clipTime(shot, t + 1 / 120) - clipTime(shot, t - 1 / 120)) * 60;
+      const n = speed > 1.6 ? Math.min(STACK, Math.ceil(speed / 2)) : 1;
+      const waits = [];
+      imgs.forEach((im, j) => {
+        if (j >= n) { im.style.opacity = 0; return; }
+        const src = frameSrc(shot.clip, n === 1 ? ct : ct + (j / (n - 1) - 0.5) * (speed / FPS));
+        if (im.dataset.src !== src) { im.dataset.src = src; im.src = src; waits.push(im.decode().catch(() => {})); }
+        im.style.opacity = 1 / (j + 1);
+      });
+      await Promise.all(waits);
+    }
+    cam.style.transform = camT(camAt(shot.cam, clamp((t - shot.start) / (shot.end - shot.start))));
+  }
+
+  const ready = new Set();
+  const SCENE_ELS = [...new Set(shots.map((s) => s.el))];
+  const lineLen = $("#mLine").getTotalLength();
+  $("#mLine").setAttribute("stroke-dasharray", lineLen);
+  // 그린 장면 그림(앨범 아트·스토리)이 다 들어온 뒤에 찍는다
+  const preload = Promise.all([...new Set([PADO, BUBBLE, MAP_BG, "img/story_H.jpg", "img/story_E.jpg", "img/story_C.jpg", "img/art/s00.jpg"])].map((src) => { const i = new Image(); i.src = src; return i.decode().catch(() => {}); }));
+
+  window.render = async (t) => {
+    await preload;
+    const live = shots.filter((s, i) => {
+      const nx = shots[i + 1];
+      const a = i === 0 || s.cut ? s.start : s.start - TR / 2;
+      const b = !nx ? Infinity : nx.cut ? s.end : s.end + TR / 2;
+      return t >= a && t < b;
+    });
+    for (const e of SCENE_ELS) set(e, { opacity: 0, filter: "none", transform: "", zIndex: 0 });
+    for (const shot of live) {
+      const i = shots.indexOf(shot), nx = shots[i + 1];
+      if (shot.mg) {
+        const scene = MG[shot.mg];
+        if (!ready.has(shot.mg)) { set(scene.el, { opacity: 1 }); scene.setup?.(); ready.add(shot.mg); }
+        scene.draw(clamp(t - shot.start, 0, shot.len), shot.len);
+      } else await drawFoot(shot, t);
+      let o = 1, s = 1, blur = 0, z = 1;
+      if (i > 0 && !shot.cut && t < shot.start + TR / 2) { const m = ease.inOut(clamp((t - (shot.start - TR / 2)) / TR)); o = m; s = lerp(1.05, 1, m); blur = (1 - m) * 14; z = 2; }
+      if (nx && !nx.cut && t > shot.end - TR / 2) { const m = ease.inOut(clamp((t - (shot.end - TR / 2)) / TR)); s *= 1 + 0.05 * m; blur += m * 14; }
+      const base = shot.el.style.transform && shot.mg === "story" ? shot.el.style.transform : "";
+      set(shot.el, { opacity: o, transform: (s === 1 ? "" : `scale(${s}) `) + base, filter: blur > 0.05 ? `blur(${blur}px)` : "none", zIndex: z });
+    }
+    // 끝: 마지막 화면이 한 점으로 모이고, 점이 파도 로고로 그려진다
+    const last = shots.at(-1).el;
+    if (t >= END) {
+      const k = p(t, END, END + 0.75, ease.inOut);
+      set(last, { opacity: 1 - p(t, END + 0.6, END + 0.75), clipPath: `circle(${lerp(1120, 18, k)}px at 540px 960px)` });
+    } else set(last, { clipPath: "none" });
+    set("#white", { opacity: p(t, END + 0.5, END + 0.7) });
+    const e0 = END + 0.7;
+    set("#dot", { opacity: show(t, END + 0.55, END + 0.7, e0 + 0.15, e0 + 0.4) });
+    const draw = p(t, e0 + 0.1, e0 + 1.0, ease.inOut), fill = p(t, e0 + 0.85, e0 + 1.2), w1 = p(t, e0 + 1.05, e0 + 1.5, ease.inOut), w2 = p(t, e0 + 1.2, e0 + 1.7, ease.inOut);
+    const slide = p(t, e0 + 1.9, e0 + 2.5, ease.inOut);
+    const size = 240, gap = 40, ww = $("#word").getBoundingClientRect().width || 340;
+    const left = lerp(540 - size / 2, 540 - (size + gap + ww) / 2, slide);
+    set("#mark", { left: left + "px", opacity: t > e0 ? 1 : 0, transform: `scale(${lerp(0.9, 1, p(t, e0, e0 + 1.2, ease.out))})` });
+    $("#mLine").setAttribute("stroke-dashoffset", lineLen * (1 - draw));
+    $("#mLine").setAttribute("opacity", 1 - p(t, e0 + 1.0, e0 + 1.3));
+    $("#mFill").setAttribute("opacity", fill);
+    $("#w1r").setAttribute("width", 100 * w1); $("#w2r").setAttribute("width", 100 * w2);
+    set("#word", { left: left + size + gap + "px", opacity: slide, transform: `translateX(${(1 - slide) * -30}px)` });
+  };
+  window.render(0);
+</script>
+</body>
+</html>
