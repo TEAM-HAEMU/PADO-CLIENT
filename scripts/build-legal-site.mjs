@@ -53,8 +53,8 @@ const tabs = current => PAGES.map(p => `<a href="${p.file}"${p.file === current 
 
 /** 공통 헤더 — 랜딩·약관 모두 */
 const header = () => `<header class="top"><div class="wrap">
-<a class="brand" href="index.html"><img src="assets/icon.png" alt="" width="28" height="28">PADO</a>
-<nav><a class="wide" href="index.html#how">소개</a><a class="wide" href="index.html#drop">남기기</a><a href="privacy.html">개인정보 처리방침</a></nav>
+<a class="brand" href="index.html"><img src="assets/icon.png" alt="" width="28" height="28">파도</a>
+<nav><a class="wide" href="index.html#how">소개</a><a href="beta.html">베타 참여</a><a class="wide" href="index.html#drop">남기기</a><a href="privacy.html">개인정보 처리방침</a></nav>
 </div></header>`;
 
 /** 공통 푸터 — 사업자 정보(상호·대표·사업자등록번호·주소·연락처·호스팅)와 법적 고지 링크. 통신판매(유료 판매)가 없어 통신판매업 신고번호는 표시하지 않는다 */
@@ -74,7 +74,7 @@ const layout = (title, body, current, meta = '') => `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)} · PADO</title>
+<title>${esc(title)} · 파도</title>
 <meta name="description" content="PADO(파도) — 거리에 음악을 흘려두는 위치 기반 음악 공유 앱">
 <link rel="icon" href="assets/favicon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
@@ -102,11 +102,11 @@ for (const p of PAGES) {
 // Google Play 계정 삭제 요구사항 — 앱을 지운 사람도 웹에서 삭제를 요청할 수 있는 페이지
 const deleteBody = `<h2>앱에서 바로 삭제</h2>
 <ul>
-<li>PADO 앱 › 프로필 › 설정(톱니바퀴) › 회원 탈퇴 › '탈퇴하기'</li>
+<li>파도 앱 › 프로필 › 설정(톱니바퀴) › 회원 탈퇴 › '탈퇴하기'</li>
 <li>모든 기기에서 로그아웃되고, 90일 안에 다시 로그인하면 계정을 복구할 수 있어요.</li>
 </ul>
 <h2>앱 없이 요청</h2>
-<p>앱을 지웠거나 로그인할 수 없다면, 가입한 이메일 주소에서 <b>${esc(OPERATOR.email)}</b>로 '계정 삭제 요청'과 PADO 닉네임을 보내 주세요. 본인 확인 후 7일 안에 처리하고 결과를 메일로 알려 드려요.</p>
+<p>앱을 지웠거나 로그인할 수 없다면, 가입한 이메일 주소에서 <b>${esc(OPERATOR.email)}</b>로 '계정 삭제 요청'과 파도 닉네임을 보내 주세요. 본인 확인 후 7일 안에 처리하고 결과를 메일로 알려 드려요.</p>
 <h2>삭제되는 정보</h2>
 <ul>
 <li>탈퇴 90일 뒤: 이메일, 비밀번호, 생년월일, 성별, 소셜 로그인 식별값, 프로필 사진, 플레이리스트, 알림, 차단 목록</li>
@@ -121,10 +121,13 @@ fs.writeFileSync(path.join(out, 'delete-account.html'), layout('계정 삭제 �
 
 // 랜딩 — site/index.html(본문)에 공통 헤더·푸터를 끼우고, 스타일·이미지를 함께 복사
 const site = path.join(root, 'site');
-fs.writeFileSync(path.join(out, 'index.html'), fs.readFileSync(path.join(site, 'index.html'), 'utf8')
-  .replace('<!--HEADER-->', header()).replace('<!--FOOTER-->', footer()).replaceAll('{{EMAIL}}', esc(OPERATOR.email)).replaceAll('{{SITE_URL}}', SITE_URL));
+// 랜딩·베타 참여(beta.html) — 같은 방식으로 헤더·푸터를 끼운다
+for (const file of ['index.html', 'beta.html']) {
+  fs.writeFileSync(path.join(out, file), fs.readFileSync(path.join(site, file), 'utf8')
+    .replace('<!--HEADER-->', header()).replace('<!--FOOTER-->', footer()).replaceAll('{{EMAIL}}', esc(OPERATOR.email)).replaceAll('{{SITE_URL}}', SITE_URL));
+}
 // 없는 주소로 들어온 경우 (GitHub Pages가 404.html을 보여준다)
-fs.writeFileSync(path.join(out, '404.html'), layout('페이지를 찾을 수 없어요', `<p>주소가 바뀌었거나 없어진 페이지예요.</p><p style="margin-top:24px"><a href="index.html">PADO 홈으로 가기</a></p>`, '404.html')
+fs.writeFileSync(path.join(out, '404.html'), layout('페이지를 찾을 수 없어요', `<p>주소가 바뀌었거나 없어진 페이지예요.</p><p style="margin-top:24px"><a href="index.html">파도 홈으로 가기</a></p>`, '404.html')
   .replace('<head>', `<head>\n<base href="${SITE_URL}">`).replace('<nav class="tabs"', '<nav hidden class="tabs"')); // 어느 경로에서 열려도 링크·스타일이 맞게
 fs.writeFileSync(path.join(out, 'robots.txt'), `User-agent: *\nAllow: /\n`);
 fs.copyFileSync(path.join(site, 'site.css'), path.join(out, 'site.css'));
