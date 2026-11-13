@@ -82,13 +82,19 @@ const enrich: Types.EnrichmentPlugin = {
 
 async function start() {
   started = true;
-  await amplitude.init(env.amplitudeApiKey, undefined, {
-    optOut: false,
-    trackingSessionEvents: true, // session_start / session_end
-    // 기기 단위 익명 — IP·광고 ID·앱 세트 ID·IDFV·통신사는 모으지 않는다 (기종·OS·앱 버전·언어만)
-    trackingOptions: { ipAddress: false, adid: false, appSetId: false, idfv: false, carrier: false },
-    logLevel: __DEV__ ? amplitude.Types.LogLevel.Warn : amplitude.Types.LogLevel.None,
-  }).promise;
+  try {
+    await amplitude.init(env.amplitudeApiKey, undefined, {
+      optOut: false,
+      trackingSessionEvents: true, // session_start / session_end
+      // 기기 단위 익명 — IP·광고 ID·앱 세트 ID·IDFV·통신사는 모으지 않는다 (기종·OS·앱 버전·언어만)
+      trackingOptions: { ipAddress: false, adid: false, appSetId: false, idfv: false, carrier: false },
+      logLevel: __DEV__ ? amplitude.Types.LogLevel.Warn : amplitude.Types.LogLevel.None,
+    }).promise;
+  } catch (e) {
+    // 시작 못 했으면 시작 전으로 되돌린다 — 이벤트는 early에 계속 모으고, 다음 모드 적용 때 다시 시작
+    started = false;
+    throw e;
+  }
   amplitude.add(enrich);
   const envIdent = new amplitude.Identify();
   envIdent.set('app_env', appEnv());
@@ -110,6 +116,7 @@ async function setReplay(on: boolean) {
 /**
  * 모드 적용 (앱 시작·설정 변경). 상세 → 기본으로 내리면 기기 ID를 새로 만들어 이전 사용자 기록과 끊는다.
  * 상세로 올린 직후의 사용자 식별은 호출 측(auth)이 identifyUser로 한다.
+ * 모드(mode)는 바로 바뀐다. SDK 시작이 실패하면 거부된 Promise — 호출 측이 받아 처리한다 (store/prefs)
  */
 export async function setAnalyticsMode(next: AnalyticsMode) {
   const prev = mode;

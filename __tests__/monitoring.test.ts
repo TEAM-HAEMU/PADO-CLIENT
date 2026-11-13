@@ -203,6 +203,21 @@ describe('monitoring (SDK 연결)', () => {
     expect(sentry.__scope.setFingerprint).toHaveBeenLastCalledWith(['api', 'POST', '/droppings/:id/likes', '503']);
   });
 
+  test('처리한 오류(reportError) — 켜져 있으면 area 태그로 보내고, 꺼져 있으면 버림', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const err = new Error('init failed');
+    const off = load({ dsn: '' });
+    off.m.initMonitoring('basic');
+    off.m.reportError(err, 'analytics_mode');
+    expect(off.sentry.captureException).not.toHaveBeenCalled();
+    const { m, sentry } = load();
+    m.initMonitoring('basic');
+    m.reportError(err, 'analytics_mode');
+    expect(sentry.captureException).toHaveBeenCalledWith(err, expect.any(Function));
+    expect(sentry.__scope.setTags).toHaveBeenLastCalledWith({ area: 'analytics_mode' });
+    warn.mockRestore();
+  });
+
   test('꺼져 있으면 API 실패도 보내지 않는다', () => {
     const { m, sentry } = load({ dsn: '' });
     m.initMonitoring('basic');

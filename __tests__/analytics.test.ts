@@ -109,6 +109,18 @@ test('기본 모드는 위치가 있어도 없어도 사용자 ID를 지운다',
   expect(ev2.user_id).toBeUndefined();
 });
 
+test('SDK 시작이 실패하면 거부를 돌려주고, 다음 적용 때 다시 시작한다 (그동안 이벤트는 모아 둠)', async () => {
+  const { a, amp } = load();
+  amp.init.mockReturnValueOnce({ promise: Promise.reject(new Error('init failed')) });
+  await expect(a.setAnalyticsMode('basic')).rejects.toThrow('init failed');
+  expect(a.analyticsMode()).toBe('basic');
+  a.track('x');
+  expect(amp.track).not.toHaveBeenCalled();
+  await a.setAnalyticsMode('detailed');
+  expect(amp.init).toHaveBeenCalledTimes(2);
+  expect(names(amp)).toEqual(['x']);
+});
+
 test('상세 → 기본으로 내리면 기기 ID를 새로 만들고 리플레이를 뗀다', async () => {
   const { a, amp } = load();
   await a.setAnalyticsMode('detailed');
