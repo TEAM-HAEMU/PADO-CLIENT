@@ -24,6 +24,8 @@ export const OPERATOR = {
 };
 
 const EFFECTIVE = '2026-10-07'; // 2026-09-30 Amplitude 분석 추가 (7일 전 고지)
+/** 위치기반서비스 이용약관만 따로 — 2026-11-13 반경을 운영자가 정하는 값으로 바꾸고 재생 거리 안내 추가 (7일 전 고지). 서버 TermType.LOCATION과 같은 값 */
+const LOCATION_EFFECTIVE = '2026-11-20';
 const O = OPERATOR;
 
 const SERVICE = `제1조 (목적)
@@ -217,7 +219,8 @@ const LOCATION = `제1조 (목적)
 
 제3조 (서비스의 내용)
 회사는 회원의 위치정보를 이용하여 다음 서비스를 제공합니다.
-  - 내 주변(반경 약 1km) 드랍을 지도에 표시하는 서비스
+  - 내 주변(회사가 정한 반경 안) 드랍을 지도에 표시하는 서비스
+  - 드랍과의 거리를 확인해, 회사가 정한 거리 안에 들어온 드랍을 열고 들을 수 있게 하는 서비스
   - 현재 위치에 드랍을 남기는 서비스
   - 드랍까지의 거리와 드랍 위치의 주소를 표시하는 서비스
   - 서비스 개선을 위한 이용 분석 (설정 › 이용 데이터 분석에 동의한 경우)
@@ -262,7 +265,7 @@ const LOCATION = `제1조 (목적)
 주소: ${O.address} / 문의: ${O.email}
 
 부칙
-이 약관은 ${EFFECTIVE}부터 시행합니다.`;
+이 약관은 ${LOCATION_EFFECTIVE}부터 시행합니다.`;
 
 const MARKETING = `${O.company}(이하 "회사")는 아래와 같이 마케팅 정보 수신에 대한 동의를 받습니다. 이 동의는 선택 사항이며, 동의하지 않아도 서비스를 이용할 수 있습니다.
 
@@ -291,6 +294,6 @@ const MARKETING = `${O.company}(이하 "회사")는 아래와 같이 마케팅 �
 export const TERMS: Partial<Record<AgreementType, TermDoc>> = {
   SERVICE: { title: '서비스 이용약관', version: EFFECTIVE, body: SERVICE },
   PRIVACY: { title: '개인정보 수집·이용 동의', version: EFFECTIVE, body: PRIVACY },
-  LOCATION: { title: '위치기반서비스 이용약관', version: EFFECTIVE, body: LOCATION },
+  LOCATION: { title: '위치기반서비스 이용약관', version: LOCATION_EFFECTIVE, body: LOCATION },
   MARKETING: { title: '마케팅 정보 수신 동의', version: EFFECTIVE, body: MARKETING },
 };
