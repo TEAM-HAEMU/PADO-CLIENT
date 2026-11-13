@@ -5,7 +5,7 @@ import { api } from './client';
 import type {
   AppNotification, BlockedUser, Comment, CreateDropBody, DropDetail, DropSummary, LikedDrop, MyProfile,
   PlaylistDetail, PlaylistSummary, RegisterBody, ReportReason, ReportTarget, SocialLoginBody, SocialLoginResponse, SocialProvider,
-  SocialSignupBody, Song, Term, TokenPair, UpdateProfileBody, UserAgreement, UUID,
+  SocialSignupBody, Song, Term, TokenPair, UpdateProfileBody, UserAgreement, UUID, DropRadius,
 } from './types';
 
 /** 경로 조각 인코딩 — 딥링크 등 외부에서 온 ID로 다른 경로를 호출하지 못하게 */
@@ -59,6 +59,11 @@ export const dropApi = {
   remove: (id: UUID) => api.delete(`/droppings/${e(id)}`),
   vote: (id: UUID, songId: UUID) => api.post(`/droppings/${e(id)}/vote`, { songId }),
   unvote: (id: UUID) => api.delete(`/droppings/${e(id)}/vote`),
+};
+
+// ── 운영 설정 (로그인 불필요)
+export const settingsApi = {
+  dropRadius: () => api.get<DropRadius>('/settings/drop-radius', { auth: 'none' }),
 };
 
 // ── 좋아요

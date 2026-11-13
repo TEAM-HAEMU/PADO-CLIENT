@@ -2,7 +2,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { commentApi, dropApi, likeApi, notificationApi, playlistApi, safetyApi, songApi, userApi } from '@/api/endpoints';
 import type { CreateDropBody, UUID } from '@/api/types';
-import { NEARBY_RADIUS_KM } from '@/config';
+import { useDropRadius } from '@/hooks/useDropRadius';
 import { useAuth } from '@/store/auth';
 import type { Coords } from '@/services/location';
 import { track } from '@/services/analytics';
@@ -19,8 +19,11 @@ export const qk = {
   me: ['me'] as const,
 };
 
-export const useNearbyDrops = (coords: Coords | null) =>
-  useQuery({ queryKey: qk.nearby(coords), enabled: !!coords, queryFn: () => dropApi.nearby(coords!.latitude, coords!.longitude, NEARBY_RADIUS_KM), refetchInterval: 120_000, placeholderData: keepPreviousData });
+/** 주변 드랍 — 운영자 표시 반경(displayMeters)만큼 (서버도 같은 값으로 자른다) */
+export function useNearbyDrops(coords: Coords | null) {
+  const km = useDropRadius().displayMeters / 1000;
+  return useQuery({ queryKey: [...qk.nearby(coords), km], enabled: !!coords, queryFn: () => dropApi.nearby(coords!.latitude, coords!.longitude, km), refetchInterval: 120_000, placeholderData: keepPreviousData });
+}
 
 export const useDrop = (id: UUID | undefined) => useQuery({ queryKey: qk.drop(id ?? ''), enabled: !!id, queryFn: () => dropApi.get(id!) });
 export const useSong = (id: UUID | undefined | null, opts: { keepPrevious?: boolean } = {}) => useQuery({ queryKey: qk.song(id ?? ''), enabled: !!id, queryFn: () => songApi.get(id!), staleTime: Infinity, placeholderData: opts.keepPrevious ? keepPreviousData : undefined });

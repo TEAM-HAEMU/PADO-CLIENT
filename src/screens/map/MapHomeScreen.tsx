@@ -18,6 +18,10 @@ import { Art, Icon, Press, T } from '@/components/ui';
 import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
+import { useDropLock } from '@/hooks/useDropLock';
+import { track } from '@/services/analytics';
+import { toast } from '@/store/toast';
+import { lockMessage } from '@/utils/dropLock';
 import { useMiniDiscActions } from '@/components/music/MiniDisc';
 import { usePreviewStore } from '@/services/preview';
 import { useTermsUpdateCheck } from '@/hooks/useTermsUpdateCheck';
@@ -155,11 +159,21 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     drops.filter(d => d.type !== 'MUSIC').slice(0, 8).forEach(d => qc.prefetchQuery({ queryKey: qk.drop(d.droppingId), queryFn: () => dropApi.get(d.droppingId), staleTime: 30_000 }));
   }, [dropIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sorted = useMemo(() => drops.map(d => ({ d, m: distanceM(here, d) })).sort((a, b) => a.m - b.m), [drops, here]);
-  const nearestId = sorted[0]?.d.droppingId;
+  // 재생 반경 밖(내 드랍·좋아요한 드랍 제외)은 잠금 — 핀은 흐리게 곡·커버 없이, 눌러도 안 열리고, 자동 재생에서도 뺀다
+  const lockOf = useDropLock();
+  const sorted = useMemo(() => drops.map(d => ({ d, m: distanceM(here, d), lock: lockOf(d) })).sort((a, b) => a.m - b.m), [drops, here, lockOf]);
+  const nearestId = sorted.find(x => !x.lock.locked)?.d.droppingId;
+  // 걸어서 잠금이 풀리거나 잠기면 핀 모양이 바뀌므로 잠깐 다시 그린다
+  const lockedIds = sorted.filter(x => x.lock.locked).map(x => x.d.droppingId).join(',');
+  const prevLocked = useRef(lockedIds);
+  useEffect(() => {
+    if (prevLocked.current === lockedIds) return;
+    prevLocked.current = lockedIds;
+    trackFor(2500);
+  }, [lockedIds, trackFor]);
 
   // 주변 곡 자동 재생 — 가까운 음악 드랍부터 차례로 (지도 화면일 때, 앱을 내려도 계속)
-  const musicDrops = useMemo(() => sorted.map(x => x.d).filter((d): d is MusicDropSummary => d.type === 'MUSIC'), [sorted]);
+  const musicDrops = useMemo(() => sorted.filter(x => !x.lock.locked).map(x => x.d).filter((d): d is MusicDropSummary => d.type === 'MUSIC'), [sorted]);
   const auto = useNearbyAutoplay(musicDrops, focused && !!coords);
   // 미니 디스크 길게 누르기 = 다음 주변 곡 (지도가 보일 때만)
   const nextRef = useRef(auto.next);
@@ -177,6 +191,11 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     if (d.type === 'VOTE') parent?.navigate('VoteDrop', { dropId: d.droppingId });
     else if (d.type === 'PLAYLIST') parent?.navigate('PlaylistDrop', { dropId: d.droppingId });
     else parent?.navigate('PinPreview', { dropId: d.droppingId });
+  };
+  const tapDrop = ({ d, lock }: (typeof sorted)[number]) => {
+    if (!lock.locked) return openDrop(d);
+    track('drop_locked_tap', { drop_id: d.droppingId, remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) });
+    toast(lockMessage(lock));
   };
 
   const region = { latitude: here.latitude - 0.0012, longitude: here.longitude, latitudeDelta: 0.018, longitudeDelta: 0.012 };
@@ -238,20 +257,25 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
             <MeMarker />
           </Marker>
         ) : null}
-        {sorted.map(({ d, m }, i) => {
+        {sorted.map((x, i) => {
+          const { d, m, lock } = x;
           const active = d.droppingId === nearestId;
-          const animated = animatePins && i < ANIMATED_PINS;
+          const animated = animatePins && i < ANIMATED_PINS && !lock.locked;
           const box = active ? PIN_SIZE.active : PIN_SIZE.normal;
           return (
             <Marker
-              key={`${d.droppingId}:${artEpoch}`}
+              key={`${d.droppingId}:${artEpoch}:${lock.locked ? 'l' : 'o'}`}
               coordinate={{ latitude: d.latitude, longitude: d.longitude }}
               anchor={{ x: box.tipX / box.w, y: box.tipY / box.h }}
               tracksViewChanges={tracks || animated}
               zIndex={active ? 3 : 2}
-              onPress={() => openDrop(d)}
+              onPress={() => tapDrop(x)}
             >
-              <DropPin type={d.type} art={dropArt(d)} active={active} animated={animated} onImageLoad={onPinImage} title={dropTitle(d)} subtitle={`${d.type === 'MUSIC' ? d.artist : dropSub(d)} · ${formatDistance(m)}`} count={d.type === 'PLAYLIST' ? d.songIds.length : undefined} />
+              {lock.locked ? (
+                <DropPin type={d.type} locked animated={false} title="잠긴 드랍" subtitle={formatDistance(m)} />
+              ) : (
+                <DropPin type={d.type} art={dropArt(d)} active={active} animated={animated} onImageLoad={onPinImage} title={dropTitle(d)} subtitle={`${d.type === 'MUSIC' ? d.artist : dropSub(d)} · ${formatDistance(m)}`} count={d.type === 'PLAYLIST' ? d.songIds.length : undefined} />
+              )}
             </Marker>
           );
         })}
@@ -291,11 +315,28 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
           </Press>
         ) : sorted.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, gap: 12 }}>
-            {sorted.slice(0, 12).map(({ d }, i) => {
+            {sorted.slice(0, 12).map((x, i) => {
+              const { d, m, lock } = x;
+              if (lock.locked) {
+                // 잠긴 드랍 — 곡·커버 대신 자물쇠와 거리만
+                return (
+                  <Press key={d.droppingId} onPress={() => tapDrop(x)} accessibilityLabel={`잠긴 드랍 · ${formatDistance(m)}`} style={{ width: 66, alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: '#FAFAFA', backgroundColor: '#FFFFFF', opacity: 0.6 }}>
+                      <View style={{ width: 49, height: 49, borderRadius: 9, backgroundColor: colors.card2, alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon name="lock" size={18} color={colors.ink3} />
+                      </View>
+                    </View>
+                    <View style={{ alignSelf: 'stretch' }}>
+                      <T v="caption" c="onPrimary" numberOfLines={1} style={{ textAlign: 'center' }}>{formatDistance(m)}</T>
+                      <T v="tiny" numberOfLines={1} style={{ textAlign: 'center', color: '#98A2B8' }}>더 가까이</T>
+                    </View>
+                  </Press>
+                );
+              }
               const fresh = i < 3;
               const onAir = d.type === 'MUSIC' && !!playingKey && d.songId === playingKey;
               return (
-                <Press key={d.droppingId} onPress={() => openDrop(d)} style={{ width: 66, alignItems: 'center', gap: 6 }}>
+                <Press key={d.droppingId} onPress={() => tapDrop(x)} style={{ width: 66, alignItems: 'center', gap: 6 }}>
                   {/* Figma 'stay music' 아트: 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 (재생 중이면 시안 테두리 + 글로우) */}
                   <View style={[{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: onAir ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: fresh || onAir ? 1 : 0.6 }, onAir || fresh ? glow(onAir ? 0.9 : 0.5, 12) : null]}>
                     <Art uri={dropArt(d)} size={49} radius={9} />

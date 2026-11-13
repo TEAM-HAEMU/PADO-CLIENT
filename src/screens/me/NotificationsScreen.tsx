@@ -12,6 +12,8 @@ import { Wave } from '@/components/ui/Wave';
 import { errorMessage } from '@/api/errors';
 import { toast } from '@/store/toast';
 import { useDrop, useNotifications, useSong } from '@/hooks/api';
+import { useDropLock } from '@/hooks/useDropLock';
+import { lockMessage } from '@/utils/dropLock';
 import { colors, fonts } from '@/theme/tokens';
 import { formatRelative } from '@/utils/format';
 
@@ -60,16 +62,23 @@ export default function NotificationsScreen() {
     { title: '이전', data: data.filter(n => new Date(n.createdAt).getTime() < dayAgo) },
   ].filter(s => s.data.length);
 
+  const lockOf = useDropLock();
   const open = async (n: AppNotification) => {
     if (!n.readAt) notificationApi.read(n.id).then(refresh).catch(() => {});
     const dropId = str(n.data.droppingId) ?? findNearbyDrop(n.data);
-    if (dropId) nav.navigate('PinPreview', { dropId });
+    // 주변 새 드랍도 재생 반경 밖이면 지도와 같이 열지 않는다 (위치를 아는 드랍만 — 내 드랍·좋아요한 드랍은 열림)
+    const known = dropId ? cachedSummary(dropId) : undefined;
+    const lock = known ? lockOf(known) : null;
+    if (lock?.locked) toast(lockMessage(lock));
+    else if (dropId) nav.navigate('PinPreview', { dropId });
     else if (n.eventName === 'dropping-created') {
       // 이미 사라졌거나 지금 주변(반경 밖)에 없으면 — 말없이 지도로 보내면 고장처럼 보이니 이유를 알린다
       toast('이 드랍은 지금 근처에 없거나 사라졌어요.');
       nav.navigate('Tabs', { screen: 'Map' });
     }
   };
+
+  const cachedSummary = (id: string) => [['nearby'], ['myDrops']].flatMap(key => qc.getQueriesData<DropSummary[]>({ queryKey: key }).flatMap(([, list]) => (Array.isArray(list) ? list : []))).find(x => x.droppingId === id);
 
   /** '새 드랍' 알림엔 droppingId가 없어 지금 불러온 주변 드랍·내 드랍 중 같은 사람·같은 곡을 찾는다 */
   const findNearbyDrop = (d: Record<string, unknown>) => {

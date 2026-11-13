@@ -16,6 +16,7 @@ import { ServiceGlyph } from '@/components/ui/Brand';
 import { Sheet } from '@/components/ui/Sheet';
 import { useMyLikes, useSongSearch } from '@/hooks/api';
 import { useDebounced } from '@/hooks/useDebounced';
+import { useDropLock } from '@/hooks/useDropLock';
 import type { RootScreen } from '@/navigation/types';
 import { useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
@@ -40,11 +41,13 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
   const existing = new Set(p.existing);
   const plName = playlistId ? qc.getQueryData<{ name: string }>(['playlist', playlistId])?.name : undefined;
 
+  // 주변 드랍 곡 — 재생 반경 밖(잠긴 드랍)의 곡은 보이지 않는다
+  const lockOf = useDropLock();
   const nearby = useMemo(() => {
     const all = qc.getQueriesData<DropSummary[]>({ queryKey: ['nearby'] }).flatMap(([, v]) => v ?? []);
     const seen = new Set<string>();
-    return all.filter(d => d.type === 'MUSIC').map(d => d.type === 'MUSIC' ? asSong(d.songId, d.title, d.artist, d.albumImageUrl) : null).filter((s): s is Song => !!s && !seen.has(s.id) && !!seen.add(s.id));
-  }, [qc]);
+    return all.filter(d => d.type === 'MUSIC' && !lockOf(d).locked).map(d => d.type === 'MUSIC' ? asSong(d.songId, d.title, d.artist, d.albumImageUrl) : null).filter((s): s is Song => !!s && !seen.has(s.id) && !!seen.add(s.id));
+  }, [qc, lockOf]);
   const likes = useMyLikes().data ?? [];
   const likedMusic = likes.filter(l => l.droppingType === 'MUSIC');
   const likedDetails = useQueries({ queries: tab === 'liked' ? likedMusic.map(l => ({ queryKey: ['drop', l.droppingId], queryFn: () => dropApi.get(l.droppingId) })) : [] });

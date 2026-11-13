@@ -116,6 +116,15 @@ export interface Song {
   links: SongLinks;
 }
 
+// ── 드랍 반경 (운영자가 관리, GET /settings/drop-radius)
+export interface DropRadius {
+  /** 지도에 드랍이 보이는 범위(m) — 주변 검색 distance = displayMeters / 1000 */
+  displayMeters: number;
+  /** 이 안에 들어와야 드랍을 열고 들을 수 있음(m) — 앱에서만 적용 */
+  playMeters: number;
+  updatedAt: string | null;
+}
+
 // ── 드랍 (주변 검색 / 내 드랍 목록 아이템)
 interface DropSummaryBase {
   droppingId: UUID;

@@ -18,8 +18,5 @@ export const env = {
   },
 } as const;
 
-/** 주변 드랍 검색 반경(km). 디자인 카피 "반경 1km" 기준 */
-export const NEARBY_RADIUS_KM = 1;
-
 /** 인스타 스토리 공유에 쓰는 Facebook 앱 ID (공개 값 — 스토리 아래 '파도에서 공유' 표시용) */
 export const FB_APP_ID = '1667301835060992';

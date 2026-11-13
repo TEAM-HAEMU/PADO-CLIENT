@@ -4,8 +4,9 @@ import { check, PERMISSIONS, request, requestMultiple, RESULTS } from 'react-nat
 import { create } from 'zustand';
 import { setAnalyticsLocation, track } from '@/services/analytics';
 import { kv } from '@/store/storage';
+import type { Coords } from '@/utils/geo';
 
-export interface Coords { latitude: number; longitude: number }
+export type { Coords };
 
 /** 위치를 아직 모를 때 지도 카메라만 두는 기준 좌표 — 드랍 생성·주변 검색에는 절대 쓰지 않는다 */
 export const FALLBACK: Coords = { latitude: 35.1889, longitude: 128.9038 };
@@ -172,16 +173,4 @@ export const useLocation = create<LocationState>((set, get) => {
   };
 });
 
-/** 두 좌표 사이 거리(m) */
-export function distanceM(a: Coords, b: Coords) {
-  const R = 6_371_000, toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.latitude - a.latitude), dLon = toRad(b.longitude - a.longitude);
-  const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(x));
-}
-
-export function formatDistance(m: number) {
-  if (m < 10) return '바로 여기';
-  if (m < 1000) return `${Math.round(m / 10) * 10}m`;
-  return `${(m / 1000).toFixed(1)}km`;
-}
+export { distanceM, formatDistance } from '@/utils/geo';
