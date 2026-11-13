@@ -142,6 +142,11 @@ export function setAnalyticsLocation(lat: number, lng: number) {
   context.lat = Math.round(lat * 1e6) / 1e6;
   context.lng = Math.round(lng * 1e6) / 1e6;
 }
+/** 위치 권한·위치 서비스를 끄면 — 마지막 좌표를 계속 붙이지 않게 */
+export function clearAnalyticsLocation() {
+  context.lat = undefined;
+  context.lng = undefined;
+}
 
 /** 대략적 지역 (시·군·구) — 역지오코딩 주소에서 (utils/address regionOf) */
 export function setAnalyticsRegion(region: string | null | undefined) {

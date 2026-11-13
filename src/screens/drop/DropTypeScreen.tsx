@@ -7,7 +7,7 @@ import { ChevronGlyph, PinGlyph, VoteGlyph } from '@/components/drop/glyphs';
 import { Icon, Press, PrimaryButton, T } from '@/components/ui';
 import { Sheet } from '@/components/ui/Sheet';
 import type { RootScreen, RootStackParamList } from '@/navigation/types';
-import { useLocation } from '@/services/location';
+import { currentCoords, useLocation } from '@/services/location';
 import { useDraft } from '@/store/draft';
 import { colors, fonts, glow } from '@/theme/tokens';
 
@@ -52,7 +52,7 @@ function Illustration({ type }: { type: DropType }) {
 export default function DropTypeScreen({ navigation }: RootScreen<'DropType'>) {
   const start = useDraft(s => s.start);
   const place = useLocation(s => s.address || s.label);
-  const hasFix = useLocation(s => !!s.coords);
+  const hasFix = useLocation(s => !!currentCoords(s)); // 낡은 좌표(백그라운드에서 오래 있다 돌아와 새 위치를 기다리는 중)는 없는 것으로
   const locating = useLocation(s => s.fix === 'locating');
   // 이 창이 떠 있는 동안도 위치 감시를 붙잡는다 (지도와 같은 감시 하나 — 따로 새로 만들지 않음)
   React.useEffect(() => useLocation.getState().start(), []);
