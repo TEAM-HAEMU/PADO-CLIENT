@@ -12,7 +12,7 @@ import { type DropSummary, isPlaylistDetail } from '@/api/types';
 import { Art, Avatar, Empty, Press, T, PrimaryButton } from '@/components/ui';
 import { MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
-import { Collage } from '@/components/music/Collage';
+import { MarkerArt } from '@/components/map/DropPin';
 import { env } from '@/config';
 import { qk, useLikeCount, useMe, useMyDrops, useMyLikeCount, useMyLikes, useMyPlaylists, useUnreadCount } from '@/hooks/api';
 import { likeApi } from '@/api/endpoints';
@@ -145,7 +145,7 @@ export default function ProfileScreen() {
                     <Marker key={`${d.droppingId}:${artEpoch}`} coordinate={d} tracksViewChanges={tracks} anchor={{ x: 0.5, y: 1 }} zIndex={drops.length - i}>
                       {/* Figma 'stay music' 핀 — #FAFAFA 3px 테두리 앨범 아트 55 + 가는 막대 + 바닥 점 */}
                       <View style={{ alignItems: 'center', width: 55 }}>
-                        <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: '#FAFAFA', backgroundColor: '#FFFFFF', overflow: 'hidden' }}><Collage images={pinArts(d)} size={49} radius={9} /></View>
+                        <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: '#FAFAFA', backgroundColor: '#FFFFFF', overflow: 'hidden' }}><MarkerArt images={pinArts(d)} size={49} radius={9} /></View>
                         <View style={{ width: 8, height: 19, alignItems: 'center' }}>
                           <View style={{ width: 1, height: 16, borderBottomLeftRadius: 1, borderBottomRightRadius: 1, backgroundColor: 'rgba(250,250,250,0.7)' }} />
                           <View style={{ position: 'absolute', top: 12, width: 8, height: 7, borderRadius: 4, backgroundColor: 'rgba(250,250,250,0.7)' }} />

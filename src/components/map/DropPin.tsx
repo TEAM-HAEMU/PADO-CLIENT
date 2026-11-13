@@ -90,15 +90,8 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
           Platform.OS === 'ios' ? (active ? glow(0.8, 14) : { shadowColor: '#12214A', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } }) : null,
         ]}
       >
-        {art && Platform.OS === 'android' ? (
-          // Android 마커는 뷰를 비트맵으로 찍어 쓰는데, 일반 Image는 화면에 붙지 않은 마커 안에서 끝내 그려지지 않아 빈 칸으로 굳는다
-          // → 자기 캔버스에 직접 그리는 SVG 이미지로 그린다 (모서리는 clipPath)
-          <Svg width={inner} height={inner}>
-            <Defs><ClipPath id="art"><Rect width={inner} height={inner} rx={R - B} ry={R - B} /></ClipPath></Defs>
-            <SvgImage href={{ uri: artUrl(art, inner)! }} width={inner} height={inner} preserveAspectRatio="xMidYMid slice" clipPath="url(#art)" onLoad={onImageLoad} />
-          </Svg>
-        ) : art ? (
-          <Image source={{ uri: artUrl(art, inner)! }} onLoadEnd={onImageLoad} style={{ width: inner, height: inner, borderRadius: R - B }} />
+        {art ? (
+          <MarkerArt images={[art]} size={inner} radius={R - B} onLoad={onImageLoad} />
         ) : (
           <View style={{ width: inner, height: inner, borderRadius: R - B, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name={type === 'VOTE' ? 'vote' : type === 'PLAYLIST' ? 'playlist' : 'music'} size={18} color={colors.primary} />
@@ -115,6 +108,31 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
           <T v="micro" c="page" style={{ fontSize: 10, lineHeight: 13 }}>{count}곡</T>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * 지도 마커 안 앨범 아트 (4장 이상이면 2×2 콜라주).
+ * Android 마커는 뷰를 비트맵으로 찍어 쓰는데, 일반 Image는 화면에 붙지 않은 마커 안에서 끝내 그려지지 않아 빈 칸으로 굳는다
+ * → Android는 자기 캔버스에 직접 그리는 SVG 이미지로 그린다 (모서리는 clipPath)
+ */
+export function MarkerArt({ images, size, radius, onLoad }: { images: (string | null | undefined)[]; size: number; radius: number; onLoad?: () => void }) {
+  const list = images.filter((u): u is string => !!u);
+  const tiles = list.length >= 4 ? list.slice(0, 4) : list.slice(0, 1);
+  const h = tiles.length === 4 ? size / 2 : size;
+  const at = (i: number) => (tiles.length === 4 ? { x: (i % 2) * h, y: Math.floor(i / 2) * h } : { x: 0, y: 0 });
+  if (Platform.OS === 'android') {
+    return (
+      <Svg width={size} height={size}>
+        <Defs><ClipPath id="art"><Rect width={size} height={size} rx={radius} ry={radius} /></ClipPath></Defs>
+        {tiles.map((u, i) => <SvgImage key={i} href={{ uri: artUrl(u, h)! }} {...at(i)} width={h} height={h} preserveAspectRatio="xMidYMid slice" clipPath="url(#art)" onLoad={onLoad} />)}
+      </Svg>
+    );
+  }
+  return (
+    <View style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }}>
+      {tiles.map((u, i) => <Image key={i} source={{ uri: artUrl(u, h)! }} onLoadEnd={onLoad} style={{ width: h, height: h, borderRadius: tiles.length === 4 ? 0 : radius }} />)}
     </View>
   );
 }

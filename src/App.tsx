@@ -4,7 +4,8 @@
  */
 import './global.css';
 import React, { useEffect } from 'react';
-import { StatusBar, LogBox } from 'react-native';
+import { StatusBar, LogBox, Platform } from 'react-native';
+import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
@@ -38,10 +39,12 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.page }} {...touchTracker}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <NavigationContainer ref={navigationRef} theme={theme} linking={linking} fallback={<Splash />} onReady={onNavState} onStateChange={onNavState}>
-            <StatusBar barStyle="dark-content" />
-            <RootNavigator />
-          </NavigationContainer>
+          <KeyboardInset>
+            <NavigationContainer ref={navigationRef} theme={theme} linking={linking} fallback={<Splash />} onReady={onNavState} onStateChange={onNavState}>
+              <StatusBar barStyle="dark-content" />
+              <RootNavigator />
+            </NavigationContainer>
+          </KeyboardInset>
           <PreviewHost />
           <MiniDisc />
           <DialogHost />
@@ -50,4 +53,19 @@ export default function App() {
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
+}
+
+/**
+ * Android 15+ edge-to-edge에선 adjustResize가 창을 줄여 주지 않아 키보드가 입력칸·버튼을 덮는다.
+ * 키보드 높이만큼 화면 아래를 비워 예전 adjustResize처럼 줄인다 (iOS는 화면마다 따로 처리하므로 그대로).
+ */
+function KeyboardInset({ children }: { children: React.ReactNode }) {
+  if (Platform.OS !== 'android') return <>{children}</>;
+  return <AndroidKeyboardInset>{children}</AndroidKeyboardInset>;
+}
+
+function AndroidKeyboardInset({ children }: { children: React.ReactNode }) {
+  const keyboard = useAnimatedKeyboard();
+  const inset = useAnimatedStyle(() => ({ paddingBottom: keyboard.height.value }));
+  return <Animated.View style={[{ flex: 1 }, inset]}>{children}</Animated.View>;
 }
