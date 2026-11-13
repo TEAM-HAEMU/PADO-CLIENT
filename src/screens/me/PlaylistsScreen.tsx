@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { playlistApi } from '@/api/endpoints';
 import { Collage } from '@/components/music/Collage';
 import type { PlaylistDropSummary } from '@/api/types';
-import { Art, Chip, Empty, Loading, Press, T, PrimaryButton, SecondaryButton } from '@/components/ui';
+import { Art, Chip, Empty, Press, T, PrimaryButton } from '@/components/ui';
+import { listStatus } from '@/components/ui/ScreenState';
 import { Glyph } from '@/components/detail/glyphs';
 import { BgWave } from '@/components/detail/parts';
 import { useMyDrops, useMyLikes, useMyPlaylists } from '@/hooks/api';
@@ -35,10 +36,13 @@ export default function PlaylistsScreen() {
   const insets = useSafeAreaInsets();
   const nav = useNavigation();
   const [tab, setTab] = useState<Tab>('mine');
-  const { data: lists, isLoading, isError, refetch } = useMyPlaylists();
+  const listsQ = useMyPlaylists();
+  const lists = listsQ.data;
   const details = useQueries({ queries: (lists ?? []).map(p => ({ queryKey: ['playlist', p.id], queryFn: () => playlistApi.get(p.id) })) });
-  const likes = useMyLikes().data ?? [];
-  const droppedPlaylists = (useMyDrops().data ?? []).filter((d): d is PlaylistDropSummary => d.type === 'PLAYLIST');
+  const likesQ = useMyLikes();
+  const likes = likesQ.data ?? [];
+  const myDropsQ = useMyDrops();
+  const droppedPlaylists = (myDropsQ.data ?? []).filter((d): d is PlaylistDropSummary => d.type === 'PLAYLIST');
   const grid = { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 20 } as const;
 
   return (
@@ -60,9 +64,7 @@ export default function PlaylistsScreen() {
         </View>
 
         {tab === 'mine' ? (
-          isLoading ? <Loading style={{ height: 200 }} /> : isError ? (
-            <Empty icon="alert" title="플레이리스트를 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} />
-          ) : !lists?.length ? (
+          listStatus(listsQ, '플레이리스트를 불러오지 못했어요') ?? (!lists?.length ? (
             <Empty icon="playlist" title="아직 플레이리스트가 없어요" desc="좋아하는 곡을 모아 두면 지금 있는 곳에 플리째 드랍할 수 있어요." action={<PrimaryButton label="첫 플레이리스트 만들기" icon="plus" onPress={() => nav.navigate('NewPlaylist')} style={{ alignSelf: 'stretch', marginTop: 8 }} />} />
           ) : (
             <View style={grid}>
@@ -71,9 +73,9 @@ export default function PlaylistsScreen() {
                 return <Cell key={p.id} size={cell} cover={<Collage images={d?.songs.map(s => s.albumImagePath) ?? [p.albumImageUrl]} size={cell} radius={18.9} />} title={p.name} sub={d ? `${d.songs.length}곡` : ' '} onPress={() => nav.navigate('PlaylistDetail', { playlistId: p.id })} />;
               })}
             </View>
-          )
+          ))
         ) : tab === 'dropped' ? (
-          droppedPlaylists.length ? (
+          listStatus(myDropsQ, '드랍한 플리를 불러오지 못했어요') ?? (droppedPlaylists.length ? (
             <View style={grid}>
               {droppedPlaylists.map(d => (
                 <Cell key={d.droppingId} size={cell} cover={<Art uri={d.firstAlbumImageUrl} size={cell} radius={18.9} />} title={d.playlistName} sub={`${d.songIds.length}곡 · ${d.address}`} onPress={() => nav.navigate('PlaylistDrop', { dropId: d.droppingId, source: 'playlists' })} />
@@ -81,8 +83,8 @@ export default function PlaylistsScreen() {
             </View>
           ) : (
             <Empty icon="playlist" title="아직 드랍한 플리가 없어요" desc="+ 버튼 → 플레이리스트로 지금 있는 곳에 플리를 남겨보세요." />
-          )
-        ) : likes.length ? (
+          ))
+        ) : listStatus(likesQ, '좋아요한 드랍을 불러오지 못했어요') ?? (likes.length ? (
           <View style={grid}>
             {likes.map(l => (
               <Cell key={l.droppingId} size={cell} cover={<Art uri={l.imageUrl} size={cell} radius={18.9} />} title={l.title ?? l.topic ?? l.playlistName ?? ''} sub={`${l.droppingType === 'MUSIC' ? l.artist ?? '' : l.droppingType === 'VOTE' ? '투표' : '플레이리스트'} · ${l.address}`} onPress={() => nav.navigate(l.droppingType === 'VOTE' ? 'VoteDrop' : l.droppingType === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: l.droppingId, source: 'playlists' })} />
@@ -90,7 +92,7 @@ export default function PlaylistsScreen() {
           </View>
         ) : (
           <Empty icon="heart" title="좋아요한 드랍이 없어요" desc="주변에 드랍이 보이면 좋아요로 모아둘 수 있어요." />
-        )}
+        ))}
       </ScrollView>
     </View>
   );

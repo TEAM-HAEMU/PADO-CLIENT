@@ -12,9 +12,10 @@ import { type DropSummary, isPlaylistDetail } from '@/api/types';
 import { Art, Avatar, Empty, Press, T, PrimaryButton } from '@/components/ui';
 import { MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
+import { listStatus } from '@/components/ui/ScreenState';
 import { MarkerArt } from '@/components/map/DropPin';
 import { env } from '@/config';
-import { qk, useLikeCount, useMe, useMyDrops, useMyLikeCount, useMyLikes, useMyPlaylists, useUnreadCount } from '@/hooks/api';
+import { invalidateAfterDropRemoved, qk, useLikeCount, useMe, useMyDrops, useMyLikeCount, useMyLikes, useMyPlaylists, useUnreadCount } from '@/hooks/api';
 import { likeApi } from '@/api/endpoints';
 import { artUrl } from '@/utils/artUrl';
 import { dropArt, dropSub, dropTitle } from '@/screens/map/MapHomeScreen';
@@ -34,7 +35,8 @@ export default function ProfileScreen() {
   const qc = useQueryClient();
   const me = useMe().data;
   const EMPTY: never[] = [];
-  const myDrops = useMyDrops().data;
+  const myDropsQ = useMyDrops();
+  const myDrops = myDropsQ.data;
   const drops = useMemo(() => myDrops ?? EMPTY, [myDrops]); // eslint-disable-line react-hooks/exhaustive-deps
   // 플리 드랍 핀은 플리 상세와 같은 4칸 커버 — 요약엔 첫 곡 아트뿐이라 드랍 상세의 곡 아트를 쓴다
   const playlistDrops = drops.filter(d => d.type === 'PLAYLIST');
@@ -94,7 +96,7 @@ export default function ProfileScreen() {
   const openDrop = (d: DropSummary) => nav.navigate(d.type === 'VOTE' ? 'VoteDrop' : d.type === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: d.droppingId, source: 'profile' });
   const removeDrop = (d: DropSummary) => dialog.alert('드랍을 삭제할까요?', `'${dropTitle(d)}' 드랍이 지도에서 사라지고 되돌릴 수 없어요.`, [
     { text: '취소', style: 'cancel' },
-    { text: '삭제', style: 'destructive', onPress: () => dropApi.remove(d.droppingId).then(() => { qc.invalidateQueries({ queryKey: ['myDrops'] }); qc.invalidateQueries({ queryKey: ['nearby'] }); toast('드랍을 삭제했어요.'); }).catch(e => toast(errorMessage(e), 'error')) },
+    { text: '삭제', style: 'destructive', onPress: () => dropApi.remove(d.droppingId).then(() => { invalidateAfterDropRemoved(qc, d.droppingId); toast('드랍을 삭제했어요.'); }).catch(e => toast(errorMessage(e), 'error')) },
   ]);
 
   return (
@@ -161,7 +163,7 @@ export default function ProfileScreen() {
               </View>
             ) : null}
             <View style={{ paddingHorizontal: 20, gap: 4 }}>
-              {drops.length ? drops.map(d => (
+              {listStatus(myDropsQ, '드랍 기록을 불러오지 못했어요') ?? (drops.length ? drops.map(d => (
                 <Press key={d.droppingId} onPress={() => openDrop(d)} onLongPress={() => removeDrop(d)} trackAs="내 드랍" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
                   <Art uri={dropArt(d)} size={52} radius={12} />
                   <View style={{ flex: 1, gap: 2 }}>
@@ -171,13 +173,13 @@ export default function ProfileScreen() {
                   </View>
                   <LikeBadge dropId={d.droppingId} />
                 </Press>
-              )) : <Empty icon="wave" title="아직 남긴 드랍이 없어요" desc="지금 있는 곳에 첫 곡을 남겨보세요." action={<PrimaryButton label="첫 드랍 남기기" icon="plus" onPress={() => nav.navigate('DropType')} style={{ alignSelf: 'stretch', marginTop: 8 }} />} />}
+              )) : <Empty icon="wave" title="아직 남긴 드랍이 없어요" desc="지금 있는 곳에 첫 곡을 남겨보세요." action={<PrimaryButton label="첫 드랍 남기기" icon="plus" onPress={() => nav.navigate('DropType')} style={{ alignSelf: 'stretch', marginTop: 8 }} />} />)}
               {drops.length ? <T v="micro" c="faint" style={{ textAlign: 'center', marginTop: 8 }}>길게 누르면 드랍을 삭제할 수 있어요</T> : null}
             </View>
           </View>
         ) : (
           <View style={{ paddingHorizontal: 20, marginTop: 30, gap: 4 }}>
-            {likes.length ? likes.map(l => (
+            {listStatus(likesQ, '좋아요한 드랍을 불러오지 못했어요') ?? (likes.length ? likes.map(l => (
               <Press key={l.droppingId} onPress={() => nav.navigate(l.droppingType === 'VOTE' ? 'VoteDrop' : l.droppingType === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: l.droppingId, source: 'profile' })} trackAs="좋아요한 드랍" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
                 <Art uri={l.imageUrl} size={52} radius={12} />
                 <View style={{ flex: 1, gap: 2 }}>
@@ -186,7 +188,7 @@ export default function ProfileScreen() {
                 </View>
                 <MeGlyph name="heart" size={14} color={colors.like} />
               </Press>
-            )) : <Empty icon="heart" title="좋아요한 드랍이 없어요" />}
+            )) : <Empty icon="heart" title="좋아요한 드랍이 없어요" />)}
           </View>
         )}
       </ScrollView>
