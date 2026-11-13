@@ -36,6 +36,19 @@ test('위치를 모르면 예외 말고는 잠금', () => {
   expect(dropLock(drop(0), null, 500)).toEqual({ locked: true, remainingM: null });
 });
 
+test('위치 오차가 재생 반경보다 크면(대략적인 위치) 위치를 모르는 것처럼 잠근다', () => {
+  // Android '대략적인 위치' — 오차 수 km
+  expect(dropLock(drop(100), { ...here, accuracy: 2000 }, 500)).toEqual({ locked: true, remainingM: null, imprecise: true });
+  expect(dropLock(drop(100), { ...here, accuracy: 500 }, 500).locked).toBe(false);
+  expect(dropLock(drop(100), { ...here, accuracy: null }, 500).locked).toBe(false);
+  // 열려 있던 드랍은 경계 여유(30m)까지
+  expect(dropLock(drop(100), { ...here, accuracy: 520 }, 500, undefined, true).locked).toBe(false);
+  expect(dropLock(drop(100), { ...here, accuracy: 540 }, 500, undefined, true).locked).toBe(true);
+  // 예외(내 드랍·좋아요)는 그대로 열림
+  expect(dropLock(drop(100, { isMyDropping: true }), { ...here, accuracy: 5000 }, 500).locked).toBe(false);
+  expect(lockMessage({ locked: true, remainingM: null, imprecise: true })).toBe('위치 오차가 커서 열 수 없어요. 정확한 위치 사용을 허용했는지 확인해주세요');
+});
+
 test('안내 문구 — 남은 거리는 올림', () => {
   expect(lockMessage({ locked: true, remainingM: 113 })).toBe('120m 더 가까이 가면 들을 수 있어요');
   expect(lockMessage({ locked: true, remainingM: 120 })).toBe('120m 더 가까이 가면 들을 수 있어요');

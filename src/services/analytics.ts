@@ -74,6 +74,11 @@ export function setAnalyticsLocation(lat: number, lng: number) {
   context.lat = Math.round(lat * 1e6) / 1e6;
   context.lng = Math.round(lng * 1e6) / 1e6;
 }
+/** 위치 권한·위치 서비스를 끄면 — 마지막 좌표를 계속 붙이지 않게 */
+export function clearAnalyticsLocation() {
+  context.lat = undefined;
+  context.lng = undefined;
+}
 
 let lastScreen: string | undefined;
 export function trackScreen(name: string | undefined, params?: object) {
