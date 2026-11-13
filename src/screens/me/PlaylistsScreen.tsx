@@ -19,7 +19,7 @@ const TABS: [Tab, string][] = [['mine', '전체'], ['liked', '좋아요'], ['dro
 /** 2열 격자 한 칸 — 정사각 커버(r18.9) + 이름 16 + 보조 12 */
 function Cell({ size, cover, title, sub, onPress }: { size: number; cover: React.ReactNode; title: string; sub: string; onPress: () => void }) {
   return (
-    <Press onPress={onPress} style={{ width: size, gap: 10 }}>
+    <Press onPress={onPress} trackAs="플레이리스트 칸" style={{ width: size, gap: 10 }}>
       {cover}
       <View style={{ gap: 2 }}>
         <T numberOfLines={1} style={{ fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22, letterSpacing: -0.32, color: '#090909' }}>{title}</T>
@@ -76,7 +76,7 @@ export default function PlaylistsScreen() {
           droppedPlaylists.length ? (
             <View style={grid}>
               {droppedPlaylists.map(d => (
-                <Cell key={d.droppingId} size={cell} cover={<Art uri={d.firstAlbumImageUrl} size={cell} radius={18.9} />} title={d.playlistName} sub={`${d.songIds.length}곡 · ${d.address}`} onPress={() => nav.navigate('PlaylistDrop', { dropId: d.droppingId })} />
+                <Cell key={d.droppingId} size={cell} cover={<Art uri={d.firstAlbumImageUrl} size={cell} radius={18.9} />} title={d.playlistName} sub={`${d.songIds.length}곡 · ${d.address}`} onPress={() => nav.navigate('PlaylistDrop', { dropId: d.droppingId, source: 'playlists' })} />
               ))}
             </View>
           ) : (
@@ -85,7 +85,7 @@ export default function PlaylistsScreen() {
         ) : likes.length ? (
           <View style={grid}>
             {likes.map(l => (
-              <Cell key={l.droppingId} size={cell} cover={<Art uri={l.imageUrl} size={cell} radius={18.9} />} title={l.title ?? l.topic ?? l.playlistName ?? ''} sub={`${l.droppingType === 'MUSIC' ? l.artist ?? '' : l.droppingType === 'VOTE' ? '투표' : '플레이리스트'} · ${l.address}`} onPress={() => nav.navigate(l.droppingType === 'VOTE' ? 'VoteDrop' : l.droppingType === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: l.droppingId })} />
+              <Cell key={l.droppingId} size={cell} cover={<Art uri={l.imageUrl} size={cell} radius={18.9} />} title={l.title ?? l.topic ?? l.playlistName ?? ''} sub={`${l.droppingType === 'MUSIC' ? l.artist ?? '' : l.droppingType === 'VOTE' ? '투표' : '플레이리스트'} · ${l.address}`} onPress={() => nav.navigate(l.droppingType === 'VOTE' ? 'VoteDrop' : l.droppingType === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: l.droppingId, source: 'playlists' })} />
             ))}
           </View>
         ) : (

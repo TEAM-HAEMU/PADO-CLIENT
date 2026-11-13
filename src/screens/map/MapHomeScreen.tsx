@@ -13,12 +13,14 @@ import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dropApi } from '@/api/endpoints';
 import type { DropSummary, MusicDropSummary } from '@/api/types';
+import type { DropOpenSource } from '@/navigation/types';
 import { DropPin, MeMarker, PIN_SIZE } from '@/components/map/DropPin';
 import { Art, Icon, Press, T } from '@/components/ui';
 import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useDropLock } from '@/hooks/useDropLock';
+import { useDropRadius } from '@/hooks/useDropRadius';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
 import { lockMessage } from '@/utils/dropLock';
@@ -60,6 +62,9 @@ const ANIMATED_PINS = 4;
 const dockTop = (bottomInset: number) => Math.max(bottomInset - 4, 14) + 50;
 // '가까운 드랍' 카드(상태 안내) 공통 모양 — 짙은 페이드 위 흰 카드
 const card = { marginHorizontal: 20, padding: 16, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.97)', borderWidth: 1, borderColor: colors.divider, flexDirection: 'row', alignItems: 'center', gap: 12 } as const;
+
+/** 지도 첫 로드는 앱 실행마다 한 번만 센다 */
+let mapLoadTracked = false;
 
 export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabParamList, 'Map'>) {
   const insets = useSafeAreaInsets();
@@ -186,17 +191,34 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const playingKey = usePreviewStore(st => st.key);
 
   // 목록에서 타입을 이미 알면 바로 해당 화면으로 (투표·플리는 미리보기 시트를 거치지 않음)
-  const openDrop = (d: DropSummary) => {
+  const openDrop = (d: DropSummary, source: DropOpenSource) => {
     const parent = navigation.getParent();
-    if (d.type === 'VOTE') parent?.navigate('VoteDrop', { dropId: d.droppingId });
-    else if (d.type === 'PLAYLIST') parent?.navigate('PlaylistDrop', { dropId: d.droppingId });
-    else parent?.navigate('PinPreview', { dropId: d.droppingId });
+    if (d.type === 'VOTE') parent?.navigate('VoteDrop', { dropId: d.droppingId, source });
+    else if (d.type === 'PLAYLIST') parent?.navigate('PlaylistDrop', { dropId: d.droppingId, source });
+    else parent?.navigate('PinPreview', { dropId: d.droppingId, source });
   };
-  const tapDrop = ({ d, lock }: (typeof sorted)[number]) => {
-    if (!lock.locked) return openDrop(d);
-    track('drop_locked_tap', { drop_id: d.droppingId, remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) });
+  const tapDrop = ({ d, m, lock }: (typeof sorted)[number], source: DropOpenSource) => {
+    if (!lock.locked) return openDrop(d, source);
+    track('drop_locked_tap', { drop_id: d.droppingId, type: d.type, source, distance_m: Math.round(m), remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) });
     toast(lockMessage(lock));
   };
+
+  // 지도 첫 로드 (앱 실행마다 한 번) — 주변 드랍 수·열 수 있는 드랍 수·반경 (반경 관련 분포용)
+  const radius = useDropRadius();
+  useEffect(() => {
+    if (mapLoadTracked || !coords || !nearby.isSuccess) return;
+    mapLoadTracked = true;
+    const open = sorted.filter(x => !x.lock.locked);
+    track('map_loaded', {
+      nearby_count: sorted.length,
+      playable_count: open.length,
+      locked_count: sorted.length - open.length,
+      nearest_m: sorted.length ? Math.round(sorted[0].m) : null,
+      nearest_playable_m: open.length ? Math.round(open[0].m) : null,
+      display_m: radius.displayMeters,
+      play_m: radius.playMeters,
+    });
+  }, [coords, nearby.isSuccess, sorted, radius]);
 
   const region = { latitude: here.latitude - 0.0012, longitude: here.longitude, latitudeDelta: 0.018, longitudeDelta: 0.012 };
 
@@ -269,7 +291,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
               anchor={{ x: box.tipX / box.w, y: box.tipY / box.h }}
               tracksViewChanges={tracks || animated}
               zIndex={active ? 3 : 2}
-              onPress={() => tapDrop(x)}
+              onPress={() => tapDrop(x, 'map_pin')}
             >
               {lock.locked ? (
                 <DropPin type={d.type} locked animated={false} title="잠긴 드랍" subtitle={formatDistance(m)} />
@@ -283,7 +305,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
 
       {/* 상단 페이드 + 동 이름 */}
       <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.96)', 'rgba(255,255,255,0.85)', 'rgba(255,255,255,0)']} locations={[0, insets.top / (insets.top + 96), 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 96 }} />
-      <Press onPress={recenter} accessibilityHint="내 위치로 지도를 다시 맞춰요" style={{ position: 'absolute', top: insets.top + 12, left: 20, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      <Press onPress={recenter} accessibilityHint="내 위치로 지도를 다시 맞춰요" trackAs="동 이름 (내 위치로)" style={{ position: 'absolute', top: insets.top + 12, left: 20, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
         <T v="title">{coords ? label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
         <Caret />
       </Press>
@@ -303,13 +325,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
           ) : null}
         </View>
         {!coords ? (
-          <Press onPress={fix === 'unavailable' ? retryLocation : undefined} style={card}>
+          <Press onPress={fix === 'unavailable' ? retryLocation : undefined} trackAs={`위치 다시 찾기 (${reason ?? 'locating'})`} style={card}>
             <Icon name="pin" size={22} color={colors.primary} />
             <T v="caption" c="ink2" style={{ flex: 1 }}>{locationHelp}</T>
             {fix === 'unavailable' ? <Icon name="chevronRight" size={16} color={colors.ink3} /> : null}
           </Press>
         ) : nearby.isError && !sorted.length ? (
-          <Press onPress={() => nearby.refetch()} style={card}>
+          <Press onPress={() => nearby.refetch()} trackAs="주변 드랍 다시 불러오기" style={card}>
             <Icon name="alert" size={22} color={colors.warning} />
             <T v="caption" c="ink2" style={{ flex: 1 }}>주변 드랍을 불러오지 못했어요. 눌러서 다시 시도</T>
           </Press>
@@ -320,7 +342,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
               if (lock.locked) {
                 // 잠긴 드랍 — 곡·커버 대신 자물쇠와 거리만
                 return (
-                  <Press key={d.droppingId} onPress={() => tapDrop(x)} accessibilityLabel={`잠긴 드랍 · ${formatDistance(m)}`} style={{ width: 66, alignItems: 'center', gap: 6 }}>
+                  <Press key={d.droppingId} onPress={() => tapDrop(x, 'map_list')} accessibilityLabel={`잠긴 드랍 · ${formatDistance(m)}`} trackAs="주변 목록 잠긴 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
                     <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: '#FAFAFA', backgroundColor: '#FFFFFF', opacity: 0.6 }}>
                       <View style={{ width: 49, height: 49, borderRadius: 9, backgroundColor: colors.card2, alignItems: 'center', justifyContent: 'center' }}>
                         <Icon name="lock" size={18} color={colors.ink3} />
@@ -336,7 +358,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
               const fresh = i < 3;
               const onAir = d.type === 'MUSIC' && !!playingKey && d.songId === playingKey;
               return (
-                <Press key={d.droppingId} onPress={() => tapDrop(x)} style={{ width: 66, alignItems: 'center', gap: 6 }}>
+                <Press key={d.droppingId} onPress={() => tapDrop(x, 'map_list')} trackAs="주변 목록 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
                   {/* Figma 'stay music' 아트: 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 (재생 중이면 시안 테두리 + 글로우) */}
                   <View style={[{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: onAir ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: fresh || onAir ? 1 : 0.6 }, onAir || fresh ? glow(onAir ? 0.9 : 0.5, 12) : null]}>
                     <Art uri={dropArt(d)} size={49} radius={9} />

@@ -10,6 +10,7 @@ import { Avatar, IconButton, Press, T, TopBar } from '@/components/ui';
 import { Glyph, VoteFill, VOTE_FILL_W } from '@/components/detail/glyphs';
 import { AddressPill, BgWave, CommentBar, DiscRow } from '@/components/detail/parts';
 import { qk, useComments, useDrop, useLikeCount, useMyLikes, useToggleLike } from '@/hooks/api';
+import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
@@ -20,11 +21,12 @@ import { expiryLabel, formatRelative } from '@/utils/format';
 import { track } from '@/services/analytics';
 
 export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDrop'>) {
-  const { dropId } = route.params;
+  const { dropId, source } = route.params;
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const drop = useDrop(dropId);
   const d = drop.data && isVoteDetail(drop.data) ? drop.data : null;
+  useDropOpenedEvent(dropId, 'VOTE', d, source);
   const comments = useComments(dropId).data ?? [];
   const likeCount = useLikeCount(dropId).data;
   const myLikes = useMyLikes().data;
@@ -106,6 +108,7 @@ function VoteRow({ o, mine, voted, pct, onVote }: { o: VoteOption; mine: boolean
         title={o.title}
         artist={o.artist}
         onPress={onVote}
+        trackAs="투표 후보 곡"
         active={mine}
         style={{ backgroundColor: mine ? '#F6FFFF' : '#F8FAFB', borderWidth: mine ? 1 : 0, borderColor: colors.accent }}
         right={<>

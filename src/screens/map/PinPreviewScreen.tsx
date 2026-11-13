@@ -25,6 +25,7 @@ import { listenFull } from '@/services/listen';
 import { SERVICES } from '@/services/musicLinks';
 import { startPreview, usePreview, usePreviewProgress } from '@/services/preview';
 import { useDropMenu } from '@/hooks/useDropMenu';
+import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
 import { colors, fonts } from '@/theme/tokens';
 import { artUrl } from '@/utils/artUrl';
 import { formatRelative } from '@/utils/format';
@@ -37,7 +38,7 @@ const RING_STROKE = 7;
 
 export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinPreview'>) {
   // 듣던 곡은 화면을 닫아도 계속 (다른 곡을 틀 때만 바뀜)
-  const { dropId } = route.params;
+  const { dropId, source } = route.params;
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const qc = useQueryClient();
@@ -62,12 +63,14 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const authed = useAuth(s => s.status === 'authed');
   const menu = useDropMenu(dropId, d?.userId, '드랍', d && 'username' in d ? d.username : undefined, song.data);
   const address = useDropAddress(dropId);
+  // 투표·플리 드랍은 넘겨받은 화면이 센다
+  useDropOpenedEvent(dropId, 'MUSIC', music, source);
 
   React.useEffect(() => {
     if (!d) return;
-    if (isVoteDetail(d)) navigation.replace('VoteDrop', { dropId });
-    else if (isPlaylistDetail(d)) navigation.replace('PlaylistDrop', { dropId });
-  }, [d, dropId, navigation]);
+    if (isVoteDetail(d)) navigation.replace('VoteDrop', { dropId, source });
+    else if (isPlaylistDetail(d)) navigation.replace('PlaylistDrop', { dropId, source });
+  }, [d, dropId, navigation, source]);
 
   if (!music) {
     return <Sheet><View style={{ height: 320 }}>{drop.isError ? <T v="body" c="ink2" style={{ textAlign: 'center', marginTop: 60 }}>{errorMessage(drop.error)}</T> : <Loading />}</View></Sheet>;

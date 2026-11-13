@@ -55,7 +55,7 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
     let skip: ReturnType<typeof setTimeout> | undefined;
     ours.current = current.songId;
     track('nearby_autoplay_play', { drop_id: current.droppingId, song_id: current.songId, nearby_count: drops.length });
-    startPreview({ id: current.songId, title: current.title, artist: current.artist, albumImagePath: current.albumImageUrl, previewUrl: current.previewUrl }).then(r => {
+    startPreview({ id: current.songId, title: current.title, artist: current.artist, albumImagePath: current.albumImageUrl, previewUrl: current.previewUrl, dropId: current.droppingId, autoplay: true }).then(r => {
       if (!alive) return;
       if (r === 'none') skip = setTimeout(() => markHeard(current.songId), 800);
       else if (r === 'unavailable') skip = setTimeout(() => markHeard(current.songId), 15_000);
@@ -95,7 +95,7 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
         if (!alive || now.key !== ours.current) return;
         if (r?.previewUrl) {
           queued.current = next.songId;
-          now.setUpNext({ key: next.songId, url: r.previewUrl, meta: { title: next.title, artist: next.artist, image: next.albumImageUrl } });
+          now.setUpNext({ key: next.songId, url: r.previewUrl, meta: { title: next.title, artist: next.artist, image: next.albumImageUrl, dropId: next.droppingId, autoplay: true } });
           return;
         }
         if (r && !r.unavailable) heard.current.add(next.songId); // 미리듣기 없는 곡 — 이번 바퀴에선 건너뜀

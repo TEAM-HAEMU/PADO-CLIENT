@@ -2,6 +2,7 @@
  * 드랍 ⋯ 메뉴 — 내 드랍이면 삭제, 남의 드랍이면 드랍 신고·사용자 신고·차단 (핀 미리보기·상세·재생 화면 공용)
  * song을 넘기면(음악 드랍) 맨 위에 '내 플리에 담기'. 드랍 정보가 있으면 '공유하기'(스토리 카드).
  */
+import { track } from '@/services/analytics';
 import { useNavigation } from '@react-navigation/native';
 import { dialog } from '@/components/ui/Dialog';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
@@ -47,7 +48,7 @@ export function useDropMenu(dropId: UUID | undefined, ownerId: UUID | undefined,
     if (!dropId) return;
     dialog.menu(title, [
       ...(song ? [{ text: '내 플리에 담기', icon: 'plus' as const, onPress: () => navigation.navigate('PlaylistPicker', { song }) }] : []),
-      ...(card ? [{ text: '공유하기', icon: 'share' as const, onPress: () => navigation.navigate('ShareCard', card) }] : []),
+      ...(card ? [{ text: '공유하기', icon: 'share' as const, onPress: () => { track('share_opened', { kind: 'drop', drop_id: dropId, source: 'drop_menu' }); navigation.navigate('ShareCard', card); } }] : []),
       ...(mine
         ? [{ text: '드랍 삭제', style: 'destructive' as const, icon: 'trash' as const, onPress: remove }]
         : [

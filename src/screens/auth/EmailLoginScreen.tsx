@@ -14,6 +14,7 @@ import { Wave } from '@/components/ui/Wave';
 import { env } from '@/config';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
+import { track } from '@/services/analytics';
 import { useAuth } from '@/store/auth';
 import { colors } from '@/theme/tokens';
 
@@ -38,8 +39,9 @@ export default function EmailLoginScreen({ navigation, route }: RootScreen<'Emai
     if (busy) return;
     if (!email.trim() || !password) return setError('이메일과 비밀번호를 입력해주세요.');
     setBusy(true); setError(null);
+    track('login_started', { method: 'email' });
     try { await signIn(await authApi.login(email.trim(), password), { method: 'email' }); }
-    catch (e) { setError(errorMessage(e)); }
+    catch (e) { track('login_failed', { method: 'email', code: (e as { code?: string }).code ?? null }); setError(errorMessage(e)); }
     finally { setBusy(false); }
   };
 

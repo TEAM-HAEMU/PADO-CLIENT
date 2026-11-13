@@ -10,6 +10,7 @@ import { Art, Avatar, Empty, Loading, Press, SecondaryButton, T, TopBar } from '
 import { MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
 import { errorMessage } from '@/api/errors';
+import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
 import { useDrop, useNotifications, useSong } from '@/hooks/api';
 import { useDropLock } from '@/hooks/useDropLock';
@@ -64,13 +65,14 @@ export default function NotificationsScreen() {
 
   const lockOf = useDropLock();
   const open = async (n: AppNotification) => {
+    track('notification_opened', { event: n.eventName, unread: !n.readAt, has_drop: !!(str(n.data.droppingId) ?? findNearbyDrop(n.data)) });
     if (!n.readAt) notificationApi.read(n.id).then(refresh).catch(() => {});
     const dropId = str(n.data.droppingId) ?? findNearbyDrop(n.data);
     // 주변 새 드랍도 재생 반경 밖이면 지도와 같이 열지 않는다 (위치를 아는 드랍만 — 내 드랍·좋아요한 드랍은 열림)
     const known = dropId ? cachedSummary(dropId) : undefined;
     const lock = known ? lockOf(known) : null;
-    if (lock?.locked) toast(lockMessage(lock));
-    else if (dropId) nav.navigate('PinPreview', { dropId });
+    if (lock?.locked) { track('drop_locked_tap', { drop_id: dropId, type: known?.type, source: 'notification', remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) }); toast(lockMessage(lock)); }
+    else if (dropId) nav.navigate('PinPreview', { dropId, source: 'notification' });
     else if (n.eventName === 'dropping-created') {
       // 이미 사라졌거나 지금 주변(반경 밖)에 없으면 — 말없이 지도로 보내면 고장처럼 보이니 이유를 알린다
       toast('이 드랍은 지금 근처에 없거나 사라졌어요.');
@@ -112,7 +114,7 @@ export default function NotificationsScreen() {
             const m = META[n.eventName] ?? META['dropping-created'];
             const unread = !n.readAt;
             return (
-              <Press onPress={() => open(n)} style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 10, paddingVertical: 9, borderRadius: 12, backgroundColor: unread ? UNREAD_BG : 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: unread ? UNREAD_LINE : 'transparent' }}>
+              <Press onPress={() => open(n)} trackAs="알림 항목" style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 10, paddingVertical: 9, borderRadius: 12, backgroundColor: unread ? UNREAD_BG : 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: unread ? UNREAD_LINE : 'transparent' }}>
                 <View style={{ width: 62, height: 62 }}>
                   <NotifThumb name={m.who(n.data)} data={n.data} />
                   <View style={{ position: 'absolute', left: 47, top: 46, padding: 3.2, borderRadius: 999, backgroundColor: m.tone, borderWidth: 0.64, borderColor: '#EBF9FE' }}>

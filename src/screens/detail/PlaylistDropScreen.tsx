@@ -9,6 +9,7 @@ import { IconButton, Press, T } from '@/components/ui';
 import { Glyph } from '@/components/detail/glyphs';
 import { BgWave, DiscRow, PlaylistHero } from '@/components/detail/parts';
 import { useCommentCount, useDrop, useLikeCount, useMyLikes, useToggleLike } from '@/hooks/api';
+import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
@@ -20,19 +21,20 @@ import { expiryLabel } from '@/utils/format';
 import { shuffled } from '@/utils/shuffle';
 
 export default function PlaylistDropScreen({ navigation, route }: RootScreen<'PlaylistDrop'>) {
-  const { dropId } = route.params;
+  const { dropId, source } = route.params;
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const drop = useDrop(dropId);
   const d = drop.data && isPlaylistDetail(drop.data) ? drop.data : null;
+  useDropOpenedEvent(dropId, 'PLAYLIST', d, source);
   // 플리 드랍 핀을 누르면 첫 곡 미리듣기를 바로
   const first = d?.songs[0];
   const autoStarted = React.useRef(false);
   React.useEffect(() => {
     if (!first || autoStarted.current) return;
     autoStarted.current = true;
-    startPreview({ id: first.songId, title: first.title, artist: first.artist, albumImagePath: first.albumImagePath, previewUrl: first.previewUrl });
-  }, [first]);
+    startPreview({ id: first.songId, title: first.title, artist: first.artist, albumImagePath: first.albumImagePath, previewUrl: first.previewUrl, dropId });
+  }, [first, dropId]);
   const playingKey = usePreviewStore(s => s.key);
   const likeCount = useLikeCount(dropId).data;
   const commentCount = useCommentCount(dropId).data;

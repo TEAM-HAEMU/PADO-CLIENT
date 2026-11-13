@@ -8,7 +8,8 @@ import { PinGlyph } from '@/components/drop/glyphs';
 import { DiscArt } from '@/components/drop/parts';
 import { Chip, PrimaryButton, T, TopBar } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
-import { useCreateDrop } from '@/hooks/api';
+import { useCreateDrop, useMyDrops } from '@/hooks/api';
+import { regionOf } from '@/utils/address';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
 import { useLocation } from '@/services/location';
@@ -17,7 +18,7 @@ import { draftArt, useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { josa } from '@/utils/josa';
-import { track } from '@/services/analytics';
+import { detailedOnly, track } from '@/services/analytics';
 
 const MAX = 255; // 명세: content 최대 255자
 const SUGGEST = ['퇴근길에 딱', '여기 풍경이랑 잘 어울려요', '친구와 함께 듣고싶어요', '여기서 처음 들었어요'];
@@ -31,6 +32,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   // 뒤로 갔다 와도 쓰던 메모가 남도록 초안에도 저장 (렌더 중이 아니라 반영 뒤에)
   useEffect(() => { useDraft.getState().set({ content: text }); }, [text]);
   const create = useCreateDrop();
+  const myDrops = useMyDrops().data;
   const scroll = useFocusedInputScroll();
   const art = draftArt(draft);
   // 'GANADARA를 고르셨군요! / 음악을 바다에 빠뜨려보세요.' — 조사는 곡·플리 이름 받침에 맞춘다
@@ -61,7 +63,10 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
     else return toast('드랍할 곡을 먼저 골라주세요.', 'error');
     create.mutate(body, {
       onSuccess: () => {
-        track('drop_created', { type: body.type, note_length: body.content.length, song_id: 'songId' in body ? body.songId : undefined, option_count: 'options' in body ? body.options.length : undefined, playlist_new: 'playlistName' in body, address: body.address, lat: body.latitude, lng: body.longitude });
+        // 첫 드랍 여부 — 내 드랍 목록을 받아 둔 경우에만 (모르면 null)
+        const first = myDrops ? myDrops.length === 0 : null;
+        track('drop_created', { type: body.type, note_length: body.content.length, song_id: 'songId' in body ? body.songId : undefined, option_count: 'options' in body ? body.options.length : undefined, playlist_new: 'playlistName' in body, first_drop: first, region: regionOf(body.address), ...detailedOnly({ address: body.address, lat: body.latitude, lng: body.longitude }) });
+        if (first) track('first_drop_created', { type: body.type });
         // 공유 카드용 — 제목 줄은 곡명 · 아티스트 (투표는 주제 · 후보 수, 플리는 이름 · 곡 수)
         const sub = draft.type === 'MUSIC' ? draft.song?.artist ?? '' : draft.type === 'VOTE' ? `후보 ${draft.options.length}곡` : draft.playlist?.kind === 'new' ? `${draft.playlist.songs.length}곡` : '플레이리스트';
         const card = { art, title: head.name, sub, place: body.address, note: body.content, latitude: body.latitude, longitude: body.longitude };

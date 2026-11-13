@@ -10,10 +10,11 @@ import Video from 'react-native-video';
 import { create } from 'zustand';
 import { toast } from '@/store/toast';
 import { findPreview, noPreviewMessage, type PreviewSource } from './previewSource';
-import { track } from '@/services/analytics';
+import { currentDropId, track } from '@/services/analytics';
 
 /** 잠금화면·알림에 보일 곡 정보 */
-export interface PreviewMeta { title: string; artist: string; image?: string | null }
+/** dropId·autoplay는 분석용 (preview_started에 어느 드랍의 곡인지, 주변 자동 재생인지) */
+export interface PreviewMeta { title: string; artist: string; image?: string | null; dropId?: string; autoplay?: boolean }
 
 interface PreviewState {
   key: string | null;
@@ -72,7 +73,7 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
   setUpNext: upNext => set({ upNext }),
   play: (key, url, meta) => {
     if (intentKey !== key) cancelIntent(); // 다른 곡의 대기 중인 재생 요청은 버린다
-    if (get().key !== key) track('preview_started', { song_id: key, title: meta?.title, artist: meta?.artist });
+    if (get().key !== key) track('preview_started', { song_id: key, title: meta?.title, artist: meta?.artist, drop_id: meta?.dropId ?? currentDropId(), autoplay: !!meta?.autoplay });
     set(get().key === key ? { paused: false, endedKey: null, pending: null } : { key, url, meta: meta ?? null, paused: false, position: 0, duration: 30, endedKey: null, pending: null, buffering: true, upNext: null });
   },
   toggle: () => { const paused = !get().paused; track(paused ? 'preview_paused' : 'preview_resumed', { song_id: get().key, position: Math.round(get().position) }); set({ paused }); },
@@ -83,7 +84,7 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
     track('preview_completed', { song_id: key });
     // 이어 틀 곡이 있으면 플레이어를 내리지 않고 바로 다음 곡으로 (endedKey로 끝난 곡을 알린다)
     if (upNext && upNext.key !== key) {
-      track('preview_started', { song_id: upNext.key, title: upNext.meta.title, artist: upNext.meta.artist });
+      track('preview_started', { song_id: upNext.key, title: upNext.meta.title, artist: upNext.meta.artist, drop_id: upNext.meta.dropId, autoplay: !!upNext.meta.autoplay });
       set({ key: upNext.key, url: upNext.url, meta: upNext.meta, paused: false, position: 0, duration: 30, endedKey: key, pending: null, buffering: true, upNext: null });
       return;
     }
@@ -147,8 +148,8 @@ export function stopPreviewFor(songId: string | undefined | null) {
  * 화면 밖(목록 선택 등)에서 곧바로 미리듣기 시작 — 이미 이 곡이면 이어서 재생.
  * none: 미리듣기 없는 곡 / unavailable: 지금 iTunes 조회 불가 / cancelled: 기다리는 사이 다른 곡·화면 이탈
  */
-type PreviewSong = PreviewSource & { id: string; albumImagePath?: string | null };
-const metaOf = (s: PreviewSong): PreviewMeta => ({ title: s.title, artist: s.artist, image: s.albumImagePath });
+type PreviewSong = PreviewSource & { id: string; albumImagePath?: string | null; dropId?: string; autoplay?: boolean };
+const metaOf = (s: PreviewSong): PreviewMeta => ({ title: s.title, artist: s.artist, image: s.albumImagePath, dropId: s.dropId, autoplay: s.autoplay });
 
 export async function startPreview(song: PreviewSong): Promise<'ok' | 'none' | 'adult' | 'unavailable' | 'cancelled'> {
   const st = usePreviewStore.getState();

@@ -91,7 +91,7 @@ export default function ProfileScreen() {
     return { latitude, longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2, latitudeDelta, longitudeDelta };
   }, [drops, mapW]);
 
-  const openDrop = (d: DropSummary) => nav.navigate(d.type === 'VOTE' ? 'VoteDrop' : d.type === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: d.droppingId });
+  const openDrop = (d: DropSummary) => nav.navigate(d.type === 'VOTE' ? 'VoteDrop' : d.type === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: d.droppingId, source: 'profile' });
   const removeDrop = (d: DropSummary) => dialog.alert('드랍을 삭제할까요?', `'${dropTitle(d)}' 드랍이 지도에서 사라지고 되돌릴 수 없어요.`, [
     { text: '취소', style: 'cancel' },
     { text: '삭제', style: 'destructive', onPress: () => dropApi.remove(d.droppingId).then(() => { qc.invalidateQueries({ queryKey: ['myDrops'] }); qc.invalidateQueries({ queryKey: ['nearby'] }); toast('드랍을 삭제했어요.'); }).catch(e => toast(errorMessage(e), 'error')) },
@@ -162,7 +162,7 @@ export default function ProfileScreen() {
             ) : null}
             <View style={{ paddingHorizontal: 20, gap: 4 }}>
               {drops.length ? drops.map(d => (
-                <Press key={d.droppingId} onPress={() => openDrop(d)} onLongPress={() => removeDrop(d)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
+                <Press key={d.droppingId} onPress={() => openDrop(d)} onLongPress={() => removeDrop(d)} trackAs="내 드랍" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
                   <Art uri={dropArt(d)} size={52} radius={12} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <T v="bodyStrong" numberOfLines={1} style={ROW_TITLE}>{dropTitle(d)}</T>
@@ -178,7 +178,7 @@ export default function ProfileScreen() {
         ) : (
           <View style={{ paddingHorizontal: 20, marginTop: 30, gap: 4 }}>
             {likes.length ? likes.map(l => (
-              <Press key={l.droppingId} onPress={() => nav.navigate(l.droppingType === 'VOTE' ? 'VoteDrop' : l.droppingType === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: l.droppingId })} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
+              <Press key={l.droppingId} onPress={() => nav.navigate(l.droppingType === 'VOTE' ? 'VoteDrop' : l.droppingType === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: l.droppingId, source: 'profile' })} trackAs="좋아요한 드랍" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
                 <Art uri={l.imageUrl} size={52} radius={12} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <T v="bodyStrong" numberOfLines={1} style={ROW_TITLE}>{l.title ?? l.topic ?? l.playlistName}</T>

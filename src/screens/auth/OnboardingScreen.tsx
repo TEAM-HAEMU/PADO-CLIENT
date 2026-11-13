@@ -14,6 +14,7 @@ import { IntroArt } from '@/components/auth/IntroArt';
 import { Wave } from '@/components/ui/Wave';
 import type { RootScreen } from '@/navigation/types';
 import { usePrefs } from '@/store/prefs';
+import { track } from '@/services/analytics';
 import { colors } from '@/theme/tokens';
 
 const PAGES = [
@@ -54,7 +55,11 @@ export default function OnboardingScreen({ navigation }: RootScreen<'Onboarding'
   const [art, setArt] = useState<{ y: number; h: number } | null>(null);
 
   // 로그인은 쌓아서 연다 — 로그인 화면의 '뒤로'로 마지막 장에 돌아올 수 있게
-  const finish = () => { seen(); navigation.navigate('Login'); };
+  const finish = () => {
+    if (!usePrefs.getState().onboardingSeen) track('onboarding_completed', { page: page + 1 });
+    seen();
+    navigation.navigate('Login');
+  };
   const go = (i: number) => {
     if (i >= PAGES.length) return finish();
     pager.current?.scrollTo({ x: i * width, animated: true });
