@@ -54,9 +54,11 @@ export default function DropTypeScreen({ navigation }: RootScreen<'DropType'>) {
   const place = useLocation(s => s.address || s.label);
   const hasFix = useLocation(s => !!s.coords);
   const locating = useLocation(s => s.fix === 'locating');
+  // 이 창이 떠 있는 동안도 위치 감시를 붙잡는다 (지도와 같은 감시 하나 — 따로 새로 만들지 않음)
+  React.useEffect(() => useLocation.getState().start(), []);
   const retry = async () => {
     const loc = useLocation.getState();
-    if ((await loc.refreshPermission()) === 'granted' || (await loc.requestPermission()) === 'granted') loc.start();
+    if ((await loc.refreshPermission()) === 'granted' || (await loc.requestPermission()) === 'granted') loc.restart();
     else Linking.openSettings();
   };
   if (!hasFix) {

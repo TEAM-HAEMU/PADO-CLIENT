@@ -60,7 +60,7 @@ const card = { marginHorizontal: 20, padding: 16, borderRadius: 18, backgroundCo
 export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabParamList, 'Map'>) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const { coords, fix, reason, label, setPlace, start, refreshPermission, requestPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission })));
+  const { coords, fix, reason, label, setPlace, start, restart, refreshPermission, requestPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission })));
   // 위치를 받기 전엔 지난번 위치 근처에 카메라를 둔다 (처음 켤 때 엉뚱한 동네가 먼저 보이지 않게)
   const startHint = useRef(lastKnown()).current; // 한 번만 읽는다 (매번 새 객체면 아래 정렬·자동 재생이 계속 다시 돈다)
   const here = coords ?? startHint ?? FALLBACK;
@@ -74,7 +74,9 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const animatePins = focused && appActive;
   useTermsUpdateCheck();
 
-  useEffect(() => start(), [start, watchKey]);
+  // 지도가 떠 있는 동안 위치 감시를 붙잡는다 (앱 전체에 하나). watchKey가 바뀌면(다시 시도) 처음부터 다시
+  useEffect(() => start(), [start]);
+  useEffect(() => { if (watchKey) restart(); }, [restart, watchKey]);
 
   // 설정에서 위치 권한·위치 서비스를 켜고 돌아오면 위치를 다시 잡는다
   useEffect(() => {
