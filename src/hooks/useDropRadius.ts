@@ -1,7 +1,7 @@
 /**
  * 드랍 보기 설정 (운영자가 어드민에서 관리) — 보기 모드(거리 / 같은 지역)·표시 반경·재생 반경·내가 있는 지역.
  * 받은 값은 kv에 저장. 서버에 아직 없거나 못 받으면 지난번 값, 그것도 없으면 기본값(거리 5km / 500m)으로 — 절대 막히지 않게.
- * 다시 묻는 때: 10분마다(모드가 바뀌었을 수 있음), 같은 지역 모드에서는 1km 넘게 움직였을 때도(지역이 바뀌었을 수 있음).
+ * 다시 묻는 때: 10분마다(모드가 바뀌었을 수 있음), 같은 지역 모드에서는 300m 넘게 움직였을 때도(지역이 바뀌었을 수 있음).
  * 위치는 주소가 아니라 좌표로 보낸다(서버가 행정구역을 판정).
  */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -25,7 +25,7 @@ async function fetchRadius(at: Coords | null) {
   return r;
 }
 
-/** 앱 전체가 같이 쓰는 기준 좌표 — 위치가 1km 넘게 바뀔 때만 새 객체 */
+/** 앱 전체가 같이 쓰는 기준 좌표 — 위치가 300m 넘게 바뀔 때만 새 객체 */
 let anchor: Coords | null = null;
 const anchorOf = (c: Coords | null) => (anchor = nextAnchor(anchor, c));
 

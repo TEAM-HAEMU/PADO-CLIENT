@@ -56,13 +56,13 @@ test('주변 검색 거리 — 거리 모드는 표시 반경, 전국·같은 �
   expect(searchKm(region())).toBe(WIDE_SEARCH_KM);
 });
 
-test('기준 좌표는 1km 넘게 움직였을 때만 바뀐다', () => {
+test('기준 좌표는 300m 넘게 움직였을 때만 바뀐다', () => {
   const home = { latitude: 35.1575, longitude: 129.0604 };
   const a = nextAnchor(null, home);
   expect(a).toEqual(home);
   expect(nextAnchor(a, null)).toBe(a);
-  expect(nextAnchor(a, { latitude: home.latitude + 800 / 111_195, longitude: home.longitude })).toBe(a);
-  const moved = { latitude: home.latitude + 1200 / 111_195, longitude: home.longitude };
+  expect(nextAnchor(a, { latitude: home.latitude + 250 / 111_195, longitude: home.longitude })).toBe(a);
+  const moved = { latitude: home.latitude + 400 / 111_195, longitude: home.longitude };
   expect(nextAnchor(a, moved)).toEqual(moved);
   expect(nextAnchor(a, moved)).not.toBe(a);
 });

@@ -10,7 +10,7 @@ export const DEFAULT_RADIUS: DropRadius = { mode: 'DISTANCE', regionUnit: null, 
 /** 전국·같은 지역 모드에서 주변 검색에 보내는 거리(km) — 서버가 설정대로 고른다 */
 export const WIDE_SEARCH_KM = 20_000;
 /** 같은 지역 모드에서 지역을 다시 물을 만큼 움직인 거리 */
-export const REGION_REFETCH_M = 1000;
+export const REGION_REFETCH_M = 300;
 
 const UNITS: RegionUnit[] = ['SIDO', 'SIGUNGU', 'DONG'];
 const isInt = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
@@ -68,7 +68,7 @@ export function permissionScope(r: DropRadius) {
 }
 
 /**
- * 설정을 다시 물을 기준 좌표 — 1km 넘게 움직였을 때만 바꾼다 (같은 지역 모드의 지역이 바뀌었을 수 있음).
+ * 설정을 다시 물을 기준 좌표 — 300m 넘게 움직였을 때만 바꾼다 (같은 지역 모드의 지역이 바뀌었을 수 있음).
  * 같은 값을 돌려주면 구독한 화면이 다시 그려지지 않는다
  */
 export function nextAnchor(prev: Coords | null, next: Coords | null): Coords | null {
