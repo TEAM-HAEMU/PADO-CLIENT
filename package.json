@@ -15,7 +15,8 @@
     "pods": "cd ios && LANG=en_US.UTF-8 pod install",
     "postinstall": "patch-package",
     "test:api": "PADO_LIVE=1 jest __tests__/apiContract.test.ts --runInBand",
-    "ios:device": "bash scripts/ios-device.sh"
+    "ios:device": "bash scripts/ios-device.sh",
+    "sentry:props": "node scripts/sentry-properties.js"
   },
   "dependencies": {
     "@amplitude/analytics-react-native": "^1.11.0",
