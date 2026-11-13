@@ -87,8 +87,8 @@ export function Press({ style, children, onPressIn, onPressOut, onPress, onLongP
   );
 }
 
-/** Figma 'button' 컴포넌트: 알약 47px, 켜짐 #2B9CFF + 짙은 글자 / 꺼짐(보조) #DFF0FF + 파란 글자 */
-const BTN_INK = '#0B1535';
+/** Figma 'button' 컴포넌트: 알약 47px, 켜짐 #2B9CFF + 밝은 글자(colors.onPrimary) / 꺼짐(보조) #DFF0FF + 파란 글자 */
+const BTN_INK = colors.onPrimary;
 interface BtnProps extends PressableProps { label: string; icon?: IconName; loading?: boolean; style?: ViewStyle; right?: IconName }
 export function PrimaryButton({ label, icon, loading, disabled, style, right, ...rest }: BtnProps) {
   return (
