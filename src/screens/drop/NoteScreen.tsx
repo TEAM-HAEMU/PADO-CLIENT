@@ -1,5 +1,5 @@
 /** 3.3 한마디 남기기 — Figma 'B 3.3 한마디 남기기' (고른 곡 · 한마디 입력 · 추천 문구) → POST /droppings */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { errorMessage } from '@/api/errors';
@@ -11,10 +11,12 @@ import { Wave } from '@/components/ui/Wave';
 import { useCreateDrop, useMyDrops } from '@/hooks/api';
 import { regionOf } from '@/utils/address';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
+import { navigationRef } from '@/navigation/ref';
 import type { RootScreen } from '@/navigation/types';
 import { useLocation } from '@/services/location';
 import { usePreviewStore } from '@/services/preview';
 import { draftArt, useDraft } from '@/store/draft';
+import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { josa } from '@/utils/josa';
@@ -32,6 +34,8 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   // 뒤로 갔다 와도 쓰던 메모가 남도록 초안에도 저장 (렌더 중이 아니라 반영 뒤에)
   useEffect(() => { useDraft.getState().set({ content: text }); }, [text]);
   const create = useCreateDrop();
+  // 제출 중 — 렌더를 기다리지 않고 바로 막는다 (빠른 연타로 같은 드랍이 두 번 만들어지지 않게)
+  const submitting = useRef(false);
   const myDrops = useMyDrops().data;
   const scroll = useFocusedInputScroll();
   const art = draftArt(draft);
@@ -50,7 +54,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   const songPlaying = usePreviewStore(st => !!songId && st.key === songId && !st.paused);
 
   const submit = () => {
-    if (create.isPending) return;
+    if (submitting.current || create.isPending) return;
     // 실제 위치를 못 받았으면 엉뚱한 곳에 드랍되지 않게 막는다
     if (!coords) return toast('지금 위치를 확인할 수 없어요. 위치 권한과 GPS를 확인해주세요.', 'error');
     const pos = coords;
@@ -61,8 +65,11 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
     else if (draft.playlist?.kind === 'existing') body = { ...base, type: 'PLAYLIST', playlistId: draft.playlist.playlistId };
     else if (draft.playlist?.kind === 'new') body = { ...base, type: 'PLAYLIST', playlistName: draft.playlist.name, songIds: draft.playlist.songs.map(s => s.id) };
     else return toast('드랍할 곡을 먼저 골라주세요.', 'error');
-    create.mutate(body, {
-      onSuccess: () => {
+    // mutate(body, { onSuccess })의 호출별 콜백은 화면이 닫히면(제출 중 뒤로 가기) 불리지 않는다 → 드랍은 생겼는데 초안이 남아
+    // 다시 제출하면 중복이 된다. 약속(mutateAsync)으로 받아 화면이 닫혀도 초안 초기화·성공 화면 이동을 한다
+    submitting.current = true;
+    create.mutateAsync(body).then(
+      () => {
         // 첫 드랍 여부 — 내 드랍 목록을 받아 둔 경우에만 (모르면 null)
         const first = myDrops ? myDrops.length === 0 : null;
         track('drop_created', { type: body.type, note_length: body.content.length, song_id: 'songId' in body ? body.songId : undefined, option_count: 'options' in body ? body.options.length : undefined, playlist_new: 'playlistName' in body, first_drop: first, region: regionOf(body.address), ...detailedOnly({ address: body.address, lat: body.latitude, lng: body.longitude }) });
@@ -70,9 +77,14 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
         // 공유 카드용 — 제목 줄은 곡명 · 아티스트 (투표는 주제 · 후보 수, 플리는 이름 · 곡 수)
         const sub = draft.type === 'MUSIC' ? draft.song?.artist ?? '' : draft.type === 'VOTE' ? `후보 ${draft.options.length}곡` : draft.playlist?.kind === 'new' ? `${draft.playlist.songs.length}곡` : '플레이리스트';
         const card = { art, title: head.name, sub, place: body.address, note: body.content, latitude: body.latitude, longitude: body.longitude };
-        draft.reset(); navigation.reset({ index: 1, routes: [{ name: 'Tabs' }, { name: 'DropSuccess', params: { art, content: body.content, kind: body.type, card } }] }); },
-      onError: e => toast(errorMessage(e), 'error'),
-    });
+        draft.reset();
+        const success = { index: 1, routes: [{ name: 'Tabs' as const }, { name: 'DropSuccess' as const, params: { art, content: body.content, kind: body.type, card } }] };
+        // 화면이 이미 닫혔을 수 있어 루트 내비게이션으로 (로그아웃했으면 이동하지 않음)
+        if (navigationRef.isReady()) { if (useAuth.getState().status === 'authed') navigationRef.reset(success); }
+        else navigation.reset(success);
+      },
+      e => toast(errorMessage(e), 'error'),
+    ).finally(() => { submitting.current = false; });
   };
 
   return (
