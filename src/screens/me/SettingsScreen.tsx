@@ -109,7 +109,7 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, gap: 20, paddingBottom: insets.bottom + 32 }}>
         {/* Figma: 설정 가운데쯤(안전·약관 뒤)에 wave가 깔린다 */}
         <Wave scale={1.2} style={{ position: 'absolute', left: -78, right: 0, top: 770 }} />
-        <Press onPress={() => navigation.navigate('ProfileEdit')} style={{ flexDirection: 'row', alignItems: 'center', gap: 18, height: 80, paddingHorizontal: 6 }}>
+        <Press onPress={() => navigation.navigate('ProfileEdit')} trackAs="프로필 편집" style={{ flexDirection: 'row', alignItems: 'center', gap: 18, height: 80, paddingHorizontal: 6 }}>
           <Avatar uri={me?.profileImageUrl} name={me?.username} size={62} />
           <View style={{ flex: 1, gap: 4 }}>
             <T v="bodyStrong" style={{ fontSize: 14, lineHeight: 20, letterSpacing: 0, color: '#000000' }}>{me?.username ?? ' '}</T>
@@ -139,10 +139,11 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
           <Row glyph="mail" tint={colors.warning} title="마케팅 정보 수신" sub="이벤트·새 기능 소식" last right={<Toggle label="마케팅 정보 수신" value={marketing} onChange={setMarketing} />} />
         </Group>
 
-        {/* 디자인의 '안전' 묶음 — 이용 데이터 분석 동의(App Store 5.1.2)도 여기 둔다 */}
+        {/* 디자인의 '안전' 묶음 — 이용 분석 두 단계도 여기 둔다 (동의창 없이 설정에서만, App Store 5.1.2) */}
         <Group title="안전 · 개인정보">
           <Row glyph="block" tint={colors.ink3} title="차단한 사용자" onPress={() => navigation.navigate('BlockedUsers')} right={<Chevron />} />
-          <Row glyph="analytics" tint={colors.ink3} title="이용 데이터 분석" sub="동의하면 사용 기록·위치로 서비스를 개선해요 (선택, Amplitude)" last right={<Toggle label="이용 데이터 분석" value={prefs.analytics} onChange={prefs.setAnalytics} />} />
+          <Row glyph="analytics" tint={colors.ink3} title="이용 분석" sub="화면·버튼 사용을 기기 단위로 익명 수집" right={<Toggle label="이용 분석" value={prefs.analyticsMode !== 'off'} onChange={v => prefs.setAnalyticsMode(v ? 'basic' : 'off')} />} />
+          <Row glyph="analytics" tint={colors.ink3} title="상세 분석" sub="계정·정확한 위치·화면 기록 포함 (선택)" last right={<Toggle label="상세 분석" value={prefs.analyticsMode === 'detailed'} onChange={v => prefs.setAnalyticsMode(v ? 'detailed' : 'basic')} />} />
         </Group>
 
         <Group title="약관 및 정보">

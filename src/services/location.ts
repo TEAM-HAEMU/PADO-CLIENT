@@ -2,7 +2,8 @@ import Geolocation from '@react-native-community/geolocation';
 import { Platform } from 'react-native';
 import { check, PERMISSIONS, request, requestMultiple, RESULTS } from 'react-native-permissions';
 import { create } from 'zustand';
-import { setAnalyticsLocation, track } from '@/services/analytics';
+import { setAnalyticsLocation, setAnalyticsRegion, track } from '@/services/analytics';
+import { regionOf } from '@/utils/address';
 import { kv } from '@/store/storage';
 import type { Coords } from '@/utils/geo';
 
@@ -135,7 +136,11 @@ export const useLocation = create<LocationState>((set, get) => {
     permission: 'unknown',
     label: '',
     address: '',
-    setPlace: (label, address) => set({ label, address: address.slice(0, 200) }),
+    setPlace: (label, address) => {
+      set({ label, address: address.slice(0, 200) });
+      // 분석에는 시·군·구까지만 (동·번지는 보내지 않음)
+      setAnalyticsRegion(regionOf(address));
+    },
     refreshPermission: async () => {
       // Android에서 '대략적인 위치'만 허용했으면 정밀 위치는 거부로 나오므로 대략 위치도 본다
       const coarse = Platform.OS === 'android' ? await check(PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION) : null;
@@ -155,6 +160,7 @@ export const useLocation = create<LocationState>((set, get) => {
         granted = ok(await request(PERM));
       }
       const p: PermState = granted ? 'granted' : 'denied';
+      track('location_permission_result', { result: p, was: get().permission });
       set({ permission: p });
       return p;
     },

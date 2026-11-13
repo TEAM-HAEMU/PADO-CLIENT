@@ -20,7 +20,7 @@ import { PreviewHost } from '@/services/preview';
 import { MiniDisc } from '@/components/music/MiniDisc';
 import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
-import { initAnalytics, trackScreen } from '@/services/analytics';
+import { setAnalyticsMode, startAppStateTracking, trackAppOpened, trackScreen } from '@/services/analytics';
 import { colors } from '@/theme/tokens';
 
 const theme = { ...DefaultTheme, dark: false, colors: { ...DefaultTheme.colors, background: colors.page, card: colors.card, text: colors.ink, border: colors.line, primary: colors.primary } };
@@ -31,10 +31,14 @@ LogBox.ignoreLogs(['ImageBackground is deprecated']);
 export default function App() {
   const bootstrap = useAuth(s => s.bootstrap);
   useEffect(() => {
-    // 분석은 선택 동의 — 동의한 경우에만 먼저 켜서 자동 로그인(bootstrap)의 사용자 식별이 기록되게 한다
-    (usePrefs.getState().analytics ? initAnalytics({ optOut: false }) : Promise.resolve()).finally(() => bootstrap());
+    // 분석 모드(기본 익명·상세·끔)를 먼저 적용해 자동 로그인(bootstrap)의 사용자 식별(상세일 때만)이 기록되게 한다
+    startAppStateTracking();
+    setAnalyticsMode(usePrefs.getState().analyticsMode)
+      .then(() => trackAppOpened())
+      .catch(() => {})
+      .finally(() => bootstrap());
   }, [bootstrap]);
-  const onNavState = () => { const r = navigationRef.getCurrentRoute(); trackScreen(r?.name, r?.params as object | undefined); };
+  const onNavState = () => { const r = navigationRef.getCurrentRoute(); trackScreen(r?.name, r?.params as object | undefined, r?.key); };
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.page }} {...touchTracker}>
       <SafeAreaProvider>

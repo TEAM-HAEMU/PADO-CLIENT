@@ -36,8 +36,13 @@ git update-index --skip-worktree ios/PADO/Info.plist android/app/src/main/res/va
 
 ## 분석 (Amplitude)
 
-`src/services/analytics.ts` — 화면 조회 · 모든 버튼 탭(`Press`) · 핵심 행동(가입·로그인, 미리듣기, 전체 듣기, 드랍·좋아요·댓글·투표, 플리, 신고, 설정 변경, API 오류) + 정밀 위치 + 세션 리플레이(입력칸 가림, 세션 30% 샘플링).
-실서버 빌드에서 `AMPLITUDE_API_KEY`가 있을 때만 보내고, 사용자는 설정 › 이용 데이터 분석에서 끌 수 있다.
+`src/services/analytics.ts` — 화면 조회·체류 시간 · 모든 버튼 탭(`Press`) · 가입부터 첫 드랍까지의 핵심 행동. 두 단계로 나뉜다.
+
+- 기본 이용 분석(기본 켜짐): 기기 단위 익명, 사용자 ID·정밀 위치·세션 리플레이 없음, 지역은 시·군·구까지
+- 상세 분석(설정에서 직접 켠 사람만): 사용자 ID · 정밀 위치 · 세션 리플레이(입력칸 가림, 세션 30% 샘플링)
+
+실서버 빌드에서 `AMPLITUDE_API_KEY`가 있을 때만 보내고, 설정 › 이용 분석에서 끌 수 있다. 동의창은 띄우지 않는다.
+앱 열기·드랍 열기·미리듣기·잠금 탭·공유는 서버(`POST /events`)에도 합계만 보낸다. 이벤트 목록은 [docs/analytics-events.md](docs/analytics-events.md), 차트 만드는 법은 [docs/amplitude-charts.md](docs/amplitude-charts.md).
 
 ## 테스트
 

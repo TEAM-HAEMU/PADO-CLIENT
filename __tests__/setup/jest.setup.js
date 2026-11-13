@@ -31,6 +31,8 @@ jest.mock('@amplitude/analytics-react-native', () => {
     identify: jest.fn(),
     reset: jest.fn(),
     setOptOut: jest.fn(),
+    remove: jest.fn(() => ({ promise: Promise.resolve() })),
+    flush: jest.fn(() => ({ promise: Promise.resolve() })),
     Identify,
     Types: { LogLevel: { None: 0, Warn: 2 } },
   };
