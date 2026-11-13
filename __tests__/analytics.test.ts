@@ -82,6 +82,33 @@ test('상세 모드: 사용자 ID·정밀 위치·세션 리플레이', async ()
   expect(a.detailedOnly({ lat: 1 })).toEqual({ lat: 1 });
 });
 
+test('상세 모드인데 위치가 없으면(권한 없음·아직 못 받음·권한을 끔) 정밀 위치만 빼고 사용자 ID는 유지', async () => {
+  const { a, amp } = load();
+  await a.setAnalyticsMode('detailed');
+  const noLoc = await enrichOf(amp).execute({ event_type: '$identify', user_id: 'user-123', location_lat: 9, location_lng: 9, event_properties: {} });
+  expect(noLoc.user_id).toBe('user-123');
+  expect(noLoc.location_lat).toBeUndefined();
+  expect(noLoc.location_lng).toBeUndefined();
+  expect(noLoc.event_properties).not.toHaveProperty('lat');
+  // 위치를 받았다가 권한을 끄면 마지막 좌표도 더는 붙이지 않는다
+  a.setAnalyticsLocation(35.1, 129.1);
+  a.clearAnalyticsLocation();
+  const cleared = await enrichOf(amp).execute({ event_type: 'tap', user_id: 'user-123', event_properties: {} });
+  expect(cleared.user_id).toBe('user-123');
+  expect(cleared.location_lat).toBeUndefined();
+  expect(cleared.event_properties).not.toHaveProperty('lat');
+});
+
+test('기본 모드는 위치가 있어도 없어도 사용자 ID를 지운다', async () => {
+  const { a, amp } = load();
+  await a.setAnalyticsMode('basic');
+  const ev = await enrichOf(amp).execute({ event_type: 'tap', user_id: 'leak', event_properties: {} });
+  expect(ev.user_id).toBeUndefined();
+  a.setAnalyticsLocation(35.1, 129.1);
+  const ev2 = await enrichOf(amp).execute({ event_type: 'tap', user_id: 'leak', event_properties: {} });
+  expect(ev2.user_id).toBeUndefined();
+});
+
 test('상세 → 기본으로 내리면 기기 ID를 새로 만들고 리플레이를 뗀다', async () => {
   const { a, amp } = load();
   await a.setAnalyticsMode('detailed');

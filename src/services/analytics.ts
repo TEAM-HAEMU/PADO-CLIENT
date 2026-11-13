@@ -72,8 +72,10 @@ const enrich: Types.EnrichmentPlugin = {
       ...(precise ? { lat: context.lat, lng: context.lng } : null),
       ...event.event_properties,
     };
+    // 정밀 위치는 상세 + 위치를 받았을 때만, 사용자 ID는 상세면 위치와 상관없이 (위치 권한이 없는 상세 사용자도 익명이 되지 않게)
     if (precise) { event.location_lat = context.lat; event.location_lng = context.lng; }
-    else { delete event.location_lat; delete event.location_lng; delete event.user_id; }
+    else { delete event.location_lat; delete event.location_lng; }
+    if (!detailed()) delete event.user_id;
     return event;
   },
 };

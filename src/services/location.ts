@@ -139,7 +139,9 @@ export const useLocation = create<LocationState>((set, get) => {
     const was = get();
     if (hard) {
       set({ coords: null, accuracy: null, fixedAt: null, stale: false, fix: 'unavailable', reason });
+      // 분석 공통 속성의 마지막 좌표·지역(시·군·구)도 더는 붙이지 않는다
       clearAnalyticsLocation();
+      setAnalyticsRegion(null);
     } else {
       set({ stale: !!was.coords, fix: 'unavailable', reason });
     }
