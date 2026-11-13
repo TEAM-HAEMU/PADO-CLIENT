@@ -143,20 +143,22 @@ export function MarkerArt({ images, size, radius, onLoad }: { images: (string | 
   );
 }
 
-/** 내 위치 — 입자 물결 링 */
-export function MeMarker() {
-  const dots: React.ReactNode[] = [];
-  for (let k = 0; k < 3; k++) {
-    const R = 22 + k * 14, n = 16 + k * 8;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2, s = 2.2 - k * 0.5;
-      dots.push(<Ellipse key={`${k}-${i}`} cx={60 + R * Math.cos(a)} cy={60 + R * Math.sin(a)} rx={s / 2} ry={s / 2} fill="#FFFFFF" opacity={(0.9 - k * 0.25) * (0.5 + 0.5 * Math.sin(i * 1.3))} />);
-    }
+/** 내 위치 링의 점 72개 — 늘 같은 모양이라 한 번만 만든다 */
+const ME_DOTS: React.ReactNode[] = [];
+for (let k = 0; k < 3; k++) {
+  const R = 22 + k * 14, n = 16 + k * 8;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2, s = 2.2 - k * 0.5;
+    ME_DOTS.push(<Ellipse key={`${k}-${i}`} cx={60 + R * Math.cos(a)} cy={60 + R * Math.sin(a)} rx={s / 2} ry={s / 2} fill="#FFFFFF" opacity={(0.9 - k * 0.25) * (0.5 + 0.5 * Math.sin(i * 1.3))} />);
   }
+}
+
+/** 내 위치 — 입자 물결 링 */
+export const MeMarker = React.memo(function MeMarkerView() {
   return (
     <View style={{ width: 120, height: 120, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={120} height={120} style={{ position: 'absolute' }}>{dots}</Svg>
+      <Svg width={120} height={120} style={{ position: 'absolute' }}>{ME_DOTS}</Svg>
       <View style={[{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, borderWidth: 4, borderColor: '#FFFFFF' }, glow(0.9, 14)]} />
     </View>
   );
-}
+});
