@@ -116,6 +116,31 @@ test('scrubEvent — user·요청 본문·Authorization 제거, 문구·브레�
   expect(ev.tags).toEqual({ app_env: 'prod', request_id: 'rid-1234-5678' });
 });
 
+test('scrubEvent — 화면 전환 거래의 route params·URL은 키째 뺀다 (가입 화면 signupToken·소셜 프로필)', () => {
+  const routeData = {
+    'sentry.op': 'navigation',
+    'route.name': 'Signup',
+    'route.key': 'Signup-k1',
+    'route.params.signupToken': 'st-abc',
+    'route.params.profile': '{"nickname":"파도","email":"a@b.co"}',
+    'route.url': 'pado://signup?token=st-abc',
+    'route.path': '/signup',
+    'previous_route.name': 'Login',
+    'previous_route.params.mode': 'social',
+    'route.has_been_seen': false,
+  };
+  const ev = scrubEvent({
+    transaction: 'Signup',
+    contexts: { trace: { trace_id: 't1', span_id: 's1', op: 'navigation', data: routeData }, app: { app_version: '1.0' } },
+    spans: [{ description: 'Navigation dispatch to screen Signup mounted', data: routeData }],
+  });
+  const kept = { 'sentry.op': 'navigation', 'route.name': 'Signup', 'route.key': 'Signup-k1', 'previous_route.name': 'Login', 'route.has_been_seen': false };
+  expect(ev.contexts?.trace).toEqual({ trace_id: 't1', span_id: 's1', op: 'navigation', data: kept });
+  expect(ev.spans?.[0].data).toEqual(kept);
+  expect(ev.contexts?.app).toEqual({ app_version: '1.0' });
+  expect(JSON.stringify(ev)).not.toContain('st-abc');
+});
+
 test('requestIdOf — ApiError.requestId만', () => {
   expect(requestIdOf({ requestId: 'rid-1234-5678' })).toBe('rid-1234-5678');
   expect(requestIdOf(new Error('x'))).toBeUndefined();
@@ -165,6 +190,14 @@ describe('monitoring (SDK 연결)', () => {
     const { beforeSend } = sentry.init.mock.calls[0][0];
     const out = beforeSend({ message: 'x a@b.co', user: { id: 'i' } }, { originalException: Object.assign(new Error('e'), { requestId: 'rid-1234-5678' }) });
     expect(out).toEqual({ message: 'x [email]', tags: { request_id: 'rid-1234-5678' } });
+  });
+
+  test('beforeSendTransaction도 route params를 빼고 거른다', () => {
+    const { m, sentry } = load();
+    m.initMonitoring('basic');
+    const { beforeSendTransaction } = sentry.init.mock.calls[0][0];
+    const out = beforeSendTransaction({ transaction: 'Signup', contexts: { trace: { op: 'navigation', data: { 'route.name': 'Signup', 'route.params.signupToken': 'st-abc' } } } });
+    expect(out.contexts.trace.data).toEqual({ 'route.name': 'Signup' });
   });
 
   test("이용 분석 '끔'이면 시작하지 않고, 켜져 있다가 끄면 닫는다 (닫힌 뒤 이벤트는 버림)", () => {
