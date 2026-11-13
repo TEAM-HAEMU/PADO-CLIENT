@@ -7,6 +7,7 @@
  *  - 목 모드에선 보내지 않는다
  */
 import { env } from '@/config';
+import { newRequestId, REQUEST_ID_HEADER } from '@/api/requestId';
 
 export const SERVER_EVENTS = ['app_opened', 'drop_opened', 'preview_started', 'drop_locked_tap', 'share_opened'] as const;
 export type ServerEventName = (typeof SERVER_EVENTS)[number];
@@ -29,7 +30,7 @@ const defaultSend: Send = async events => {
   try {
     const res = await fetch(`${env.apiBaseUrl}/events`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', [REQUEST_ID_HEADER]: newRequestId() },
       body: JSON.stringify({ events }),
       signal: ctrl.signal,
     });

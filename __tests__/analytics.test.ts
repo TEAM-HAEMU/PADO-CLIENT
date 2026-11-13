@@ -165,7 +165,8 @@ test('서버 집계 이벤트는 드랍 ID와 함께 모아서 토큰 없이 POS
   expect(fetch).toHaveBeenCalledTimes(1);
   const [url, init] = fetch.mock.calls[0];
   expect(url).toBe('https://api.test/api/v1/events');
-  expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
+  // 로그인 토큰 없이, 요청 ID만 (서버 로그와 잇는 용도)
+  expect(init.headers).toEqual({ 'Content-Type': 'application/json', 'X-Request-Id': expect.stringMatching(/^[A-Za-z0-9-]{8,64}$/) });
   expect(JSON.parse(init.body)).toEqual({ events: [{ name: 'drop_opened', droppingId: 'd1' }, { name: 'preview_started' }] });
 });
 
