@@ -5,7 +5,6 @@
  */
 import React from 'react';
 import { Image, useWindowDimensions, View } from 'react-native';
-import { useQueryClient } from '@tanstack/react-query';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
@@ -16,7 +15,7 @@ import { ServiceGlyph } from '@/components/ui/Brand';
 import { Sheet } from '@/components/ui/Sheet';
 import { PreviewCredit } from '@/components/music/PreviewRow';
 import { CommentGlyph, HeartGlyph, MoreGlyph, PinGlyph, PlayCircleGlyph } from '@/components/player/glyphs';
-import { useCommentCount, useDrop, useDropAddress, useLikeCount, useMyLikes, useSong, useToggleLike } from '@/hooks/api';
+import { useCommentCount, useDrop, useDropAddress, useLikeCount, useSong, useToggleLike, useIsLiked } from '@/hooks/api';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
 import type { ServiceId } from '@/store/prefs';
@@ -41,7 +40,6 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const { dropId, source } = route.params;
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const qc = useQueryClient();
   const drop = useDrop(dropId);
   const d = drop.data;
   const music = d && isMusicDetail(d) ? d : null;
@@ -57,8 +55,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   }, [song.data]);
   const likeCount = useLikeCount(dropId).data;
   const commentCount = useCommentCount(dropId).data;
-  const myLikes = useMyLikes().data;
-  const liked = qc.getQueryData<boolean>(['liked', dropId]) ?? !!myLikes?.some(x => x.droppingId === dropId);
+  const liked = useIsLiked(dropId);
   const toggleLike = useToggleLike(dropId);
   const authed = useAuth(s => s.status === 'authed');
   const menu = useDropMenu(dropId, d?.userId, '드랍', d && 'username' in d ? d.username : undefined, song.data);
@@ -85,7 +82,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const openPlayer = () => { if (song.data) navigation.replace('Player', { songId: song.data.id, dropId }); };
   // 전체 듣기 — 누른 음악 앱으로 바로 딥링크
   const listenIn = (s: ServiceId) => { if (song.data) listenFull(s, song.data); };
-  const like = () => (authed ? toggleLike.mutate(undefined, { onError: e => toast(errorMessage(e), 'error') }) : toast('로그인이 필요해요.'));
+  const like = () => (authed ? toggleLike.toggle() : toast('로그인이 필요해요.'));
 
   return (
     <Sheet

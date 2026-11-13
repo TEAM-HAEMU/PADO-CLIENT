@@ -181,7 +181,10 @@ export function usePreview(song: PreviewSong | null | undefined, opts: { lazy?: 
     let alive = true;
     if (!song || opts.lazy) return;
     const id = song.id;
-    findPreview(song, { priority: true }).then(r => { if (alive) setFound({ id, url: r.unavailable ? false : r.previewUrl, adult: r.adult }); });
+    findPreview(song, { priority: true })
+      .catch(() => ({ previewUrl: null, unavailable: true, adult: false }))
+      // 조회가 예외로 끝나도 '찾는 중'에 머물지 않게 확인 불가(false — 누르면 다시 조회)로
+      .then(r => { if (alive) setFound({ id, url: r.unavailable ? false : r.previewUrl, adult: r.adult }); });
     return () => { alive = false; };
   }, [song?.id, song?.title, song?.artist, song?.previewUrl]); // eslint-disable-line react-hooks/exhaustive-deps
   return {
