@@ -187,8 +187,10 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     if (coords) followedAt.current = coords;
     mapRef.current?.animateToRegion(region, 500);
   };
+  // Android는 지도가 준비되기 전에 부른 카메라 이동을 무시한다 → 준비된 뒤에 처음 위치로 옮긴다
+  const [mapReady, setMapReady] = useState(false);
   useEffect(() => {
-    if (!coords) return;
+    if (!coords || !mapReady) return;
     if (!centered.current) {
       centered.current = true;
       followedAt.current = coords;
@@ -199,7 +201,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     followedAt.current = coords;
     // 줌은 사용자가 맞춘 그대로 두고 가운데만 옮긴다
     mapRef.current?.animateCamera({ center: { latitude: coords.latitude - 0.0012, longitude: coords.longitude } }, { duration: 600 });
-  }, [coords]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [coords, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 다른 탭에 갔다가 지도로 돌아오면 다시 내 위치로 (보던 곳을 끌어 둔 채였어도)
+  const wasFocused = useRef(focused);
+  useEffect(() => {
+    if (focused && !wasFocused.current && centered.current && coords) recenter();
+    wasFocused.current = focused;
+  }, [focused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -217,6 +225,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         toolbarEnabled={false}
         pitchEnabled={false}
         onPanDrag={() => { follow.current = false; }}
+        onMapReady={() => setMapReady(true)}
       >
         {/* Apple 지도는 스타일을 못 바꾸므로 넓은 하늘빛 막을 깔아 디자인 톤에 맞춘다 (오버레이라 핀 아래에 그려짐) */}
         {!useGoogle ? <Polygon coordinates={tintArea(here)} fillColor="rgba(120,200,232,0.22)" strokeWidth={0} strokeColor="transparent" tappable={false} /> : null}
@@ -257,7 +266,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: dockTop(insets.bottom) + 24 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, marginBottom: 16 }}>
           <T v="captionStrong" c="onPrimary">가까운 드랍</T>
-          <T v="number" style={{ fontFamily: fonts.medium, color: '#2BD1FF' }}>{drops.length}</T>
+          <T v="number" style={{ fontFamily: fonts.medium, color: '#2BD1FF', flex: 1 }}>{drops.length}</T>
+          {/* 내 위치로 — 지도 앱처럼 언제든 한 번에 돌아온다 */}
+          {coords ? (
+            <Press onPress={recenter} accessibilityLabel="내 위치로 이동" hitSlop={8} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#12214A', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 2 }, elevation: 4 }}>
+              <Icon name="locate" size={22} color={colors.primary} />
+            </Press>
+          ) : null}
         </View>
         {!coords ? (
           <Press onPress={fix === 'unavailable' ? retryLocation : undefined} style={card}>

@@ -5,7 +5,7 @@
 import React, { useEffect } from 'react';
 import { Image, Platform, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
-import Svg, { Ellipse } from 'react-native-svg';
+import Svg, { ClipPath, Defs, Ellipse, Image as SvgImage, Rect } from 'react-native-svg';
 import { T, Icon } from '@/components/ui';
 import { colors, glow } from '@/theme/tokens';
 import { artUrl } from '@/utils/artUrl';
@@ -90,7 +90,14 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
           Platform.OS === 'ios' ? (active ? glow(0.8, 14) : { shadowColor: '#12214A', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } }) : null,
         ]}
       >
-        {art ? (
+        {art && Platform.OS === 'android' ? (
+          // Android 마커는 뷰를 비트맵으로 찍어 쓰는데, 일반 Image는 화면에 붙지 않은 마커 안에서 끝내 그려지지 않아 빈 칸으로 굳는다
+          // → 자기 캔버스에 직접 그리는 SVG 이미지로 그린다 (모서리는 clipPath)
+          <Svg width={inner} height={inner}>
+            <Defs><ClipPath id="art"><Rect width={inner} height={inner} rx={R - B} ry={R - B} /></ClipPath></Defs>
+            <SvgImage href={{ uri: artUrl(art, inner)! }} width={inner} height={inner} preserveAspectRatio="xMidYMid slice" clipPath="url(#art)" onLoad={onImageLoad} />
+          </Svg>
+        ) : art ? (
           <Image source={{ uri: artUrl(art, inner)! }} onLoadEnd={onImageLoad} style={{ width: inner, height: inner, borderRadius: R - B }} />
         ) : (
           <View style={{ width: inner, height: inner, borderRadius: R - B, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
