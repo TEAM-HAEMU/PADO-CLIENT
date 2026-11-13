@@ -5,7 +5,7 @@
 import { Linking } from 'react-native';
 import type { Song } from '@/api/types';
 import type { ServiceId } from '@/store/prefs';
-import { findItunes } from './itunes';
+import { findPreview } from './previewSource';
 
 export const SERVICES: Record<ServiceId, { label: string }> = {
   spotify: { label: 'Spotify' },
@@ -35,7 +35,8 @@ export function candidateUrls(service: ServiceId, song: SongLike, appleMusicUrl?
 }
 
 export async function openInService(service: ServiceId, song: SongLike): Promise<boolean> {
-  const apple = service === 'appleMusic' ? (await findItunes(song.title, song.artist)).appleMusicUrl : null;
+  // Apple Music은 백엔드가 ISRC로 찾은 링크를 먼저, 없으면 iTunes 검색 결과
+  const apple = service === 'appleMusic' ? song.links?.appleMusic ?? (await findPreview(song)).appleMusicUrl : null;
   for (const url of candidateUrls(service, song, apple)) {
     try {
       // 스킴은 canOpenURL이 거짓 음성을 내는 경우가 있어 바로 열어보고 실패 시 다음 후보

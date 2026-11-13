@@ -97,6 +97,8 @@ export interface UpdateProfileBody {
 export interface SongLinks {
   spotify: string | null;
   youtubeMusic: string | null;
+  /** Apple Music 곡 링크 (백엔드가 ISRC로 찾음) */
+  appleMusic?: string | null;
 }
 
 export interface Song {
@@ -105,6 +107,12 @@ export interface Song {
   artist: string;
   duration: number; // seconds
   albumImagePath: string | null;
+  /** 국제 표준 녹음 코드 — 모르면 null */
+  isrc?: string | null;
+  /** 30초 미리듣기 (Apple Music, ISRC로 정확히 맞춘 곡). 없으면 null */
+  previewUrl?: string | null;
+  /** 19세 이상 곡 (Spotify explicit) — 백엔드가 내려 주면 미리듣기를 시도하지 않는다 */
+  explicit?: boolean | null;
   links: SongLinks;
 }
 
@@ -125,6 +133,7 @@ export interface MusicDropSummary extends DropSummaryBase {
   title: string;
   artist: string;
   albumImageUrl: string | null;
+  previewUrl?: string | null;
 }
 
 export interface VoteDropSummary extends DropSummaryBase {
@@ -153,6 +162,7 @@ export interface MusicDropDetail {
   expiryDate: string;
   createdAt: string;
   albumImageUrl: string | null;
+  previewUrl?: string | null;
 }
 
 export interface VoteOption {
@@ -183,6 +193,7 @@ export interface PlaylistDropSong {
   title: string;
   artist: string;
   albumImagePath: string | null;
+  previewUrl?: string | null;
 }
 
 export interface PlaylistDropDetail {

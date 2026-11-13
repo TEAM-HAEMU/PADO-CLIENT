@@ -4,7 +4,10 @@
  * 스토리에는 링크를 붙일 수 없어 카드 아래에 paado.app을 글자로 적는다.
  */
 import React, { useEffect, useRef } from 'react';
-import { Image, Text, View, type TextStyle, type ViewStyle } from 'react-native';
+import { Image, Platform, Text, View, type TextStyle, type ViewStyle } from 'react-native';
+import MapView, { PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
+import { env } from '@/config';
+import { googleMapStyle } from '@/theme/mapStyle';
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, { Defs, LinearGradient as SvgGradient, Path, Rect, Stop } from 'react-native-svg';
 import { fonts } from '@/theme/tokens';
@@ -19,7 +22,14 @@ export interface ShareCardData {
   sub: string;
   place: string;
   note: string;
+  /** 드랍 위치 — 있으면 C 카드 배경을 실제 지도로 그린다 */
+  latitude?: number;
+  longitude?: number;
 }
+
+const useGoogle = !!env.googleMapsKey || Platform.OS === 'android';
+/** 동네 단위로 보이는 줌 (세로 약 900m) — 정확한 건물까지는 드러나지 않게 */
+const MAP_LAT_DELTA = 0.008;
 
 /** 인스타가 카드 밖(위·아래) 여백을 칠할 색 */
 export const CARD_EDGE: Record<CardStyle, [string, string]> = {
@@ -33,15 +43,21 @@ const SUB = '#7482AE';
 const BLUE = '#2B9CFF';
 const otter = require('@/assets/otter/otter.webp');
 
-interface Props { data: ShareCardData; variant: CardStyle; width: number; onReady?: () => void }
+interface Props {
+  data: ShareCardData; variant: CardStyle; width: number; onReady?: () => void;
+  /** 실제 지도를 찍어 둔 이미지 (C 카드 배경) */
+  mapImage?: string | null;
+  /** 이 카드에 실제 지도를 띄우고, 다 그려지면 찍어서 넘긴다 (보이는 미리보기 카드 하나만) */
+  onMapSnapshot?: (uri: string) => void;
+}
 
-export function StoryCard({ data, variant, width, onReady }: Props) {
+export function StoryCard({ data, variant, width, onReady, mapImage, onMapSnapshot }: Props) {
   const u = width / 540;
   // 앨범 아트를 다 받은 뒤에 캡처해야 빈 원이 찍히지 않는다
   const ready = useRef(false);
   const done = () => { if (!ready.current) { ready.current = true; onReady?.(); } };
   useEffect(() => { if (!data.art) done(); }); // eslint-disable-line react-hooks/exhaustive-deps
-  const C = { data, u, onLoad: done };
+  const C = { data, u, onLoad: done, mapImage, onMapSnapshot };
   return (
     <View style={{ width, height: width * (16 / 9), overflow: 'hidden' }}>
       {variant === 'C' ? <MapCard {...C} /> : variant === 'E' ? <OtterCard {...C} /> : <WaterCard {...C} />}
@@ -49,22 +65,66 @@ export function StoryCard({ data, variant, width, onReady }: Props) {
   );
 }
 
-interface CardProps { data: ShareCardData; u: number; onLoad: () => void }
+interface CardProps { data: ShareCardData; u: number; onLoad: () => void; mapImage?: string | null; onMapSnapshot?: (uri: string) => void }
 
 const txt = (u: number, size: number, family: string, color: string, extra?: TextStyle): TextStyle => ({ fontFamily: family, fontSize: size * u, lineHeight: size * u * 1.4, color, letterSpacing: -0.02 * size * u, ...extra });
 const abs = (s: ViewStyle): ViewStyle => ({ position: 'absolute', ...s });
 const quote = (note: string) => `“${note}”`;
 
+/** C 카드 배경 — 실제 지도(드랍 위치가 가운데, 핀 끝 점과 겹친다). 위·아래는 앱 지도처럼 옅게 덮어 지도 로고가 도드라지지 않게 */
+function MapBackdrop({ data, u, mapImage, onMapSnapshot }: CardProps) {
+  const ref = useRef<MapView>(null);
+  const taken = useRef(false);
+  const has = data.latitude != null && data.longitude != null;
+  const W = 540 * u, H = 960 * u;
+  const snap = () => {
+    if (taken.current || !onMapSnapshot) return;
+    taken.current = true;
+    // 타일이 다 그려진 뒤 한 박자 쉬고 찍는다 (스타일 적용 전 회색 타일이 찍히지 않게)
+    setTimeout(() => { ref.current?.takeSnapshot({ format: 'png', result: 'file' }).then(onMapSnapshot).catch(() => { taken.current = false; }); }, 600);
+  };
+  return (
+    <>
+      {mapImage ? (
+        <Image source={{ uri: mapImage }} style={{ position: 'absolute', left: 0, top: 0, width: W, height: H }} />
+      ) : has && onMapSnapshot ? (
+        <MapView
+          ref={ref}
+          pointerEvents="none"
+          style={abs({ left: 0, top: 0, width: W, height: H })}
+          provider={useGoogle ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
+          customMapStyle={useGoogle ? googleMapStyle : undefined}
+          mapType={useGoogle ? 'standard' : 'mutedStandard'}
+          userInterfaceStyle="light"
+          initialRegion={{ latitude: data.latitude!, longitude: data.longitude!, latitudeDelta: MAP_LAT_DELTA, longitudeDelta: MAP_LAT_DELTA * (W / H) }}
+          scrollEnabled={false} zoomEnabled={false} rotateEnabled={false} pitchEnabled={false} toolbarEnabled={false}
+          showsPointsOfInterests={false} showsBuildings={false} showsCompass={false}
+          onMapLoaded={snap}
+        />
+      ) : (
+        <Svg width={W} height={H} viewBox="0 0 540 960" style={abs({ left: 0, top: 0 })}>
+          <Path d="M-20 300 Q 200 260 300 420 T 600 520" stroke="#fff" strokeWidth={26} fill="none" />
+          <Path d="M120 -20 L 180 1000" stroke="#fff" strokeWidth={16} />
+          <Path d="M-20 700 L 600 640" stroke="#fff" strokeWidth={12} />
+          <Path d="M380 -20 Q 330 400 460 1000" stroke="#C9E6FA" strokeWidth={40} fill="none" />
+        </Svg>
+      )}
+      {mapImage || has ? (
+        <>
+          <LinearGradient pointerEvents="none" colors={['rgba(231,242,251,0.9)', 'rgba(231,242,251,0)']} style={abs({ left: 0, right: 0, top: 0, height: 140 * u })} />
+          <LinearGradient pointerEvents="none" colors={['rgba(231,242,251,0)', 'rgba(231,242,251,0.92)', '#E7F2FB']} locations={[0, 0.55, 1]} style={abs({ left: 0, right: 0, bottom: 0, height: 300 * u })} />
+        </>
+      ) : null}
+    </>
+  );
+}
+
 /** C · 지도 위 핀 — 앱 지도처럼 앨범 아트 핀이 꽂힌 장면 + 아래 흰 카드 */
-function MapCard({ data, u, onLoad }: CardProps) {
+function MapCard(props: CardProps) {
+  const { data, u, onLoad } = props;
   return (
     <View style={{ flex: 1, backgroundColor: '#E7F2FB' }}>
-      <Svg width={540 * u} height={960 * u} viewBox="0 0 540 960" style={abs({ left: 0, top: 0 })}>
-        <Path d="M-20 300 Q 200 260 300 420 T 600 520" stroke="#fff" strokeWidth={26} fill="none" />
-        <Path d="M120 -20 L 180 1000" stroke="#fff" strokeWidth={16} />
-        <Path d="M-20 700 L 600 640" stroke="#fff" strokeWidth={12} />
-        <Path d="M380 -20 Q 330 400 460 1000" stroke="#C9E6FA" strokeWidth={40} fill="none" />
-      </Svg>
+      <MapBackdrop {...props} />
       <View style={abs({ left: 150 * u, top: 230 * u, width: 240 * u, alignItems: 'center' })}>
         <View style={{ borderRadius: 36 * u, shadowColor: '#12214A', shadowOpacity: 0.25, shadowRadius: 20 * u, shadowOffset: { width: 0, height: 16 * u } }}>
           <View style={{ width: 212 * u, height: 212 * u, borderRadius: 36 * u, borderWidth: 6 * u, borderColor: '#fff', overflow: 'hidden', backgroundColor: '#C8E8FF' }}>

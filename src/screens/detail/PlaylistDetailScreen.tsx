@@ -15,7 +15,7 @@ import { usePlaylist } from '@/hooks/api';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
 import { usePreviewStore } from '@/services/preview';
-import { findItunes } from '@/services/itunes';
+import { findPreview } from '@/services/previewSource';
 import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
 import { formatDuration, formatTotal } from '@/utils/format';
@@ -30,7 +30,7 @@ export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'
   const nowKey = usePreviewStore(st => st.key);
   // 위쪽 몇 곡은 미리듣기 주소를 미리 찾아 둔다 — 처음 누를 때 몇 초 기다리지 않게 (요청 한도를 아끼려 3곡만, 순서대로)
   const firstIds = p?.songs.slice(0, 3).map(x => x.id).join(',');
-  React.useEffect(() => { p?.songs.slice(0, 3).forEach(x => { findItunes(x.title, x.artist); }); }, [firstIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => { p?.songs.slice(0, 3).forEach(x => { findPreview(x); }); }, [firstIds]); // eslint-disable-line react-hooks/exhaustive-deps
   // 새 플리 만들기에서 왔으면 곡 담기 화면을 한 번 자동으로 연다
   const openAdd = route.params.openAdd;
   React.useEffect(() => {

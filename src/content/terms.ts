@@ -16,7 +16,7 @@ export const OPERATOR = {
   service: 'PADO(파도)',
   company: '테라',
   representative: '서정현',
-  address: '부산광역시 해운대구 대천로103번길 61, 101동 1801호(좌동)',
+  address: '부산광역시 해운대구 대천로103번길 61',
   bizNo: '593-32-01797',
   email: 'seo@paado.app',
   privacyOfficer: '서정현 (대표)',

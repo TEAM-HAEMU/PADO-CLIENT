@@ -109,7 +109,6 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
             </View>
             <Press
               onPress={preview.toggle}
-              disabled={!preview.available}
               accessibilityLabel={preview.playing ? '미리듣기 일시정지' : '30초 미리듣기'}
               style={{ position: 'absolute', left: (capW - 16 - 58) / 2, top: (capH - 16 - 58) / 2, width: 58, height: 58, opacity: preview.available ? 1 : 0.5, shadowColor: '#FFFFFF', shadowOpacity: 0.4, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } }}
             >

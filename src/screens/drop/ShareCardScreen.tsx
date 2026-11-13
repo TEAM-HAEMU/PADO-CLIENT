@@ -41,6 +41,11 @@ export default function ShareCardScreen({ navigation, route }: RootScreen<'Share
   const [busy, setBusy] = useState<'story' | 'other' | null>(null);
   const shot = useRef<React.ComponentRef<typeof View>>(null);
   const ready = useRef(false);
+  // C 카드의 실제 지도 — 보이는 미리보기에서 한 번 찍어 두고 저장 이미지·썸네일에 같이 쓴다
+  const [mapImage, setMapImage] = useState<string | null>(null);
+  const mapRef = useRef<string | null>(null);
+  const onMapSnapshot = (uri: string) => { mapRef.current = uri; setMapImage(uri); };
+  const wantsMap = data.latitude != null && data.longitude != null;
 
   const pick = (v: CardStyle) => { setVariant(v); kv.set('shareCard', v); };
   // 화면에 맞는 가장 큰 9:16
@@ -48,6 +53,9 @@ export default function ShareCardScreen({ navigation, route }: RootScreen<'Share
 
   const capture = async () => {
     for (let i = 0; i < 30 && !ready.current; i++) await new Promise<void>(r => setTimeout(() => r(), 100)); // 앨범 아트를 기다린다 (최대 3초)
+    // 지도 카드면 실제 지도 사진도 기다린다 (최대 5초 — 못 받으면 그린 지도로)
+    if (variant === 'C' && wantsMap) for (let i = 0; i < 50 && !mapRef.current; i++) await new Promise<void>(r => setTimeout(() => r(), 100));
+    if (variant === 'C' && wantsMap && mapRef.current) await new Promise<void>(r => setTimeout(() => r(), 150)); // 캡처용 카드에 사진이 그려질 틈
     // 크기를 넘기지 않는다 — 넘기면 찍은 뒤 늘려서 흐려진다. PNG로 한 번 덜 압축한다 (인스타가 어차피 다시 압축)
     return captureRef(shot, { format: 'png', result: 'tmpfile', fileName: 'pado-drop' });
   };
@@ -85,14 +93,14 @@ export default function ShareCardScreen({ navigation, route }: RootScreen<'Share
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} onLayout={e => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
         {cardW > 0 ? (
           <View style={{ borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: colors.line }}>
-            <StoryCard key={variant} data={data} variant={variant} width={cardW} />
+            <StoryCard key={variant} data={data} variant={variant} width={cardW} mapImage={mapImage} onMapSnapshot={variant === 'C' && wantsMap && !mapImage ? onMapSnapshot : undefined} />
           </View>
         ) : null}
       </View>
       {/* 캡처용 — 화면 밖에 실제 크기(1080px 폭)로 그린다 */}
       <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: 'absolute', left: -SHOT_W * 2, top: 0 }}>
         <View ref={shot} collapsable={false}>
-          <StoryCard key={variant} data={data} variant={variant} width={SHOT_W} onReady={() => { ready.current = true; }} />
+          <StoryCard key={variant} data={data} variant={variant} width={SHOT_W} mapImage={mapImage} onReady={() => { ready.current = true; }} />
         </View>
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, paddingVertical: 18 }}>
@@ -102,7 +110,7 @@ export default function ShareCardScreen({ navigation, route }: RootScreen<'Share
             <Press key={s.id} accessibilityLabel={s.label} accessibilityState={{ selected: on }} onPress={() => { ready.current = false; pick(s.id); }}
               style={{ borderRadius: 10, borderWidth: 2, borderColor: on ? colors.primary : 'transparent', padding: 2 }}>
               <View pointerEvents="none" style={{ borderRadius: 7, overflow: 'hidden' }}>
-                <StoryCard data={data} variant={s.id} width={THUMB} />
+                <StoryCard data={data} variant={s.id} width={THUMB} mapImage={mapImage} />
               </View>
             </Press>
           );

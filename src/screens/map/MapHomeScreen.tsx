@@ -21,7 +21,7 @@ import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useMiniDiscActions } from '@/components/music/MiniDisc';
 import { usePreviewStore } from '@/services/preview';
 import { useTermsUpdateCheck } from '@/hooks/useTermsUpdateCheck';
-import { distanceM, FALLBACK, formatDistance, useLocation } from '@/services/location';
+import { distanceM, FALLBACK, formatDistance, lastKnown, useLocation } from '@/services/location';
 import { googleMapStyle } from '@/theme/mapStyle';
 import { colors, fonts, glow } from '@/theme/tokens';
 import type { TabParamList } from '@/navigation/types';
@@ -61,7 +61,9 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const { coords, fix, reason, label, setPlace, start, refreshPermission, requestPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission })));
-  const here = coords ?? FALLBACK;
+  // 위치를 받기 전엔 지난번 위치 근처에 카메라를 둔다 (처음 켤 때 엉뚱한 동네가 먼저 보이지 않게)
+  const startHint = useRef(lastKnown()).current; // 한 번만 읽는다 (매번 새 객체면 아래 정렬·자동 재생이 계속 다시 돈다)
+  const here = coords ?? startHint ?? FALLBACK;
   const nearby = useNearbyDrops(coords);
   const drops = useMemo(() => nearby.data ?? [], [nearby.data]);
   const [tracks, setTracks] = useState(true);
@@ -197,7 +199,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       mapRef.current?.animateToRegion({ ...region, latitude: coords.latitude - 0.0012, longitude: coords.longitude }, 400);
       return;
     }
-    if (!follow.current || (followedAt.current && distanceM(followedAt.current, coords) < 15)) return;
+    if (!follow.current || (followedAt.current && distanceM(followedAt.current, coords) < 8)) return;
     followedAt.current = coords;
     // 줌은 사용자가 맞춘 그대로 두고 가운데만 옮긴다
     mapRef.current?.animateCamera({ center: { latitude: coords.latitude - 0.0012, longitude: coords.longitude } }, { duration: 600 });

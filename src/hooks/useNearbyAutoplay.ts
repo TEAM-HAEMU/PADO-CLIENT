@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MusicDropSummary } from '@/api/types';
-import { findItunes } from '@/services/itunes';
+import { findPreview } from '@/services/previewSource';
 import { startPreview, usePreviewStore } from '@/services/preview';
 import { usePrefs } from '@/store/prefs';
 import { track } from '@/services/analytics';
@@ -55,7 +55,7 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
     let skip: ReturnType<typeof setTimeout> | undefined;
     ours.current = current.songId;
     track('nearby_autoplay_play', { drop_id: current.droppingId, song_id: current.songId, nearby_count: drops.length });
-    startPreview({ id: current.songId, title: current.title, artist: current.artist, albumImagePath: current.albumImageUrl }).then(r => {
+    startPreview({ id: current.songId, title: current.title, artist: current.artist, albumImagePath: current.albumImageUrl, previewUrl: current.previewUrl }).then(r => {
       if (!alive) return;
       if (r === 'none') skip = setTimeout(() => markHeard(current.songId), 800);
       else if (r === 'unavailable') skip = setTimeout(() => markHeard(current.songId), 15_000);
@@ -90,7 +90,7 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
     let alive = true;
     (async () => {
       for (const next of candidates) {
-        const r = await findItunes(next.title, next.artist).catch(() => null);
+        const r = await findPreview({ id: next.songId, title: next.title, artist: next.artist, previewUrl: next.previewUrl }).catch(() => null);
         const now = usePreviewStore.getState();
         if (!alive || now.key !== ours.current) return;
         if (r?.previewUrl) {

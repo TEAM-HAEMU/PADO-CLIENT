@@ -12,6 +12,7 @@ import { useSongSearch } from '@/hooks/api';
 import { useDebounced } from '@/hooks/useDebounced';
 import type { RootScreen } from '@/navigation/types';
 import { startPreview, usePreviewStore } from '@/services/preview';
+import { noPreviewMessage } from '@/services/previewSource';
 import { toast } from '@/store/toast';
 import { useDraft } from '@/store/draft';
 import { colors, fonts } from '@/theme/tokens';
@@ -55,7 +56,7 @@ export default function SongSearchScreen({ navigation }: RootScreen<'SongSearch'
     if (picked?.id === song.id && st.key === song.id) return st.toggle();
     setPicked(song);
     const r = await startPreview(song);
-    if (r === 'none') toast('이 곡은 미리듣기를 지원하지 않아요.');
+    if (r === 'none' || r === 'adult') toast(noPreviewMessage({ adult: r === 'adult' }));
     else if (r === 'unavailable') toast('지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.', 'error');
   };
   // 아트를 누르면 미리듣기만 켜고 끈다 — 아직 안 고른 곡이면 고르면서 재생

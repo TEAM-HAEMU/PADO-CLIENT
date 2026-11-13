@@ -3,11 +3,16 @@ import { Platform } from 'react-native';
 import { check, PERMISSIONS, request, requestMultiple, RESULTS } from 'react-native-permissions';
 import { create } from 'zustand';
 import { setAnalyticsLocation, track } from '@/services/analytics';
+import { kv } from '@/store/storage';
 
 export interface Coords { latitude: number; longitude: number }
 
 /** 위치를 아직 모를 때 지도 카메라만 두는 기준 좌표 — 드랍 생성·주변 검색에는 절대 쓰지 않는다 */
 export const FALLBACK: Coords = { latitude: 35.1889, longitude: 128.9038 };
+
+/** 지난번 실행 때 마지막 위치 — 앱을 켜자마자 지도 카메라를 그 근처에 두는 데만 쓴다 (드랍·주변 검색엔 쓰지 않음) */
+const LAST_KEY = 'location:last';
+export const lastKnown = (): Coords | null => kv.get<Coords | null>(LAST_KEY, null);
 
 const PERM = Platform.select({ ios: PERMISSIONS.IOS.LOCATION_WHEN_IN_USE, default: PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION });
 
@@ -81,25 +86,31 @@ export const useLocation = create<LocationState>((set, get) => ({
   },
   start: () => {
     const got = (pos: { coords: Coords }) => {
-      setAnalyticsLocation(pos.coords.latitude, pos.coords.longitude);
-      set({ coords: { latitude: pos.coords.latitude, longitude: pos.coords.longitude }, fix: 'ok', reason: null });
+      const c = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      setAnalyticsLocation(c.latitude, c.longitude);
+      set({ coords: c, fix: 'ok', reason: null });
+      kv.set(LAST_KEY, c);
     };
     const giveUp = async (e?: { code?: number }) => {
       if (get().coords) return;
       const reason = await reasonOf(e);
       if (!get().coords) { set({ fix: 'unavailable', reason }); track('location_unavailable', { reason }); }
     };
-    // 1) 정밀 GPS (8초) → 2) 못 잡으면 대략 위치(와이파이·기지국, 최근 5분 이내 값도 허용)로 한 번 더 — 실내에서도 지도·주변 드랍은 보이게
+    // 1) 기기가 최근(2분 안)에 잡아 둔 위치를 바로 (보통 즉시 옴) → 2) 정밀 GPS로 다듬기 → 3) 그래도 없으면 대략 위치(와이파이·기지국, 5분 안)
+    // 예전엔 정밀 GPS를 8초 기다린 뒤에야 대략 위치를 써서 첫 위치가 늦었다.
+    // (Android 라이브러리는 한 번에 하나의 단발 요청만 기억하므로 차례로 부른다)
     const coarse = (e?: { code?: number }) => {
       if (get().coords) return;
       if (e?.code === 1) return giveUp(e);
       Geolocation.getCurrentPosition(got, giveUp, { enableHighAccuracy: false, timeout: 15_000, maximumAge: 300_000 });
     };
+    const precise = () => Geolocation.getCurrentPosition(got, coarse, { enableHighAccuracy: true, timeout: 10_000, maximumAge: 10_000 });
     if (!get().coords) set({ fix: 'locating', reason: null });
-    Geolocation.getCurrentPosition(got, coarse, { enableHighAccuracy: true, timeout: 8000, maximumAge: 30_000 });
+    Geolocation.getCurrentPosition(p => { got(p); precise(); }, e => (e?.code === 1 ? giveUp(e) : precise()), { enableHighAccuracy: false, timeout: 3000, maximumAge: 120_000 });
     // 여러 곳에서 start()를 불러도 위치 감시는 하나만 유지 (감시 오류는 권한 거부만 반영 — 나머지는 위의 대략 위치 시도가 결론)
     if (watchId !== null) Geolocation.clearWatch(watchId);
-    const id = Geolocation.watchPosition(got, e => { if (e?.code === 1) giveUp(e); }, { enableHighAccuracy: true, distanceFilter: 15 });
+    // 걸으면서 바로 따라오게 — 5m 움직이면, 최대 4초(빠르면 2초) 간격으로 (기본값은 10초·100m라 이동이 늦게 반영됐다)
+    const id = Geolocation.watchPosition(got, e => { if (e?.code === 1) giveUp(e); }, { enableHighAccuracy: true, distanceFilter: 5, interval: 4000, fastestInterval: 2000 });
     watchId = id;
     return () => { Geolocation.clearWatch(id); if (watchId === id) watchId = null; };
   },

@@ -31,7 +31,7 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
   React.useEffect(() => {
     if (!first || autoStarted.current) return;
     autoStarted.current = true;
-    startPreview({ id: first.songId, title: first.title, artist: first.artist, albumImagePath: first.albumImagePath });
+    startPreview({ id: first.songId, title: first.title, artist: first.artist, albumImagePath: first.albumImagePath, previewUrl: first.previewUrl });
   }, [first]);
   const playingKey = usePreviewStore(s => s.key);
   const likeCount = useLikeCount(dropId).data;
