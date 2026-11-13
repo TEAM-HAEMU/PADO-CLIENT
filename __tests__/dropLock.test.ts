@@ -16,6 +16,15 @@ test('재생 반경 안이면 열리고, 밖이면 남은 거리와 함께 잠�
   expect(far.locked && Math.round(far.remainingM!)).toBe(120);
 });
 
+test('한 번 열린 드랍은 재생 반경 + 30m까지 열어 둔다 (경계 흔들림 방지)', () => {
+  expect(dropLock(drop(520), here, 500).locked).toBe(true);
+  expect(dropLock(drop(520), here, 500, undefined, true).locked).toBe(false);
+  expect(dropLock(drop(529), here, 500, undefined, true).locked).toBe(false);
+  const gone = dropLock(drop(540), here, 500, undefined, true);
+  expect(gone.locked).toBe(true);
+  if (gone.locked) expect(Math.round(gone.remainingM!)).toBe(40);
+});
+
 test('내 드랍·좋아요한 드랍은 어디서든 열린다 (위치를 몰라도)', () => {
   expect(dropLock(drop(9000, { isMyDropping: true }), here, 500).locked).toBe(false);
   expect(dropLock(drop(9000), here, 500, new Set(['d1'])).locked).toBe(false);

@@ -5,11 +5,19 @@ import { useDropRadius } from '@/hooks/useDropRadius';
 import { useLocation } from '@/services/location';
 import { dropLock, type LockTarget } from '@/utils/dropLock';
 
+/** 지금 열려 있는 드랍 — 앱 전체에서 같이 쓴다 (앱을 켜 둔 동안만 기억) */
+const opened = new Set<string>();
+
 export function useDropLock() {
   const coords = useLocation(s => s.coords);
   const { playMeters } = useDropRadius();
   const likes = useMyLikes().data;
   const mine = useMyDrops().data;
   const open = useMemo(() => new Set([...(likes ?? []).map(l => l.droppingId), ...(mine ?? []).map(d => d.droppingId)]), [likes, mine]);
-  return useCallback((d: LockTarget) => dropLock(d, coords, playMeters, open), [coords, playMeters, open]);
+  return useCallback((d: LockTarget) => {
+    const lock = dropLock(d, coords, playMeters, open, opened.has(d.droppingId));
+    if (lock.locked) opened.delete(d.droppingId);
+    else opened.add(d.droppingId);
+    return lock;
+  }, [coords, playMeters, open]);
 }
