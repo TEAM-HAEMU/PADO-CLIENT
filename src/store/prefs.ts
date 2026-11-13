@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { kv } from './storage';
 import { migrateAnalyticsMode, setAnalyticsMode as applyAnalyticsMode, setUserProps, track, type AnalyticsMode, type SavedAnalyticsPrefs } from '@/services/analytics';
+import { setMonitoringMode } from '@/services/monitoring';
 
 export { migrateAnalyticsMode };
 
@@ -20,6 +21,7 @@ interface Prefs {
   /**
    * 설정 › 이용 분석 (Amplitude). basic = 기기 단위 익명 분석(기본 켜짐), detailed = 상세 분석(직접 켠 사람만), off = 끔.
    * 동의창은 띄우지 않는다 (iOS 5.1.2(i))
+   * off면 오류 진단(Sentry)도 멈춘다. basic·detailed는 오류 진단에 차이가 없다 (services/monitoring)
    */
   analyticsMode: AnalyticsMode;
   setAnalyticsMode: (m: AnalyticsMode) => void;
@@ -63,6 +65,7 @@ export const usePrefs = create<Prefs>((set, get) => {
       set({ analyticsMode: next }); persist();
       // 끄기 직전 한 번 기록하고 끈다 / 켠 뒤에 기록한다
       if (next === 'off') changed('analytics_mode', next);
+      setMonitoringMode(next);
       applyAnalyticsMode(next).then(() => {
         if (next === 'off') return;
         changed('analytics_mode', next);

@@ -1,5 +1,11 @@
 import Config from 'react-native-config';
 
+/** 0~1 비율 값 — 비었거나 범위를 벗어나면 기본값 */
+const rate = (v: string | undefined, fallback: number) => {
+  const n = v === undefined || v.trim() === '' ? NaN : Number(v);
+  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : fallback;
+};
+
 /** .env 값 (react-native-config). 키가 비면 해당 기능은 안내만 하고 앱은 계속 동작한다. */
 export const env = {
   apiBaseUrl: Config.API_BASE_URL || 'https://api.paado.app/api/v1',
@@ -12,6 +18,14 @@ export const env = {
   amplitudeInMock: (Config.AMPLITUDE_IN_MOCK || '').toLowerCase() === 'true',
   /** 세션 리플레이 샘플링 비율 (0~1). 기본 0.3 */
   replaySampleRate: Number(Config.AMPLITUDE_REPLAY_SAMPLE_RATE) || 0.3,
+  /** Sentry 오류 진단 DSN — 비어 있으면 Sentry를 켜지 않음 */
+  sentryDsn: Config.SENTRY_DSN || '',
+  /** 개발 빌드(__DEV__)에서도 Sentry 전송 (검증용, environment=dev) */
+  sentryInDev: (Config.SENTRY_IN_DEV || '').toLowerCase() === 'true',
+  /** 목 모드에서도 Sentry 전송 (검증용, environment=mock) */
+  sentryInMock: (Config.SENTRY_IN_MOCK || '').toLowerCase() === 'true',
+  /** 성능 추적(앱 시작·화면 전환) 샘플링 비율 (0~1). 기본 0.1 */
+  sentryTracesSampleRate: rate(Config.SENTRY_TRACES_SAMPLE_RATE, 0.1),
   google: {
     webClientId: Config.GOOGLE_WEB_CLIENT_ID || '',
     iosClientId: Config.GOOGLE_IOS_CLIENT_ID || '',
