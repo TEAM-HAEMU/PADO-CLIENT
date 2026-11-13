@@ -1,7 +1,7 @@
 /* 재생 반경 잠금 규칙 · 반경 설정 검증 */
 import { dropLock, lockMessage } from '@/utils/dropLock';
 import { formatRadius } from '@/utils/geo';
-import { DEFAULT_RADIUS, sanitizeRadius } from '@/hooks/useDropRadius';
+import { DEFAULT_RADIUS, sanitizeRadius } from '@/utils/dropScope';
 
 const here = { latitude: 35.1575, longitude: 129.0604 };
 // 위도 1도 ≈ 111,195m
@@ -53,11 +53,12 @@ test('반경 표시', () => {
 });
 
 test('반경 설정 — 계약 범위 밖·이상한 모양은 버린다', () => {
-  expect(sanitizeRadius({ displayMeters: 3000, playMeters: 200, updatedAt: '2026-11-13T12:00:00.000+09:00' })).toEqual({ displayMeters: 3000, playMeters: 200, updatedAt: '2026-11-13T12:00:00.000+09:00' });
+  // 보기 모드 이전 백엔드(mode 없음)는 거리 모드로 본다
+  expect(sanitizeRadius({ displayMeters: 3000, playMeters: 200, updatedAt: '2026-11-13T12:00:00.000+09:00' })).toEqual({ mode: 'DISTANCE', regionUnit: null, displayMeters: 3000, playMeters: 200, region: null, updatedAt: '2026-11-13T12:00:00.000+09:00' });
   expect(sanitizeRadius({ displayMeters: 5000, playMeters: 500, updatedAt: null })).toEqual(DEFAULT_RADIUS);
   expect(sanitizeRadius({ displayMeters: 50, playMeters: 10 })).toBeNull();
   expect(sanitizeRadius({ displayMeters: 1000, playMeters: 2000 })).toBeNull();
-  expect(sanitizeRadius({ displayMeters: 60_000, playMeters: 500 })).toBeNull();
+  expect(sanitizeRadius({ displayMeters: 600_000, playMeters: 500 })).toBeNull();
   expect(sanitizeRadius(null)).toBeNull();
   expect(sanitizeRadius('<html>')).toBeNull();
 });

@@ -3,6 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { commentApi, dropApi, likeApi, notificationApi, playlistApi, safetyApi, songApi, userApi } from '@/api/endpoints';
 import type { CreateDropBody, UUID } from '@/api/types';
 import { useDropRadius } from '@/hooks/useDropRadius';
+import { searchKm } from '@/utils/dropScope';
 import { useAuth } from '@/store/auth';
 import type { Coords } from '@/services/location';
 import { track } from '@/services/analytics';
@@ -19,10 +20,14 @@ export const qk = {
   me: ['me'] as const,
 };
 
-/** 주변 드랍 — 운영자 표시 반경(displayMeters)만큼 (서버도 같은 값으로 자른다) */
+/**
+ * 주변 드랍 — 범위는 서버가 운영자 보기 설정으로 고른다(가까운 순, 최대 500개).
+ * 거리 모드는 표시 반경(km), 전국·같은 지역 모드는 넓은 값을 보낸다. 같은 지역 모드는 지역이 바뀌면 다시 받는다
+ */
 export function useNearbyDrops(coords: Coords | null) {
-  const km = useDropRadius().displayMeters / 1000;
-  return useQuery({ queryKey: [...qk.nearby(coords), km], enabled: !!coords, queryFn: () => dropApi.nearby(coords!.latitude, coords!.longitude, km), refetchInterval: 120_000, placeholderData: keepPreviousData });
+  const radius = useDropRadius();
+  const km = searchKm(radius);
+  return useQuery({ queryKey: [...qk.nearby(coords), km, radius.mode, radius.regionUnit, radius.region?.code ?? null], enabled: !!coords, queryFn: () => dropApi.nearby(coords!.latitude, coords!.longitude, km), refetchInterval: 120_000, placeholderData: keepPreviousData });
 }
 
 export const useDrop = (id: UUID | undefined) => useQuery({ queryKey: qk.drop(id ?? ''), enabled: !!id, queryFn: () => dropApi.get(id!) });

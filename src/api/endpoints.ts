@@ -5,7 +5,7 @@ import { api } from './client';
 import type {
   AppNotification, BlockedUser, Comment, CreateDropBody, DropDetail, DropSummary, LikedDrop, MyProfile,
   PlaylistDetail, PlaylistSummary, RegisterBody, ReportReason, ReportTarget, SocialLoginBody, SocialLoginResponse, SocialProvider,
-  SocialSignupBody, Song, Term, TokenPair, UpdateProfileBody, UserAgreement, UUID, DropRadius,
+  SocialSignupBody, Song, Term, TokenPair, UpdateProfileBody, UserAgreement, UUID,
 } from './types';
 
 /** 경로 조각 인코딩 — 딥링크 등 외부에서 온 ID로 다른 경로를 호출하지 못하게 */
@@ -63,7 +63,9 @@ export const dropApi = {
 
 // ── 운영 설정 (로그인 불필요)
 export const settingsApi = {
-  dropRadius: () => api.get<DropRadius>('/settings/drop-radius', { auth: 'none' }),
+  /** 좌표를 주면 같은 지역 모드일 때 그 좌표의 지역(region)도 온다. 응답 모양 검사는 hooks/useDropRadius */
+  dropRadius: (at?: { latitude: number; longitude: number } | null) =>
+    api.get<unknown>('/settings/drop-radius', { auth: 'none', query: at ? { latitude: at.latitude.toFixed(4), longitude: at.longitude.toFixed(4) } : undefined }),
 };
 
 // ── 좋아요

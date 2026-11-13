@@ -21,6 +21,7 @@ import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useDropLock } from '@/hooks/useDropLock';
 import { useDropRadius } from '@/hooks/useDropRadius';
+import { scopeLabel } from '@/utils/dropScope';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
 import { lockMessage } from '@/utils/dropLock';
@@ -217,6 +218,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       nearest_playable_m: open.length ? Math.round(open[0].m) : null,
       display_m: radius.displayMeters,
       play_m: radius.playMeters,
+      visibility_mode: radius.mode,
+      region_unit: radius.regionUnit,
     });
   }, [coords, nearby.isSuccess, sorted, radius]);
 
@@ -315,7 +318,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       <LinearGradient pointerEvents="none" colors={['rgba(4,9,22,0)', 'rgba(4,9,22,0.7)', 'rgba(4,9,22,0.98)']} locations={[0, 0.45, 1]} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 354 }} />
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: dockTop(insets.bottom) + 24 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, marginBottom: 16 }}>
-          <T v="captionStrong" c="onPrimary">가까운 드랍</T>
+          <T v="captionStrong" c="onPrimary">{scopeLabel(radius)}</T>
           <T v="number" style={{ fontFamily: fonts.medium, color: '#2BD1FF', flex: 1 }}>{drops.length}</T>
           {/* 내 위치로 — 지도 앱처럼 언제든 한 번에 돌아온다 */}
           {coords ? (
