@@ -128,9 +128,12 @@ export function invalidateAfterBlock(qc: QueryClient) {
   for (const queryKey of [['nearby'], ['comments'], ['commentCount'], ['blocks'], ['drop'], qk.myLikes, qk.myLikeCount]) qc.invalidateQueries({ queryKey });
 }
 
+/** 드랍 만들기 요청 — 화면과 무관하게 진행 중인지 보려고 (qc.isMutating·useIsMutating) */
+export const CREATE_DROP_KEY = ['createDrop'];
 export function useCreateDrop() {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: CREATE_DROP_KEY,
     mutationFn: (body: CreateDropBody) => dropApi.create(body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['nearby'] }); qc.invalidateQueries({ queryKey: ['myDrops'] }); },
   });

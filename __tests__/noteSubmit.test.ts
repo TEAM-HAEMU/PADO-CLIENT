@@ -1,4 +1,4 @@
-/* 한마디 화면 제출 — 제출 중에 화면을 떠나도 성공 처리(초안 초기화·성공 화면)가 빠지지 않고, 연타해도 한 번만 만든다, 위치 오차가 크면 막는다 */
+/* 한마디 화면 제출 — 제출 중에 화면을 떠나도 성공 처리(초안 초기화·성공 화면)가 빠지지 않고, 연타·다시 들어온 화면에서도 한 번만 만든다, 위치 오차가 크면 막는다 */
 import './setup/screenEnv';
 
 const mockCreate = jest.fn();
@@ -12,7 +12,8 @@ jest.mock('@/components/drop/parts', () => require('./setup/screenEnv').mockHost
 jest.mock('@/hooks/useFocusedInputScroll', () => ({ useFocusedInputScroll: () => ({ ref: { current: null }, onFocus: () => {} }) }));
 jest.mock('@/hooks/api', () => {
   const { useMutation } = jest.requireActual('@tanstack/react-query');
-  return { useCreateDrop: () => useMutation({ mutationFn: (b: unknown) => mockCreate(b) }), useMyDrops: () => ({ data: [] }) };
+  const CREATE_DROP_KEY = ['createDrop'];
+  return { CREATE_DROP_KEY, useCreateDrop: () => useMutation({ mutationKey: CREATE_DROP_KEY, mutationFn: (b: unknown) => mockCreate(b) }), useMyDrops: () => ({ data: [] }) };
 });
 jest.mock('@/services/location', () => ({
   useLocation: Object.assign((sel: (s: typeof mockLoc) => unknown) => sel(mockLoc), { getState: () => mockLoc }),
@@ -103,6 +104,30 @@ test('실패하면 오류를 알리고 초안은 그대로, 다시 제출할 수
   expect(mockCreate).toHaveBeenCalledTimes(2);
   expect(mockReset).toHaveBeenCalledTimes(1);
   act(() => { r.unmount(); });
+});
+
+test('제출 중 뒤로 갔다 다시 들어온 화면에서도 두 번째 제출은 막히고, 그사이 새로 시작한 초안은 첫 제출이 끝나도 지우지 않는다', async () => {
+  const d = deferred();
+  mockCreate.mockReturnValueOnce(d.promise);
+  const qc = newClient();
+  const r1 = render(qc);
+  act(() => { submitButton(r1).props.onPress(); });
+  act(() => { r1.unmount(); });
+  // 다시 들어온 한마디 화면 — 진행 중 표시, 눌러도 안 나감
+  const r2 = render(qc);
+  await flush();
+  expect(submitButton(r2).props.loading).toBe(true);
+  act(() => { submitButton(r2).props.onPress(); });
+  await flush();
+  expect(mockCreate).toHaveBeenCalledTimes(1);
+  act(() => { r2.unmount(); });
+  // 새 드랍을 만들기 시작
+  act(() => { useDraft.getState().start('VOTE'); useDraft.getState().set({ topic: '새 주제' }); });
+  d.resolve({});
+  await flush();
+  expect(useDraft.getState()).toMatchObject({ type: 'VOTE', topic: '새 주제' });
+  expect(mockReset).not.toHaveBeenCalled();
+  expect(mockToast).toHaveBeenCalledWith('드랍을 남겼어요', 'success');
 });
 
 test('위치 오차가 100m를 넘으면 정확한 위치 안내를 띄우고 제출하지 않는다 (모르면 그대로 제출)', async () => {
