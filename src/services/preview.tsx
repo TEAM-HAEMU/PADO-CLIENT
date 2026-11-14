@@ -136,7 +136,8 @@ export function PreviewHost() {
       onProgress={e => { if (e.currentTime > 0) ready(); _progress(e.currentTime, e.seekableDuration || e.playableDuration); }}
       onEnd={ended}
       // 주소는 있는데 재생이 안 되면(만료·지역 제한 등) 조용히 멈추지 말고 알린다
-      onError={() => { fail(); toast('미리듣기를 재생하지 못했어요. 잠시 후 다시 시도해주세요.', 'error'); }}
+      // 주변 자동 재생 곡은 사용자가 누른 재생이 아니라 알리지 않는다 (자동 재생이 쉬었다가 다음 곡으로)
+      onError={() => { fail(); if (!meta?.autoplay) toast('미리듣기를 재생하지 못했어요. 잠시 후 다시 시도해주세요.', 'error'); }}
       style={{ width: 0, height: 0 }}
     />
   );

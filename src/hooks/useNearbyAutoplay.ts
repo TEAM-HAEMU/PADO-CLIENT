@@ -7,14 +7,16 @@
  *  - 지도 화면을 벗어나면 다음 곡으로 넘어가지 않음(지금 곡은 끝까지). 앱을 내려도(백그라운드) 계속 이어짐 (위치는 앱을 내리기 전 기준)
  *  - 미리듣기가 없는 곡은 건너뛰고, iTunes 조회가 막히거나 재생 오류가 나면 잠시 쉬었다가 다음 곡 (연속 실패가 쌓이면 대기를 늘리다 멈춤)
  *  - 틀 수 있는 곡이 없으면 멈추고, 주변 곡 목록이 바뀔 때 다시 본다 (규칙: utils/autoplayPlan.ts)
+ *  - 실패가 쌓여 멈췄거나 쉬는 중이어도 사용자가 다음 곡·재생을 누르거나, 자동 재생을 다시 켜거나, 앱이 앞으로 돌아오면 곧바로 다시
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import type { MusicDropSummary } from '@/api/types';
 import { findPreview } from '@/services/previewSource';
 import { startPreview, stopPreviewFor, usePreviewStore } from '@/services/preview';
 import { usePrefs } from '@/store/prefs';
 import { track } from '@/services/analytics';
-import { decideAutoplay, emptyPlan, markHeard, markSkipped, recordOutcome, songSetKey, upNextCandidates, type AutoplayPlan } from '@/utils/autoplayPlan';
+import { decideAutoplay, emptyPlan, markHeard, markSkipped, recordOutcome, songSetKey, upNextCandidates, wake, type AutoplayPlan } from '@/utils/autoplayPlan';
 
 /** drops는 가까운 순으로 정렬돼 있어야 한다 */
 export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
@@ -24,6 +26,8 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
   // plan이 바뀔 때·대기가 끝날 때 다음 차례를 다시 고르게 하는 신호
   const [turn, setTurn] = useState(0);
   const bump = () => setTurn(t => t + 1);
+  /** 멈춤·연속 실패·대기를 풀고 다시 고르게 (사용자 조작·포그라운드 복귀) */
+  const rouse = () => { plan.current = wake(plan.current); bump(); };
   // 사용자가 지도에서 일시정지함 — 풀 때까지 다음 곡으로도 넘어가지 않음
   const [held, setHeld] = useState(false);
   // 자동 재생으로 튼 곡 id (다른 곳에서 튼 곡과 구분)
@@ -115,13 +119,23 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
     return () => { alive = false; };
   }, [run, key, drops, turn]); // turn: plan(ref)이 바뀌면 후보를 다시 고른다
 
-  // 자동 재생을 끄면 자동 재생 곡은 멈춘다. 지도를 벗어나도 지금 곡은 계속(다음 곡으로만 안 넘어감) —
-  // 드랍 만들기 창·핀을 열어도 같은 곡이면 끊기지 않게
+  // 앱이 앞으로 돌아오면(네트워크가 돌아왔을 수 있다) 실패로 멈춘 상태를 풀고 다시 본다
   useEffect(() => {
+    const sub = AppState.addEventListener('change', st => { if (st === 'active') rouse(); });
+    return () => sub.remove();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- rouse는 ref·setState만 쓴다
+
+  // 자동 재생을 끄면 자동 재생 곡은 멈춘다. 다시 켜면 실패로 멈춘 상태를 풀고 곧바로 다시 본다. 지도를 벗어나도 지금 곡은 계속(다음 곡으로만 안 넘어감) —
+  // 드랍 만들기 창·핀을 열어도 같은 곡이면 끊기지 않게
+  const wasEnabled = useRef(enabled);
+  useEffect(() => {
+    const turnedOn = enabled && !wasEnabled.current;
+    wasEnabled.current = enabled;
+    if (turnedOn) rouse();
     if (enabled) return;
     const st = usePreviewStore.getState();
     if (ours.current && st.key === ours.current) st.stop();
-  }, [enabled]);
+  }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps -- rouse는 ref·setState만 쓴다
 
   const playingOurs = !!ours.current && key === ours.current;
   const nowDrop = playingOurs ? drops.find(d => d.songId === key) ?? null : null;
@@ -138,6 +152,7 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
       const st = usePreviewStore.getState();
       if (playingOurs) { setHeld(!st.paused); st.toggle(); return; }
       setHeld(false);
+      rouse(); // 실패로 멈춰 있었어도 재생 버튼을 누르면 다시
     },
     /** 다음 주변 곡 — 지금 무엇이 나오든 멈추고 다음 차례로 */
     next: () => {
@@ -150,9 +165,8 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
         plan.current = markHeard(plan.current, starting.current);
         stopPreviewFor(starting.current);
       } else {
-        // 쉬는 중이면 지금 차례였던 곡을 넘기고 곧바로 다음 곡으로 (대기도 풀림)
-        const d = decideAutoplay(drops, { ...plan.current, resumeAt: 0 }, Date.now());
-        plan.current = d.type === 'play' ? markHeard(d.plan, d.drop.songId) : d.plan;
+        // 쉬는 중·실패로 멈춘 중이면 대기만 풀고 곧바로 다음 차례로 (실패한 곡은 이미 빠져 있다 — 아직 안 들은 곡을 들은 곡으로 넘기지 않음)
+        plan.current = wake(plan.current);
       }
       bump();
       if (st.key) st.stop();

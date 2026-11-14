@@ -4,13 +4,15 @@ let mockFind: (id: string) => Promise<Found>;
 const mockTrack = jest.fn();
 jest.mock('react-native-video', () => 'Video');
 jest.mock('react-native/Libraries/Settings/Settings', () => ({ __esModule: true, default: { get: () => undefined } }));
-jest.mock('@/store/toast', () => ({ toast: jest.fn() }));
+const mockToast = jest.fn();
+jest.mock('@/store/toast', () => ({ toast: (...a: unknown[]) => mockToast(...a) }));
 jest.mock('@/services/previewSource', () => ({ findPreview: (s: { id: string }) => mockFind(s.id), noPreviewMessage: () => '' }));
 jest.mock('@/services/analytics', () => ({ track: (...a: unknown[]) => mockTrack(...a), currentDropId: () => undefined }));
 jest.mock('@/store/prefs', () => ({ usePrefs: (sel: (s: { autoplayNearby: boolean }) => unknown) => sel({ autoplayNearby: true }) }));
 
 import type { MusicDropSummary } from '@/api/types';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
+import { AppState } from 'react-native';
 import { usePreviewStore } from '@/services/preview';
 import { MAX_FAIL_STREAK } from '@/utils/autoplayPlan';
 const React = require('react') as typeof import('react');
@@ -123,4 +125,72 @@ test('조회가 예외로 끝나도 불러오는 중이 남지 않고 다음 곡
   expect(st().pending).toBeNull();
   await flush(16_000);
   expect(st().key).toBe('b');
+});
+
+/** 실패를 MAX_FAIL_STREAK번 내서 멈추게 한다 */
+async function failUntilIdle() {
+  for (let i = 0; i < 20; i++) {
+    await flush(130_000, 1000);
+    if (st().key) act(() => { st()._error(); });
+  }
+  const before = mockTrack.mock.calls.filter(c => c[0] === 'preview_started').length;
+  await flush(300_000, 5000);
+  expect(mockTrack.mock.calls.filter(c => c[0] === 'preview_started').length).toBe(before); // 멈춤
+  expect(st().key).toBeNull();
+}
+
+test('연속 실패로 멈춘 뒤 다음 곡을 누르면 다시 튼다', async () => {
+  mockFind = jest.fn(async (id: string) => ({ previewUrl: `https://x/${id}.m4a` }));
+  mount([drop('a'), drop('b')]);
+  await failUntilIdle();
+  act(() => { result.current.next(); });
+  await flush(1000);
+  expect(st().key).not.toBeNull();
+});
+
+test('연속 실패로 멈춘 뒤 재생 버튼을 누르면 다시 튼다', async () => {
+  mockFind = jest.fn(async (id: string) => ({ previewUrl: `https://x/${id}.m4a` }));
+  mount([drop('a'), drop('b')]);
+  await failUntilIdle();
+  act(() => { result.current.toggle(); });
+  await flush(1000);
+  expect(st().key).not.toBeNull();
+});
+
+test('연속 실패로 멈춘 뒤 앱이 앞으로 돌아오면 다시 튼다', async () => {
+  mockFind = jest.fn(async (id: string) => ({ previewUrl: `https://x/${id}.m4a` }));
+  mount([drop('a'), drop('b')]);
+  await failUntilIdle();
+  const calls = (AppState.addEventListener as jest.Mock).mock.calls.filter(c => c[0] === 'change');
+  act(() => { (calls[calls.length - 1][1] as (s: string) => void)('active'); });
+  await flush(1000);
+  expect(st().key).not.toBeNull();
+});
+
+test('쉬는 중에 다음 곡을 누르면 대기만 풀고, 안 들은 다음 곡을 건너뛰지 않는다', async () => {
+  mockFind = jest.fn(async (id: string) => ({ previewUrl: `https://x/${id}.m4a` }));
+  mount([drop('a'), drop('b'), drop('c')]);
+  await flush(500);
+  expect(st().key).toBe('a');
+  act(() => { st()._error(); });
+  await flush(500);
+  expect(st().key).toBeNull(); // 쉬는 중
+  act(() => { result.current.next(); });
+  await flush(500);
+  expect(st().key).toBe('b');
+});
+
+test('재생 오류 토스트 — 사용자가 튼 곡은 알리고, 자동 재생 곡은 알리지 않는다', async () => {
+  const { PreviewHost } = require('@/services/preview') as typeof import('@/services/preview');
+  let host: import('react-test-renderer').ReactTestRenderer | undefined;
+  act(() => { host = TestRenderer.create(React.createElement(PreviewHost)); });
+  const video = () => host!.root.findByType('Video' as unknown as React.ElementType);
+  mockToast.mockClear();
+  act(() => { st().play('u', 'https://x/u.m4a', { title: 'u', artist: 'x' }); });
+  act(() => { video().props.onError(); });
+  expect(mockToast).toHaveBeenCalledTimes(1);
+  act(() => { st().play('v', 'https://x/v.m4a', { title: 'v', artist: 'x', autoplay: true }); });
+  act(() => { video().props.onError(); });
+  expect(mockToast).toHaveBeenCalledTimes(1);
+  act(() => { host!.unmount(); });
 });

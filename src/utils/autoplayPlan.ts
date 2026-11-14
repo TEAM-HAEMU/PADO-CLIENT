@@ -9,7 +9,7 @@
  * 무한 반복을 막는 규칙
  *  - 새 바퀴는 이번 바퀴에 끝까지 들은(또는 넘긴) 곡이 있을 때만 시작한다. 곡이 heard에 들어가려면 실제로 30초를 듣거나
  *    사용자가 넘겨야 하므로, 아무것도 못 트는 목록에서 바퀴가 쉬지 않고 돌지 않는다
- *  - 연속 실패가 MAX_FAIL_STREAK번이면 멈추고, 드랍 목록(곡 집합)이 바뀔 때까지 다시 시도하지 않는다
+ *  - 연속 실패가 MAX_FAIL_STREAK번이면 멈추고, 드랍 목록(곡 집합)이 바뀌거나 사용자가 다시 누를 때(wake)까지 다시 시도하지 않는다
  *  - 틀 곡이 없으면(미리듣기 없는 곡뿐) 멈추고, 곡 집합이 바뀌면 다시 본다
  */
 
@@ -106,6 +106,14 @@ export function recordOutcome(plan: AutoplayPlan, songId: string, outcome: Autop
 export function markHeard(plan: AutoplayPlan, songId: string): AutoplayPlan {
   // 사용자가 넘기면 쉬는 중이던 대기도 푼다
   return { ...plan, heard: add(plan.heard, songId), failStreak: 0, resumeAt: 0, idleFor: null };
+}
+
+/**
+ * 사용자가 다시 원함(다음 곡·재생 버튼·자동 재생 다시 켜기) 또는 앱이 앞으로 돌아옴 — 멈춤·연속 실패·대기를 풀고 곧바로 다시 고른다.
+ * 들은 곡·실패한 곡 기록은 그대로 (실패한 곡은 다른 곡 뒤로, 남은 곡이 없으면 다시 시도)
+ */
+export function wake(plan: AutoplayPlan): AutoplayPlan {
+  return plan.idleFor === null && plan.failStreak === 0 && plan.resumeAt === 0 ? plan : { ...plan, idleFor: null, failStreak: 0, resumeAt: 0 };
 }
 
 /** 미리듣기 없음이 확인된 곡 (이어 틀 곡을 찾다가 알게 된 경우) */

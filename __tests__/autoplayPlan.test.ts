@@ -1,6 +1,6 @@
 /* 주변 곡 자동 재생 — 다음 곡 결정 규칙 (순수 함수) */
 import {
-  decideAutoplay, emptyPlan, failDelay, markHeard, markSkipped, recordOutcome, songSetKey, upNextCandidates,
+  decideAutoplay, emptyPlan, failDelay, markHeard, markSkipped, recordOutcome, songSetKey, upNextCandidates, wake,
   FAIL_DELAY_MS, MAX_FAIL_DELAY_MS, MAX_FAIL_STREAK, SKIP_DELAY_MS, type AutoplayOutcome, type AutoplayPlan,
 } from '@/utils/autoplayPlan';
 
@@ -208,6 +208,31 @@ describe('재생 오류·조회 불가 — 1-4 같은 곡 무한 재시도', () 
   test('cancelled는 아무것도 바꾸지 않는다', () => {
     const plan = emptyPlan();
     expect(recordOutcome(plan, 'a', 'cancelled', T0)).toBe(plan);
+  });
+});
+
+describe('wake — 사용자 조작·포그라운드 복귀로 멈춤 풀기', () => {
+  test('연속 실패로 멈춘 뒤 wake하면 같은 곡 집합에서도 다시 고른다 (들은 곡·실패한 곡 기록은 유지)', () => {
+    let plan = emptyPlan();
+    for (let i = 0; i < MAX_FAIL_STREAK; i++) plan = recordOutcome(plan, i % 2 ? 'b' : 'a', 'unavailable', T0);
+    const stopped = decideAutoplay([A, B], { ...plan, resumeAt: 0 }, T0);
+    expect(stopped.type).toBe('idle');
+    expect(decideAutoplay([A, B], stopped.plan, T0 + 10 * MAX_FAIL_DELAY_MS).type).toBe('idle');
+    const woken = wake(stopped.plan);
+    expect(woken).toMatchObject({ idleFor: null, failStreak: 0, resumeAt: 0 });
+    expect(woken.failed).toBe(stopped.plan.failed);
+    expect(decideAutoplay([A, B], woken, T0).type).toBe('play');
+  });
+  test('쉬는 중이면 대기만 푼다 — 아직 안 들은 다음 곡을 들은 곡으로 넘기지 않는다', () => {
+    const plan = recordOutcome(emptyPlan(), 'a', 'error', T0);
+    expect(pickId([A, B], plan, T0 + 1)).toBe('wait');
+    const woken = wake(plan);
+    expect(woken.heard.size).toBe(0);
+    expect(pickId([A, B], woken, T0 + 1)).toBe('b');
+  });
+  test('풀 것이 없으면 같은 plan을 그대로', () => {
+    const plan = emptyPlan();
+    expect(wake(plan)).toBe(plan);
   });
 });
 
