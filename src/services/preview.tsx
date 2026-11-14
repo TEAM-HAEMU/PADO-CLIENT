@@ -34,6 +34,11 @@ interface PreviewState {
    * 곡이 끝날 때 플레이어를 내리지 않고 주소만 바꿔 끼운다 — 백그라운드에서 소리가 한 번 끊기면 iOS가 앱을 재워 다음 곡을 못 틀기 때문
    */
   upNext: { key: string; url: string; meta: PreviewMeta } | null;
+  /**
+   * 마지막 재생 오류 (주소 만료·오프라인 등으로 플레이어가 오류를 냄). 매번 새 객체라 같은 곡이 또 실패해도 구독자가 알 수 있다.
+   * 주변 곡 자동 재생이 이 곡을 실패로 기록하고 다음 곡으로 넘어간다 — 없으면 key가 비자마자 같은 곡을 다시 튼다
+   */
+  lastError: { key: string; seq: number } | null;
   setUpNext: (next: PreviewState['upNext']) => void;
   play: (key: string, url: string, meta?: PreviewMeta) => void;
   toggle: () => void;
@@ -41,6 +46,7 @@ interface PreviewState {
   _progress: (pos: number, dur: number) => void;
   _ended: () => void;
   _ready: () => void;
+  _error: () => void;
 }
 
 /**
@@ -62,6 +68,7 @@ const cancelIntent = (key?: string | null) => {
 const settle = (token: number) => { if (current(token)) usePreviewStore.setState({ pending: null }); };
 
 const IDLE = { key: null, url: null, meta: null, paused: true, position: 0, buffering: false };
+let errorSeq = 0;
 
 export const usePreviewStore = create<PreviewState>((set, get) => ({
   ...IDLE,
@@ -70,6 +77,7 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
   pending: null,
   buffering: false,
   upNext: null,
+  lastError: null,
   setUpNext: upNext => set({ upNext }),
   play: (key, url, meta) => {
     if (intentKey !== key) cancelIntent(); // 다른 곡의 대기 중인 재생 요청은 버린다
@@ -91,6 +99,11 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
     set({ ...IDLE, endedKey: key, upNext: null });
   },
   _ready: () => { if (get().buffering) set({ buffering: false }); },
+  _error: () => {
+    const { key } = get();
+    cancelIntent();
+    set({ ...IDLE, endedKey: null, upNext: null, lastError: key ? { key, seq: ++errorSeq } : get().lastError });
+  },
 }));
 
 // UI 테스트는 `-PADO_MUTE YES` 실행 인자를 넘긴다 → 미리듣기를 무음으로 (화면 동작은 그대로)
@@ -101,7 +114,7 @@ export function PreviewHost() {
   const meta = usePreviewStore(st => st.meta);
   const paused = usePreviewStore(st => st.paused);
   const _progress = usePreviewStore(st => st._progress);
-  const stop = usePreviewStore(st => st.stop);
+  const fail = usePreviewStore(st => st._error);
   const ended = usePreviewStore(st => st._ended);
   const ready = usePreviewStore(st => st._ready);
   if (!url) return null;
@@ -123,7 +136,8 @@ export function PreviewHost() {
       onProgress={e => { if (e.currentTime > 0) ready(); _progress(e.currentTime, e.seekableDuration || e.playableDuration); }}
       onEnd={ended}
       // 주소는 있는데 재생이 안 되면(만료·지역 제한 등) 조용히 멈추지 말고 알린다
-      onError={() => { stop(); toast('미리듣기를 재생하지 못했어요. 잠시 후 다시 시도해주세요.', 'error'); }}
+      // 주변 자동 재생 곡은 사용자가 누른 재생이 아니라 알리지 않는다 (자동 재생이 쉬었다가 다음 곡으로)
+      onError={() => { fail(); if (!meta?.autoplay) toast('미리듣기를 재생하지 못했어요. 잠시 후 다시 시도해주세요.', 'error'); }}
       style={{ width: 0, height: 0 }}
     />
   );
@@ -155,7 +169,15 @@ export async function startPreview(song: PreviewSong): Promise<'ok' | 'none' | '
   const st = usePreviewStore.getState();
   if (st.key === song.id) { if (st.paused) st.toggle(); return 'ok'; }
   const token = begin(song.id, metaOf(song));
-  const r = await findPreview(song, { priority: true });
+  let r: Awaited<ReturnType<typeof findPreview>>;
+  try {
+    r = await findPreview(song, { priority: true });
+  } catch {
+    // 조회가 예외로 끝나도 '불러오는 중'이 남지 않게 (확인 불가로 처리)
+    if (!current(token)) return 'cancelled';
+    settle(token);
+    return 'unavailable';
+  }
   if (!current(token)) return 'cancelled';
   if (r.unavailable || !r.previewUrl) { settle(token); return r.unavailable ? 'unavailable' : r.adult ? 'adult' : 'none'; }
   usePreviewStore.getState().play(song.id, r.previewUrl, metaOf(song));
