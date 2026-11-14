@@ -90,6 +90,7 @@
 | `location_unavailable` | 첫 위치를 못 받음 | `reason`(`denied`·`off`·`timeout`) | |
 | `map_loaded` | 앱 실행마다 지도에 주변 드랍이 처음 뜸 | `nearby_count`, `playable_count`, `locked_count`, `nearest_m`, `nearest_playable_m`, `display_m`, `play_m` | |
 | `drop_locked_tap` | 재생 반경 밖 드랍을 누름 | `drop_id`, `type`, `source`, `distance_m`, `remaining_m` | 예 |
+| `map_cluster_tap` | 많이 축소한 지도에서 드랍 묶음을 눌러 확대 | `count`(묶음의 드랍 수) | |
 
 ### 드랍 · 듣기
 
