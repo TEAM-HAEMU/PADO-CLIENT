@@ -78,7 +78,10 @@ export function scrubUrl(url: string): string {
   return scrubString(base);
 }
 
-/** 객체를 따라가며 민감한 키는 가리고, 문자열은 scrubString */
+/** URL을 담는 키 — 쿼리를 뺀다 (url, http.url, url.full, request_url·redirectUrl처럼 url로 끝나는 키, href) */
+const isUrlKey = (key: string) => /(url|href)$/i.test(key) || key.toLowerCase() === 'url.full';
+
+/** 객체를 따라가며 민감한 키는 가리고, 문자열은 scrubString (URL 키는 쿼리를 뺀다) */
 export function scrubData<T>(value: T, depth = 0): T {
   if (depth > 8) return FILTERED as unknown as T;
   if (typeof value === 'string') return scrubString(value) as unknown as T;
@@ -86,7 +89,7 @@ export function scrubData<T>(value: T, depth = 0): T {
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (k === 'url' && typeof v === 'string') out[k] = scrubUrl(v);
+      if (isUrlKey(k) && typeof v === 'string') out[k] = scrubUrl(v);
       else out[k] = isSensitiveKey(k) ? FILTERED : scrubData(v, depth + 1);
     }
     return out as T;
@@ -139,14 +142,28 @@ export interface EventLike {
   [k: string]: unknown;
 }
 
-/** 문맥 중 SDK가 채우는 기기·앱 정보는 그대로 두고(처리방침의 기기 정보), 나머지만 걸러낸다 */
-const DEVICE_CONTEXTS = new Set(['device', 'os', 'app', 'culture', 'react_native_context', 'trace', 'runtime']);
+/** 문맥 중 SDK가 채우는 기기·앱 정보는 그대로 두고(처리방침의 기기 정보), 나머지만 걸러낸다. trace는 data만 따로 거른다 */
+const DEVICE_CONTEXTS = new Set(['device', 'os', 'app', 'culture', 'react_native_context', 'runtime']);
+
+/**
+ * 화면 전환 추적이 span에 붙일 수 있는 route params·URL·경로 (route.params.*, route.url, route.path, route.href, previous_route.*).
+ * sendDefaultPii가 꺼져 있으면 SDK가 붙이지 않지만, 옵션이나 SDK 동작이 바뀌어도
+ * 가입 화면(Signup)의 signupToken·소셜 프로필 같은 params가 나가지 않게 키째 뺀다. 화면 이름(route.name)·key는 남긴다
+ */
+const ROUTE_DETAIL_KEY = /^(previous_)?route\.(params|url|path|href)(\.|$)/;
+export function dropRouteDetails<T extends Record<string, unknown>>(data: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) if (!ROUTE_DETAIL_KEY.test(k)) out[k] = v;
+  return out as T;
+}
+const scrubSpanData = (data: Record<string, unknown>) => scrubData(dropRouteDetails(data));
 
 /**
  * 이벤트 전체를 걸러낸다.
  *  - user 지움 (IP·기기 단위 식별값을 보내지 않는다 — 처리방침의 Sentry 항목에 없음)
  *  - request: 본문·쿠키·쿼리·Authorization 헤더 제거, URL은 쿼리 뺌
  *  - 메시지·예외 문구·브레드크럼·extra·tags·문맥(기기 정보 제외)·span 설명/데이터를 scrub
+ *  - span·trace 문맥의 route params·URL·경로는 키째 뺀다 (dropRouteDetails)
  *  - requestId가 있으면 tag request_id
  */
 export function scrubEvent<T extends EventLike>(event: T, requestId?: string): T {
@@ -165,10 +182,16 @@ export function scrubEvent<T extends EventLike>(event: T, requestId?: string): T
   if (e.tags) e.tags = scrubData(e.tags);
   if (e.contexts) {
     const contexts: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(e.contexts)) contexts[k] = DEVICE_CONTEXTS.has(k) ? v : scrubData(v);
+    for (const [k, v] of Object.entries(e.contexts)) {
+      if (k === 'trace' && v && typeof v === 'object') {
+        // 거래(화면 전환)의 루트 span — trace_id·op 등은 그대로, data(route 속성)만 거른다
+        const trace = v as { data?: Record<string, unknown> };
+        contexts[k] = trace.data ? { ...trace, data: scrubSpanData(trace.data) } : trace;
+      } else contexts[k] = DEVICE_CONTEXTS.has(k) ? v : scrubData(v);
+    }
     e.contexts = contexts;
   }
-  if (e.spans) e.spans = e.spans.map(sp => ({ ...sp, ...(typeof sp.description === 'string' ? { description: scrubString(stripQuery(sp.description)) } : null), ...(sp.data ? { data: scrubData(sp.data) } : null) }));
+  if (e.spans) e.spans = e.spans.map(sp => ({ ...sp, ...(typeof sp.description === 'string' ? { description: scrubString(stripQuery(sp.description)) } : null), ...(sp.data ? { data: scrubSpanData(sp.data) } : null) }));
   if (typeof e.transaction === 'string') e.transaction = scrubString(stripQuery(e.transaction));
   if (requestId) e.tags = { ...e.tags, request_id: requestId };
   return e as T;

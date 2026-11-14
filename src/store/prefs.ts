@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { kv } from './storage';
 import { migrateAnalyticsMode, setAnalyticsMode as applyAnalyticsMode, setUserProps, track, type AnalyticsMode, type SavedAnalyticsPrefs } from '@/services/analytics';
-import { setMonitoringMode } from '@/services/monitoring';
+import { reportError, setMonitoringMode } from '@/services/monitoring';
 
 export { migrateAnalyticsMode };
 
@@ -66,11 +66,14 @@ export const usePrefs = create<Prefs>((set, get) => {
       // 끄기 직전 한 번 기록하고 끈다 / 켠 뒤에 기록한다
       if (next === 'off') changed('analytics_mode', next);
       setMonitoringMode(next);
-      applyAnalyticsMode(next).then(() => {
-        if (next === 'off') return;
-        changed('analytics_mode', next);
-        if (next === 'detailed') onDetailedEnabled?.();
-      });
+      // SDK 시작이 실패해도 고른 값은 그대로 둔다 (분석 모듈의 모드도 이미 바뀌어 있어 둘이 어긋나지 않음 — 시작 못 한 동안은 보내지 않고, 다음 적용 때 다시 시작)
+      applyAnalyticsMode(next)
+        .then(() => {
+          if (next === 'off') return;
+          changed('analytics_mode', next);
+          if (next === 'detailed') onDetailedEnabled?.();
+        })
+        .catch(e => reportError(e, 'analytics_mode'));
     },
     setLocationPrompted: () => { set({ locationPrompted: true }); persist(); },
     setOnboardingSeen: () => { if (!get().onboardingSeen) { set({ onboardingSeen: true }); persist(); } },

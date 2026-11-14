@@ -72,6 +72,15 @@ test('scrubData — 민감한 키는 가리고 request_id는 남긴다', () => {
   });
 });
 
+test('scrubData — URL을 담는 키(url로 끝나는 키·url.full·http.url·href)는 쿼리를 뺀다', () => {
+  const q = 'https://api.paado.app/api/v1/droppings/nearby?lat=35.1&lng=129.1';
+  const cut = `https://api.paado.app/api/v1/droppings/nearby?${FILTERED}`;
+  expect(scrubData({ url: q, 'url.full': q, 'http.url': q, request_url: q, redirectUrl: q, href: 'pado://signup?token=st-abc', 'http.method': 'GET' })).toEqual({
+    url: cut, 'url.full': cut, 'http.url': cut, request_url: cut, redirectUrl: cut, href: `pado://signup?${FILTERED}`, 'http.method': 'GET',
+  });
+  expect(scrubData({ nested: { 'url.full': 'https://itunes.apple.com/search?term=노래' } })).toEqual({ nested: { 'url.full': `https://itunes.apple.com/search?${FILTERED}` } });
+});
+
 describe('scrubBreadcrumb', () => {
   test('네트워크: 메서드·상태·쿼리 뺀 URL만 (본문·헤더 버림)', () => {
     const c = scrubBreadcrumb({ category: 'xhr', type: 'http', data: { method: 'GET', status_code: 200, url: 'https://api.paado.app/api/v1/droppings/nearby?lat=35.1&lng=129.1', request_body_size: 10, request_headers: { Authorization: 'Bearer x' } } });
@@ -114,6 +123,33 @@ test('scrubEvent — user·요청 본문·Authorization 제거, 문구·브레�
   expect(ev.contexts?.custom).toEqual({ address: FILTERED });
   expect(ev.spans?.[0]).toEqual({ description: `GET https://api.paado.app/api/v1/droppings/nearby?${FILTERED}`, data: { url: `https://api.paado.app/api/v1/droppings/nearby?${FILTERED}`, 'http.query': FILTERED, 'http.method': 'GET' } });
   expect(ev.tags).toEqual({ app_env: 'prod', request_id: 'rid-1234-5678' });
+});
+
+test('scrubEvent — 화면 전환 거래의 route params·URL은 키째 뺀다 (가입 화면 signupToken·소셜 프로필)', () => {
+  const routeData = {
+    'sentry.op': 'navigation',
+    'route.name': 'Signup',
+    'route.key': 'Signup-k1',
+    'route.params.signupToken': 'st-abc',
+    'route.params.profile': '{"nickname":"파도","email":"a@b.co"}',
+    'route.url': 'pado://signup?token=st-abc',
+    'route.path': '/signup',
+    'route.href': 'pado://signup?token=st-abc',
+    'previous_route.href': 'pado://login?code=st-abc',
+    'previous_route.name': 'Login',
+    'previous_route.params.mode': 'social',
+    'route.has_been_seen': false,
+  };
+  const ev = scrubEvent({
+    transaction: 'Signup',
+    contexts: { trace: { trace_id: 't1', span_id: 's1', op: 'navigation', data: routeData }, app: { app_version: '1.0' } },
+    spans: [{ description: 'Navigation dispatch to screen Signup mounted', data: routeData }],
+  });
+  const kept = { 'sentry.op': 'navigation', 'route.name': 'Signup', 'route.key': 'Signup-k1', 'previous_route.name': 'Login', 'route.has_been_seen': false };
+  expect(ev.contexts?.trace).toEqual({ trace_id: 't1', span_id: 's1', op: 'navigation', data: kept });
+  expect(ev.spans?.[0].data).toEqual(kept);
+  expect(ev.contexts?.app).toEqual({ app_version: '1.0' });
+  expect(JSON.stringify(ev)).not.toContain('st-abc');
 });
 
 test('requestIdOf — ApiError.requestId만', () => {
@@ -167,6 +203,14 @@ describe('monitoring (SDK 연결)', () => {
     expect(out).toEqual({ message: 'x [email]', tags: { request_id: 'rid-1234-5678' } });
   });
 
+  test('beforeSendTransaction도 route params를 빼고 거른다', () => {
+    const { m, sentry } = load();
+    m.initMonitoring('basic');
+    const { beforeSendTransaction } = sentry.init.mock.calls[0][0];
+    const out = beforeSendTransaction({ transaction: 'Signup', contexts: { trace: { op: 'navigation', data: { 'route.name': 'Signup', 'route.params.signupToken': 'st-abc' } } } });
+    expect(out.contexts.trace.data).toEqual({ 'route.name': 'Signup' });
+  });
+
   test("이용 분석 '끔'이면 시작하지 않고, 켜져 있다가 끄면 닫는다 (닫힌 뒤 이벤트는 버림)", () => {
     const off = load();
     expect(off.m.initMonitoring('off')).toBe(false);
@@ -201,6 +245,21 @@ describe('monitoring (SDK 연결)', () => {
     expect(sentry.captureException).toHaveBeenCalledWith(err, expect.any(Function));
     expect(sentry.__scope.setTags).toHaveBeenLastCalledWith({ request_id: 'rid-503-0000', api_path: '/droppings/:id/likes', api_status: '503' });
     expect(sentry.__scope.setFingerprint).toHaveBeenLastCalledWith(['api', 'POST', '/droppings/:id/likes', '503']);
+  });
+
+  test('처리한 오류(reportError) — 켜져 있으면 area 태그로 보내고, 꺼져 있으면 버림', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const err = new Error('init failed');
+    const off = load({ dsn: '' });
+    off.m.initMonitoring('basic');
+    off.m.reportError(err, 'analytics_mode');
+    expect(off.sentry.captureException).not.toHaveBeenCalled();
+    const { m, sentry } = load();
+    m.initMonitoring('basic');
+    m.reportError(err, 'analytics_mode');
+    expect(sentry.captureException).toHaveBeenCalledWith(err, expect.any(Function));
+    expect(sentry.__scope.setTags).toHaveBeenLastCalledWith({ area: 'analytics_mode' });
+    warn.mockRestore();
   });
 
   test('꺼져 있으면 API 실패도 보내지 않는다', () => {
