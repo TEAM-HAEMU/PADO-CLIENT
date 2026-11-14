@@ -1,5 +1,8 @@
-/* 지도 핀 고르기 · 드랍 목록 키 · 역지오코딩 간격 · 아트 프리패처 */
-import { createPrefetcher, GEOCODE_EVERY_MS, geocodeDue, idSetKey, inRegion, MAX_PINS, pickPins } from '@/utils/mapPins';
+/* 지도 핀 고르기 · 축소 시 묶음 · 드랍 목록 키 · 역지오코딩 간격 · 아트 프리패처 */
+import {
+  CLUSTER_LNG_DELTA, CLUSTER_MIN_ZOOM_DELTA, clusterCell, clusterLabel, clusterPoints, clusterSize, clusterZoomRegion, createPrefetcher,
+  GEOCODE_EVERY_MS, geocodeDue, idSetKey, inRegion, MAX_CLUSTERS, MAX_PINS, pickPins, shouldCluster, singlePins,
+} from '@/utils/mapPins';
 
 const here = { latitude: 35.1575, longitude: 129.0604 };
 // 위도 1도 ≈ 111,195m
@@ -53,6 +56,220 @@ describe('pickPins', () => {
 
   test('목록이 상한보다 적으면 영역 안 전부', () => {
     expect(pickPins(sorted.slice(0, 5), region).map(p => p.rank)).toEqual([0, 1, 2, 3, 4]);
+  });
+});
+
+describe('shouldCluster', () => {
+  test('영역을 모르거나 가까이 보면 핀, 많이 축소하면 묶음', () => {
+    expect(shouldCluster(null)).toBe(false);
+    expect(shouldCluster(region)).toBe(false);
+    expect(shouldCluster({ ...region, longitudeDelta: CLUSTER_LNG_DELTA })).toBe(false);
+    expect(shouldCluster({ ...region, longitudeDelta: CLUSTER_LNG_DELTA * 1.01 })).toBe(true);
+  });
+});
+
+describe('clusterPoints', () => {
+  // 경도 0.2도(약 18km) 폭으로 축소한 지도
+  const wide = { ...here, latitudeDelta: 0.3, longitudeDelta: 0.2 };
+  const east = (m: number, from = here) => ({ latitude: from.latitude, longitude: from.longitude + m / (111_195 * Math.cos((from.latitude * Math.PI) / 180)) });
+
+  test('칸 크기는 화면 폭/칸 수에 가까운 2의 거듭제곱 — 조금 확대·축소해도 같다', () => {
+    expect(clusterCell(0.2)).toBe(2 ** -5); // 0.04 → 0.03125
+    expect(clusterCell(0.21)).toBe(clusterCell(0.19));
+    expect(clusterCell(0.4)).toBe(clusterCell(0.2) * 2);
+  });
+
+  test('가까이 모인 드랍은 하나로 묶고, 수·평균 좌표·범위를 준다', () => {
+    const pts = [here, north(50), east(80), north(120)];
+    const out = clusterPoints(pts, wide);
+    expect(out).toHaveLength(1);
+    expect(out[0].count).toBe(4);
+    expect(out[0].latitude).toBeCloseTo(pts.reduce((a, p) => a + p.latitude, 0) / 4, 9);
+    expect(out[0].longitude).toBeCloseTo(pts.reduce((a, p) => a + p.longitude, 0) / 4, 9);
+    expect(out[0].minLat).toBe(here.latitude);
+    expect(out[0].maxLat).toBe(north(120).latitude);
+    expect(out[0].maxLng).toBe(east(80).longitude);
+  });
+
+  test('멀리 떨어진 무리는 따로 묶고, 전부 세면 영역 안 드랍 수와 같다', () => {
+    const far = east(9000);
+    const pts = [here, north(30), far, east(40, far), east(60, far)];
+    const out = clusterPoints(pts, wide);
+    expect(out).toHaveLength(2);
+    expect(out.map(c => c.count).sort()).toEqual([2, 3]);
+    expect(out.reduce((a, c) => a + c.count, 0)).toBe(pts.length);
+  });
+
+  test('칸 경계에 걸친 무리는 갈라지지 않고 하나로 합친다 (묶음끼리 겹치지 않게)', () => {
+    const cell = clusterCell(wide.longitudeDelta);
+    // 경도 칸 경계 바로 양옆에 50m 간격으로
+    const edge = { latitude: here.latitude, longitude: Math.ceil(here.longitude / cell) * cell };
+    const pts = [east(-30, edge), east(-10, edge), east(10, edge), east(30, edge), east(50, edge)];
+    const out = clusterPoints(pts, wide);
+    expect(out).toHaveLength(1);
+    expect(out[0].count).toBe(5);
+    expect(out[0].minLng).toBe(pts[0].longitude);
+    expect(out[0].maxLng).toBe(pts[4].longitude);
+  });
+
+  test('합쳐도 서로 한 칸 넘게 떨어진 묶음끼리는 가깝지 않다', () => {
+    const cell = clusterCell(wide.longitudeDelta);
+    const pts = Array.from({ length: 300 }, (_, i) => east((i * 7919) % 15000, north(((i * 104729) % 15000) - 7500)));
+    const out = clusterPoints(pts, wide);
+    expect(out.reduce((a, c) => a + c.count, 0)).toBe(300);
+    const cellLat = cell * Math.round(Math.cos((here.latitude * Math.PI) / 180) * 10) / 10;
+    for (const a of out) for (const b of out) {
+      if (a === b) continue;
+      // 합칠 때 기준은 합치기 전 중심이라 합친 뒤 중심은 조금 움직일 수 있다 — 반 칸보다는 멀다
+      expect(Math.hypot((a.longitude - b.longitude) / cell, (a.latitude - b.latitude) / cellLat)).toBeGreaterThan(0.5);
+    }
+  });
+
+  test('보이는 영역(넉넉히) 밖은 세지 않는다', () => {
+    // 위도 반폭 0.15도, pad 0.5 → 0.3도(약 33km)까지
+    const out = clusterPoints([here, north(40_000)], wide);
+    expect(out.reduce((a, c) => a + c.count, 0)).toBe(1);
+  });
+
+  test('같은 줌에서 지도를 끌어도 같은 드랍은 같은 키의 묶음에 남는다', () => {
+    const pts = [here, north(30), east(40)];
+    const a = clusterPoints(pts, wide);
+    const b = clusterPoints(pts, { ...wide, latitude: here.latitude + 0.02, longitude: here.longitude - 0.03 });
+    expect(b.map(c => c.key)).toEqual(a.map(c => c.key));
+    expect(b.map(c => c.count)).toEqual(a.map(c => c.count));
+  });
+
+  test('줌 단계가 바뀌면 키도 바뀐다 (다른 격자)', () => {
+    const a = clusterPoints([here], wide);
+    const b = clusterPoints([here], { ...wide, longitudeDelta: 0.8, latitudeDelta: 1.2 });
+    expect(a[0].key).not.toBe(b[0].key);
+  });
+
+  test('500개도 칸 수만큼으로 줄어든다', () => {
+    const pts = Array.from({ length: 500 }, (_, i) => east((i % 25) * 300, north(Math.floor(i / 25) * 300)));
+    const out = clusterPoints(pts, wide);
+    expect(out.reduce((a, c) => a + c.count, 0)).toBe(500);
+    expect(out.length).toBeLessThanOrEqual(16);
+  });
+
+  test('빈 목록이면 빈 묶음', () => {
+    expect(clusterPoints([], wide)).toEqual([]);
+  });
+
+  test('혼자 떨어진 드랍은 1개짜리 묶음으로, 그 드랍을 single로 준다 (여럿이면 null)', () => {
+    const lone = { ...east(9000), id: 'lone' };
+    const pts = [{ ...here, id: 'a' }, { ...north(30), id: 'b' }, lone];
+    const out = clusterPoints(pts, wide);
+    const one = out.find(c => c.count === 1)!;
+    expect(one.single).toBe(lone);
+    expect(out.find(c => c.count === 2)!.single).toBeNull();
+  });
+
+  test('이웃 칸 묶음에 합쳐진 1개짜리는 single이 아니다', () => {
+    const cell = clusterCell(wide.longitudeDelta);
+    const edge = { latitude: here.latitude, longitude: Math.ceil(here.longitude / cell) * cell };
+    const out = clusterPoints([east(-30, edge), east(-10, edge), east(10, edge)], wide);
+    expect(out).toHaveLength(1);
+    expect(out[0].single).toBeNull();
+  });
+
+  describe('묶음 수 상한', () => {
+    // 넓힌 영역(가로 ±0.2도·세로 ±0.3도)에 두 칸 간격으로 2개씩 — 서로 합쳐지지 않는 묶음 84개
+    const cell = clusterCell(wide.longitudeDelta);
+    const cellLat = cell * 0.8;
+    const pts: { latitude: number; longitude: number }[] = [];
+    for (let i = -3; i <= 3; i++) for (let j = -6; j < 6; j++) {
+      const p = { latitude: (Math.floor(here.latitude / cellLat) + j * 2 + 0.5) * cellLat, longitude: (Math.floor(here.longitude / cell) + i * 2 + 0.5) * cell };
+      pts.push(p, { ...p, longitude: p.longitude + cell * 0.1 });
+    }
+    const far = (c: { latitude: number; longitude: number }) => Math.max(Math.abs(c.longitude - wide.longitude) / wide.longitudeDelta, Math.abs(c.latitude - wide.latitude) / wide.latitudeDelta);
+    const all = clusterPoints(pts, wide, undefined, Infinity);
+    const capped = clusterPoints(pts, wide);
+
+    test('상한을 넘으면 상한까지만', () => {
+      expect(all.length).toBeGreaterThan(MAX_CLUSTERS);
+      expect(capped).toHaveLength(MAX_CLUSTERS);
+    });
+
+    test('화면 안 묶음은 다 남고 수도 그대로다', () => {
+      const onScreen = all.filter(c => far(c) <= 0.5);
+      expect(onScreen.length).toBeGreaterThan(0);
+      for (const c of onScreen) expect(capped.find(k => k.key === c.key)?.count).toBe(c.count);
+    });
+
+    test('빠지는 건 화면 가운데서 먼 묶음이고, 남은 순서는 그대로', () => {
+      const kept = new Set(capped.map(c => c.key));
+      const dropped = all.filter(c => !kept.has(c.key));
+      const keptFar = Math.max(...capped.map(far));
+      for (const c of dropped) expect(far(c)).toBeGreaterThanOrEqual(keptFar);
+      expect(capped.map(c => c.key)).toEqual(all.filter(c => kept.has(c.key)).map(c => c.key));
+    });
+
+    test('상한 이하면 그대로', () => {
+      expect(clusterPoints(pts, wide, undefined, all.length)).toEqual(all);
+    });
+  });
+});
+
+describe('singlePins', () => {
+  const wide = { ...here, latitudeDelta: 0.3, longitudeDelta: 0.2 };
+  const drops = [north(0), north(30), north(9000), north(-9000)];
+  // 지도 화면처럼 거리순 목록의 d는 드랍 목록의 객체 그대로
+  const sorted = [drops[1], drops[0], drops[3], drops[2]].map(d => ({ d }));
+
+  test('1개짜리 묶음의 드랍만, 거리순 목록 순서·순번으로', () => {
+    const clusters = clusterPoints(drops, wide);
+    expect(clusters.map(c => c.count).sort()).toEqual([1, 1, 2]);
+    expect(singlePins(sorted, clusters)).toEqual([{ item: sorted[2], rank: 2 }, { item: sorted[3], rank: 3 }]);
+  });
+
+  test('1개짜리가 없으면 빈 목록', () => {
+    expect(singlePins(sorted, clusterPoints(drops.slice(0, 2), wide))).toEqual([]);
+    expect(singlePins(sorted, [])).toEqual([]);
+  });
+
+  test('같은 좌표라도 다른 객체면 찾지 않는다 (드랍 목록 그대로 묶어야 한다)', () => {
+    const clusters = clusterPoints([{ ...drops[2] }], wide);
+    expect(singlePins(sorted, clusters)).toEqual([]);
+  });
+});
+
+describe('clusterZoomRegion', () => {
+  const wide = { ...here, latitudeDelta: 0.3, longitudeDelta: 0.2 };
+  const one = (lat: number, lng: number, span = 0) => ({ key: 'k', latitude: lat, longitude: lng, count: 3, minLat: lat - span / 2, maxLat: lat + span / 2, minLng: lng - span / 2, maxLng: lng + span / 2 });
+
+  test('한 점에 몰린 묶음은 핀이 보이는 줌까지 확대한다 (그 이상은 안 들어감)', () => {
+    const r = clusterZoomRegion(one(here.latitude, here.longitude), wide);
+    expect(r.longitudeDelta).toBe(CLUSTER_MIN_ZOOM_DELTA);
+    expect(shouldCluster(r)).toBe(false);
+    expect(r.latitudeDelta / r.longitudeDelta).toBeCloseTo(wide.latitudeDelta / wide.longitudeDelta, 9);
+  });
+
+  test('넓게 퍼진 묶음은 다 보이게, 적어도 지금의 절반으로는 확대한다', () => {
+    const spread = clusterZoomRegion(one(here.latitude, here.longitude, 0.02), wide);
+    expect(spread.longitudeDelta).toBeGreaterThanOrEqual(0.02 * 1.6 - 1e-12);
+    expect(spread.longitudeDelta).toBeLessThan(wide.longitudeDelta);
+    const huge = clusterZoomRegion(one(here.latitude, here.longitude, 1), wide);
+    expect(huge.longitudeDelta).toBe(wide.longitudeDelta / 2);
+  });
+
+  test('묶음 범위가 새 영역 안에 다 들어온다 (아래 목록 자리만큼 위로 올려도)', () => {
+    const c = one(here.latitude, here.longitude, 0.02);
+    const r = clusterZoomRegion(c, wide);
+    expect(c.maxLat).toBeLessThanOrEqual(r.latitude + r.latitudeDelta / 2);
+    expect(c.minLat).toBeGreaterThanOrEqual(r.latitude - r.latitudeDelta / 2);
+    expect(r.latitude).toBeLessThan(here.latitude);
+  });
+});
+
+describe('clusterLabel · clusterSize', () => {
+  test('숫자 표기', () => {
+    expect(clusterLabel(7)).toBe('7');
+    expect(clusterLabel(500)).toBe('500');
+    expect(clusterLabel(1234)).toBe('1,234');
+  });
+  test('지름은 수에 따라 세 단계', () => {
+    expect([1, 9, 10, 49, 50, 500].map(clusterSize)).toEqual([36, 36, 42, 42, 48, 48]);
   });
 });
 
