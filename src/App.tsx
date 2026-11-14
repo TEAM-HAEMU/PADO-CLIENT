@@ -28,7 +28,9 @@ import { colors } from '@/theme/tokens';
 const theme = { ...DefaultTheme, dark: false, colors: { ...DefaultTheme.colors, background: colors.page, card: colors.card, text: colors.ink, border: colors.line, primary: colors.primary } };
 
 // NativeWind(css-interop)가 로드 시 RN 0.87에서 deprecated된 ImageBackground를 건드려 뜨는 경고 — 앱 코드와 무관
-LogBox.ignoreLogs(['ImageBackground is deprecated']);
+// Sentry를 켜지 않는 빌드(개발·목 모드·DSN 없음·이용 분석 끔)에서 Sentry.wrap이 앱 시작 추적을 못 끝냈다고 내는 경고 — 의도된 상태.
+// 개발 빌드에선 이 경고가 하단 LogBox 띠로 떠서 탭 바를 가린다 (UI 테스트·수동 확인 방해)
+LogBox.ignoreLogs(['ImageBackground is deprecated', 'App Start Span could not be finished']);
 
 const renderFallback = ({ resetError }: { resetError: () => void }) => <AppErrorFallback onReset={resetError} />;
 
