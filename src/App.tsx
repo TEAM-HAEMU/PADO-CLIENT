@@ -21,7 +21,7 @@ import { MiniDisc } from '@/components/music/MiniDisc';
 import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
 import { setAnalyticsMode, startAppStateTracking, trackAppOpened, trackScreen } from '@/services/analytics';
-import { initMonitoring, registerNavigation, Sentry } from '@/services/monitoring';
+import { initMonitoring, registerNavigation, reportError, Sentry } from '@/services/monitoring';
 import { AppErrorFallback } from '@/components/AppErrorFallback';
 import { colors } from '@/theme/tokens';
 
@@ -42,7 +42,7 @@ function App() {
     startAppStateTracking();
     setAnalyticsMode(usePrefs.getState().analyticsMode)
       .then(() => trackAppOpened())
-      .catch(() => {})
+      .catch(e => reportError(e, 'analytics_start')) // 분석을 못 켜도 로그인은 계속
       .finally(() => bootstrap());
   }, [bootstrap]);
   const onNavState = () => { const r = navigationRef.getCurrentRoute(); trackScreen(r?.name, r?.params as object | undefined, r?.key); };
