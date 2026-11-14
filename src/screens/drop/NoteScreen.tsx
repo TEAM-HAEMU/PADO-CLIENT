@@ -1,6 +1,7 @@
 /** 3.3 한마디 남기기 — Figma 'B 3.3 한마디 남기기' (고른 곡 · 한마디 입력 · 추천 문구) → POST /droppings */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Linking, ScrollView, TextInput, View } from 'react-native';
+import { useIsMutating, useQueryClient } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { errorMessage } from '@/api/errors';
@@ -10,16 +11,19 @@ import { DiscArt } from '@/components/drop/parts';
 import { Chip, PrimaryButton, T, TopBar } from '@/components/ui';
 import { dialog } from '@/components/ui/Dialog';
 import { Wave } from '@/components/ui/Wave';
-import { useCreateDrop } from '@/hooks/api';
+import { CREATE_DROP_KEY, useCreateDrop, useMyDrops } from '@/hooks/api';
+import { regionOf } from '@/utils/address';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
+import { navigationRef } from '@/navigation/ref';
 import type { RootScreen } from '@/navigation/types';
 import { currentCoords, preciseDropHint, PRECISE_DROP_TITLE, tooImpreciseToDrop, useLocation } from '@/services/location';
 import { usePreviewStore } from '@/services/preview';
 import { draftArt, useDraft } from '@/store/draft';
+import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { josa } from '@/utils/josa';
-import { track } from '@/services/analytics';
+import { detailedOnly, track } from '@/services/analytics';
 
 const MAX = 255; // 명세: content 최대 255자
 const SUGGEST = ['퇴근길에 딱', '여기 풍경이랑 잘 어울려요', '친구와 함께 듣고싶어요', '여기서 처음 들었어요'];
@@ -33,6 +37,10 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   // 뒤로 갔다 와도 쓰던 메모가 남도록 초안에도 저장 (렌더 중이 아니라 반영 뒤에)
   useEffect(() => { useDraft.getState().set({ content: text }); }, [text]);
   const create = useCreateDrop();
+  const qc = useQueryClient();
+  // 드랍을 만드는 중 — 이 화면이 아니라 앱 전체 기준 (제출 중 뒤로 갔다 다시 들어온 새 화면에서도 두 번째 제출이 나가지 않게)
+  const creating = useIsMutating({ mutationKey: CREATE_DROP_KEY }) > 0;
+  const myDrops = useMyDrops().data;
   const scroll = useFocusedInputScroll();
   const art = draftArt(draft);
   // 'GANADARA를 고르셨군요! / 음악을 바다에 빠뜨려보세요.' — 조사는 곡·플리 이름 받침에 맞춘다
@@ -50,7 +58,8 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   const songPlaying = usePreviewStore(st => !!songId && st.key === songId && !st.paused);
 
   const submit = () => {
-    if (create.isPending) return;
+    // 렌더를 기다리지 않고 캐시의 진행 상태를 바로 본다 (빠른 연타·다시 들어온 화면 모두)
+    if (qc.isMutating({ mutationKey: CREATE_DROP_KEY }) > 0) return;
     // 실제 위치를 못 받았거나(권한·위치 서비스 꺼짐) 낡은 좌표면 엉뚱한 곳에 드랍되지 않게 막는다 — 누르는 순간의 위치로
     const loc = useLocation.getState();
     const coords = currentCoords(loc);
@@ -65,15 +74,32 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
     else if (draft.playlist?.kind === 'existing') body = { ...base, type: 'PLAYLIST', playlistId: draft.playlist.playlistId };
     else if (draft.playlist?.kind === 'new') body = { ...base, type: 'PLAYLIST', playlistName: draft.playlist.name, songIds: draft.playlist.songs.map(s => s.id) };
     else return toast('드랍할 곡을 먼저 골라주세요.', 'error');
-    create.mutate(body, {
-      onSuccess: () => {
-        track('drop_created', { type: body.type, note_length: body.content.length, song_id: 'songId' in body ? body.songId : undefined, option_count: 'options' in body ? body.options.length : undefined, playlist_new: 'playlistName' in body, address: body.address, lat: body.latitude, lng: body.longitude });
+    // mutate(body, { onSuccess })의 호출별 콜백은 화면이 닫히면(제출 중 뒤로 가기) 불리지 않는다 → 드랍은 생겼는데 초안이 남아
+    // 다시 제출하면 중복이 된다. 약속(mutateAsync)으로 받아 화면이 닫혀도 초안 초기화·성공 화면 이동을 한다
+    // 이 초안을 냈다 — 끝나기 전에 새 초안을 시작했으면(뒤로 가서 다시 만들기) 그 초안은 지우지 않는다
+    const draftId = useDraft.getState().id;
+    create.mutateAsync(body).then(
+      () => {
+        // 첫 드랍 여부 — 내 드랍 목록을 받아 둔 경우에만 (모르면 null)
+        const first = myDrops ? myDrops.length === 0 : null;
+        track('drop_created', { type: body.type, note_length: body.content.length, song_id: 'songId' in body ? body.songId : undefined, option_count: 'options' in body ? body.options.length : undefined, playlist_new: 'playlistName' in body, first_drop: first, region: regionOf(body.address), ...detailedOnly({ address: body.address, lat: body.latitude, lng: body.longitude }) });
+        if (first) track('first_drop_created', { type: body.type });
         // 공유 카드용 — 제목 줄은 곡명 · 아티스트 (투표는 주제 · 후보 수, 플리는 이름 · 곡 수)
         const sub = draft.type === 'MUSIC' ? draft.song?.artist ?? '' : draft.type === 'VOTE' ? `후보 ${draft.options.length}곡` : draft.playlist?.kind === 'new' ? `${draft.playlist.songs.length}곡` : '플레이리스트';
         const card = { art, title: head.name, sub, place: body.address, note: body.content, latitude: body.latitude, longitude: body.longitude };
-        draft.reset(); navigation.reset({ index: 1, routes: [{ name: 'Tabs' }, { name: 'DropSuccess', params: { art, content: body.content, kind: body.type, card } }] }); },
-      onError: e => toast(errorMessage(e), 'error'),
-    });
+        if (useDraft.getState().id !== draftId) {
+          // 그사이 새 드랍을 만들고 있다 — 초안·화면은 그대로 두고 알리기만
+          toast('드랍을 남겼어요', 'success');
+          return;
+        }
+        draft.reset();
+        const success = { index: 1, routes: [{ name: 'Tabs' as const }, { name: 'DropSuccess' as const, params: { art, content: body.content, kind: body.type, card } }] };
+        // 화면이 이미 닫혔을 수 있어 루트 내비게이션으로 (로그아웃했으면 이동하지 않음)
+        if (navigationRef.isReady()) { if (useAuth.getState().status === 'authed') navigationRef.reset(success); }
+        else navigation.reset(success);
+      },
+      e => toast(errorMessage(e), 'error'),
+    );
   };
 
   return (
@@ -120,7 +146,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
             <PinGlyph height={13} />
             <T v="captionStrong" c="ink2" numberOfLines={1} style={{ fontFamily: fonts.regular }}>지금 서 있는 {address || label || '이곳'}에 남겨져요</T>
           </View>
-          <PrimaryButton label="여기 빠뜨리기" onPress={submit} loading={create.isPending} />
+          <PrimaryButton label="여기 빠뜨리기" onPress={submit} loading={creating} />
         </View>
       </ScrollView>
     </View>

@@ -26,7 +26,7 @@ function ResultRow({ song, selected, playing, onPick, onToggle }: { song: Song; 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, height: 70, paddingLeft: 8, marginHorizontal: -8, borderRadius: 16, backgroundColor: selected ? colors.primarySoft : 'transparent' }}>
       <DiscArt uri={song.albumImagePath} playing={playing} onToggle={onToggle} />
-      <Press onPress={onPick} accessibilityState={{ selected }} style={{ flex: 1, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 20, paddingRight: 8 }}>
+      <Press onPress={onPick} trackAs="검색 결과 곡" accessibilityState={{ selected }} style={{ flex: 1, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 20, paddingRight: 8 }}>
         <View style={{ flex: 1, gap: 4 }}>
           <T numberOfLines={1} style={{ fontFamily: selected ? fonts.medium : fonts.regular, fontSize: 12, lineHeight: 17, letterSpacing: -0.24, color: selected ? colors.primary : '#090909' }}>{song.title}</T>
           <T numberOfLines={1} style={{ fontFamily: fonts.regular, fontSize: 10, lineHeight: 13, letterSpacing: -0.2, color: '#B9B9B9' }}>{song.artist}</T>

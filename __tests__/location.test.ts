@@ -12,7 +12,7 @@ jest.mock('react-native-permissions', () => ({
   request: jest.fn(async () => 'granted'),
   requestMultiple: jest.fn(async () => ({})),
 }));
-jest.mock('@/services/analytics', () => ({ track: jest.fn(), setAnalyticsLocation: jest.fn(), clearAnalyticsLocation: jest.fn() }));
+jest.mock('@/services/analytics', () => ({ track: jest.fn(), setAnalyticsLocation: jest.fn(), clearAnalyticsLocation: jest.fn(), setAnalyticsRegion: jest.fn() }));
 
 import { AppState, type AppStateStatus } from 'react-native';
 import { currentCoords, DROP_MAX_ACCURACY_M, FIX_TIMEOUT_MS, STALE_MS, tooImpreciseToDrop, useLocation } from '@/services/location';
@@ -23,7 +23,7 @@ const mockGeo = jest.requireMock('@react-native-community/geolocation').default 
   clearWatch: jest.Mock<void, [number]>;
 };
 
-const mockAnalytics = jest.requireMock('@/services/analytics') as { track: jest.Mock; clearAnalyticsLocation: jest.Mock };
+const mockAnalytics = jest.requireMock('@/services/analytics') as { track: jest.Mock; clearAnalyticsLocation: jest.Mock; setAnalyticsRegion: jest.Mock };
 const mockPerm = jest.requireMock('react-native-permissions') as { check: jest.Mock };
 /** location.ts가 처음 start() 때 단 AppState 리스너 */
 const appState = (s: AppStateStatus) => {
@@ -45,6 +45,7 @@ beforeEach(() => {
   mockGeo.clearWatch.mockReset();
   mockAnalytics.track.mockClear();
   mockAnalytics.clearAnalyticsLocation.mockClear();
+  mockAnalytics.setAnalyticsRegion.mockClear();
   useLocation.setState({ coords: null, accuracy: null, fixedAt: null, stale: false, fix: 'locating', reason: null });
 });
 afterEach(() => { releases.splice(0).forEach(r => r()); jest.useRealTimers(); });
@@ -149,6 +150,7 @@ test('위치를 받은 뒤 권한을 끄면 좌표를 버리고 denied (낡은 �
   expect(st()).toMatchObject({ coords: null, accuracy: null, fixedAt: null, fix: 'unavailable', reason: 'denied' });
   expect(currentCoords(st())).toBeNull();
   expect(mockAnalytics.clearAnalyticsLocation).toHaveBeenCalled();
+  expect(mockAnalytics.setAnalyticsRegion).toHaveBeenCalledWith(null);
   // 감시가 같은 오류를 거듭 내도 한 번만 센다
   onErr({ code: 1 });
   await flush();

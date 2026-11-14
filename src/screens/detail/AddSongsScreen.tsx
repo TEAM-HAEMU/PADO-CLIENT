@@ -128,6 +128,7 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
                 dim={inList}
                 active={on}
                 onPress={() => toggle(s)}
+                trackAs="담을 곡 고르기"
                 right={<Glyph name="checkCircle" color={on || inList ? colors.accent : '#DEDEDE'} />}
               />
             );

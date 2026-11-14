@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { kv } from './storage';
-import { initAnalytics, setAnalyticsOptOut, setUserProps, track } from '@/services/analytics';
+import { migrateAnalyticsMode, setAnalyticsMode as applyAnalyticsMode, setUserProps, track, type AnalyticsMode, type SavedAnalyticsPrefs } from '@/services/analytics';
+import { reportError, setMonitoringMode } from '@/services/monitoring';
+
+export { migrateAnalyticsMode };
 
 export type ServiceId = 'spotify' | 'youtubeMusic' | 'appleMusic';
 
@@ -15,11 +18,13 @@ interface Prefs {
   locationPrompted: boolean;
   /** 처음 실행 소개 3장(온보딩)을 봤는지 — 본 뒤엔 로그인 화면부터 */
   onboardingSeen: boolean;
-  /** 설정 › 이용 데이터 분석 (Amplitude). 선택 동의 — 동의한 경우에만 켜짐 (기본 꺼짐) */
-  analytics: boolean;
-  /** 분석 동의를 한 번이라도 물어봤는지 (첫 실행 안내 1회) */
-  analyticsAsked: boolean;
-  setAnalytics: (v: boolean) => void;
+  /**
+   * 설정 › 이용 분석 (Amplitude). basic = 기기 단위 익명 분석(기본 켜짐), detailed = 상세 분석(직접 켠 사람만), off = 끔.
+   * 동의창은 띄우지 않는다 (iOS 5.1.2(i))
+   * off면 오류 진단(Sentry)도 멈춘다. basic·detailed는 오류 진단에 차이가 없다 (services/monitoring)
+   */
+  analyticsMode: AnalyticsMode;
+  setAnalyticsMode: (m: AnalyticsMode) => void;
   /** null = 매번 선택 */
   setService: (s: ServiceId | null, remember?: boolean) => void;
   setAutoplayNearby: (v: boolean) => void;
@@ -28,16 +33,16 @@ interface Prefs {
   setOnboardingSeen: () => void;
 }
 
-const saved = kv.get<Partial<Prefs>>('prefs', {});
+const saved = kv.get<Partial<Prefs> & SavedAnalyticsPrefs>('prefs', {});
 
-/** 분석을 켠 직후 할 일 (로그인돼 있으면 사용자 식별) — auth 스토어가 등록 (순환 import 방지) */
-let onAnalyticsEnabled: (() => void) | undefined;
-export const setOnAnalyticsEnabled = (fn: () => void) => { onAnalyticsEnabled = fn; };
+/** 상세 분석을 켠 직후 할 일 (로그인돼 있으면 사용자 식별) — auth 스토어가 등록 (순환 import 방지) */
+let onDetailedEnabled: (() => void) | undefined;
+export const setOnDetailedAnalyticsEnabled = (fn: () => void) => { onDetailedEnabled = fn; };
 
 export const usePrefs = create<Prefs>((set, get) => {
   const persist = () => {
-    const { service, rememberService, autoplayNearby, notify, locationPrompted, onboardingSeen, analytics, analyticsAsked } = get();
-    kv.set('prefs', { service, rememberService, autoplayNearby, notify, locationPrompted, onboardingSeen, analytics, analyticsAsked });
+    const { service, rememberService, autoplayNearby, notify, locationPrompted, onboardingSeen, analyticsMode } = get();
+    kv.set('prefs', { service, rememberService, autoplayNearby, notify, locationPrompted, onboardingSeen, analyticsMode });
   };
   const changed = (key: string, value: string | boolean | null) => {
     track('setting_changed', { key, value });
@@ -50,17 +55,25 @@ export const usePrefs = create<Prefs>((set, get) => {
     notify: saved.notify ?? { like: true, comment: true, nearby: false },
     locationPrompted: saved.locationPrompted ?? false,
     onboardingSeen: saved.onboardingSeen ?? false,
-    // 예전 버전은 기본 켜짐이었음 → 직접 고른 적이 없으면(analyticsAsked 없음) 꺼진 것으로 본다 (설정에서 직접 켜야 수집)
-    analytics: saved.analyticsAsked ? saved.analytics ?? false : false,
-    analyticsAsked: saved.analyticsAsked ?? false,
+    analyticsMode: migrateAnalyticsMode(saved),
     setService: (service, remember = true) => { set({ service: remember ? service : get().service, rememberService: remember }); persist(); changed('service', service); },
     setAutoplayNearby: autoplayNearby => { set({ autoplayNearby }); persist(); changed('autoplay_nearby', autoplayNearby); },
     setNotify: (k, v) => { set({ notify: { ...get().notify, [k]: v } }); persist(); changed(`notify_${k}`, v); },
-    setAnalytics: analytics => {
-      set({ analytics, analyticsAsked: true }); persist();
-      if (!analytics) { changed('analytics', false); setAnalyticsOptOut(true); return; }  // 끄기 직전 한 번 기록하고 끈다
-      // 동의한 뒤에야 SDK를 시작한다 (동의 전엔 아무것도 보내지 않음)
-      initAnalytics({ optOut: false }).then(() => { setAnalyticsOptOut(false); changed('analytics', true); onAnalyticsEnabled?.(); });
+    setAnalyticsMode: next => {
+      const prev = get().analyticsMode;
+      if (prev === next) return;
+      set({ analyticsMode: next }); persist();
+      // 끄기 직전 한 번 기록하고 끈다 / 켠 뒤에 기록한다
+      if (next === 'off') changed('analytics_mode', next);
+      setMonitoringMode(next);
+      // SDK 시작이 실패해도 고른 값은 그대로 둔다 (분석 모듈의 모드도 이미 바뀌어 있어 둘이 어긋나지 않음 — 시작 못 한 동안은 보내지 않고, 다음 적용 때 다시 시작)
+      applyAnalyticsMode(next)
+        .then(() => {
+          if (next === 'off') return;
+          changed('analytics_mode', next);
+          if (next === 'detailed') onDetailedEnabled?.();
+        })
+        .catch(e => reportError(e, 'analytics_mode'));
     },
     setLocationPrompted: () => { set({ locationPrompted: true }); persist(); },
     setOnboardingSeen: () => { if (!get().onboardingSeen) { set({ onboardingSeen: true }); persist(); } },

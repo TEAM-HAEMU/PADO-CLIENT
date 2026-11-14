@@ -76,6 +76,10 @@ yarn-error.log
 
 # secrets
 .env
+# Sentry 소스맵·dSYM 업로드 인증 (npm run sentry:props 로 만든다 — 커밋 금지)
+ios/sentry.properties
+android/sentry.properties
+.env.sentry-build-plugin
 
 # 로컬 전용 (레포에 올리지 않음)
 /PADO_full_tour.mp4

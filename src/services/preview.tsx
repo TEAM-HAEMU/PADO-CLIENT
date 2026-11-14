@@ -10,10 +10,11 @@ import Video from 'react-native-video';
 import { create } from 'zustand';
 import { toast } from '@/store/toast';
 import { findPreview, noPreviewMessage, type PreviewSource } from './previewSource';
-import { track } from '@/services/analytics';
+import { currentDropId, track } from '@/services/analytics';
 
 /** 잠금화면·알림에 보일 곡 정보 */
-export interface PreviewMeta { title: string; artist: string; image?: string | null }
+/** dropId·autoplay는 분석용 (preview_started에 어느 드랍의 곡인지, 주변 자동 재생인지) */
+export interface PreviewMeta { title: string; artist: string; image?: string | null; dropId?: string; autoplay?: boolean }
 
 interface PreviewState {
   key: string | null;
@@ -33,6 +34,11 @@ interface PreviewState {
    * 곡이 끝날 때 플레이어를 내리지 않고 주소만 바꿔 끼운다 — 백그라운드에서 소리가 한 번 끊기면 iOS가 앱을 재워 다음 곡을 못 틀기 때문
    */
   upNext: { key: string; url: string; meta: PreviewMeta } | null;
+  /**
+   * 마지막 재생 오류 (주소 만료·오프라인 등으로 플레이어가 오류를 냄). 매번 새 객체라 같은 곡이 또 실패해도 구독자가 알 수 있다.
+   * 주변 곡 자동 재생이 이 곡을 실패로 기록하고 다음 곡으로 넘어간다 — 없으면 key가 비자마자 같은 곡을 다시 튼다
+   */
+  lastError: { key: string; seq: number } | null;
   setUpNext: (next: PreviewState['upNext']) => void;
   play: (key: string, url: string, meta?: PreviewMeta) => void;
   toggle: () => void;
@@ -40,6 +46,7 @@ interface PreviewState {
   _progress: (pos: number, dur: number) => void;
   _ended: () => void;
   _ready: () => void;
+  _error: () => void;
 }
 
 /**
@@ -61,6 +68,7 @@ const cancelIntent = (key?: string | null) => {
 const settle = (token: number) => { if (current(token)) usePreviewStore.setState({ pending: null }); };
 
 const IDLE = { key: null, url: null, meta: null, paused: true, position: 0, buffering: false };
+let errorSeq = 0;
 
 export const usePreviewStore = create<PreviewState>((set, get) => ({
   ...IDLE,
@@ -69,10 +77,11 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
   pending: null,
   buffering: false,
   upNext: null,
+  lastError: null,
   setUpNext: upNext => set({ upNext }),
   play: (key, url, meta) => {
     if (intentKey !== key) cancelIntent(); // 다른 곡의 대기 중인 재생 요청은 버린다
-    if (get().key !== key) track('preview_started', { song_id: key, title: meta?.title, artist: meta?.artist });
+    if (get().key !== key) track('preview_started', { song_id: key, title: meta?.title, artist: meta?.artist, drop_id: meta?.dropId ?? currentDropId(), autoplay: !!meta?.autoplay });
     set(get().key === key ? { paused: false, endedKey: null, pending: null } : { key, url, meta: meta ?? null, paused: false, position: 0, duration: 30, endedKey: null, pending: null, buffering: true, upNext: null });
   },
   toggle: () => { const paused = !get().paused; track(paused ? 'preview_paused' : 'preview_resumed', { song_id: get().key, position: Math.round(get().position) }); set({ paused }); },
@@ -83,13 +92,18 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
     track('preview_completed', { song_id: key });
     // 이어 틀 곡이 있으면 플레이어를 내리지 않고 바로 다음 곡으로 (endedKey로 끝난 곡을 알린다)
     if (upNext && upNext.key !== key) {
-      track('preview_started', { song_id: upNext.key, title: upNext.meta.title, artist: upNext.meta.artist });
+      track('preview_started', { song_id: upNext.key, title: upNext.meta.title, artist: upNext.meta.artist, drop_id: upNext.meta.dropId, autoplay: !!upNext.meta.autoplay });
       set({ key: upNext.key, url: upNext.url, meta: upNext.meta, paused: false, position: 0, duration: 30, endedKey: key, pending: null, buffering: true, upNext: null });
       return;
     }
     set({ ...IDLE, endedKey: key, upNext: null });
   },
   _ready: () => { if (get().buffering) set({ buffering: false }); },
+  _error: () => {
+    const { key } = get();
+    cancelIntent();
+    set({ ...IDLE, endedKey: null, upNext: null, lastError: key ? { key, seq: ++errorSeq } : get().lastError });
+  },
 }));
 
 // UI 테스트는 `-PADO_MUTE YES` 실행 인자를 넘긴다 → 미리듣기를 무음으로 (화면 동작은 그대로)
@@ -100,7 +114,7 @@ export function PreviewHost() {
   const meta = usePreviewStore(st => st.meta);
   const paused = usePreviewStore(st => st.paused);
   const _progress = usePreviewStore(st => st._progress);
-  const stop = usePreviewStore(st => st.stop);
+  const fail = usePreviewStore(st => st._error);
   const ended = usePreviewStore(st => st._ended);
   const ready = usePreviewStore(st => st._ready);
   if (!url) return null;
@@ -122,7 +136,8 @@ export function PreviewHost() {
       onProgress={e => { if (e.currentTime > 0) ready(); _progress(e.currentTime, e.seekableDuration || e.playableDuration); }}
       onEnd={ended}
       // 주소는 있는데 재생이 안 되면(만료·지역 제한 등) 조용히 멈추지 말고 알린다
-      onError={() => { stop(); toast('미리듣기를 재생하지 못했어요. 잠시 후 다시 시도해주세요.', 'error'); }}
+      // 주변 자동 재생 곡은 사용자가 누른 재생이 아니라 알리지 않는다 (자동 재생이 쉬었다가 다음 곡으로)
+      onError={() => { fail(); if (!meta?.autoplay) toast('미리듣기를 재생하지 못했어요. 잠시 후 다시 시도해주세요.', 'error'); }}
       style={{ width: 0, height: 0 }}
     />
   );
@@ -147,14 +162,22 @@ export function stopPreviewFor(songId: string | undefined | null) {
  * 화면 밖(목록 선택 등)에서 곧바로 미리듣기 시작 — 이미 이 곡이면 이어서 재생.
  * none: 미리듣기 없는 곡 / unavailable: 지금 iTunes 조회 불가 / cancelled: 기다리는 사이 다른 곡·화면 이탈
  */
-type PreviewSong = PreviewSource & { id: string; albumImagePath?: string | null };
-const metaOf = (s: PreviewSong): PreviewMeta => ({ title: s.title, artist: s.artist, image: s.albumImagePath });
+type PreviewSong = PreviewSource & { id: string; albumImagePath?: string | null; dropId?: string; autoplay?: boolean };
+const metaOf = (s: PreviewSong): PreviewMeta => ({ title: s.title, artist: s.artist, image: s.albumImagePath, dropId: s.dropId, autoplay: s.autoplay });
 
 export async function startPreview(song: PreviewSong): Promise<'ok' | 'none' | 'adult' | 'unavailable' | 'cancelled'> {
   const st = usePreviewStore.getState();
   if (st.key === song.id) { if (st.paused) st.toggle(); return 'ok'; }
   const token = begin(song.id, metaOf(song));
-  const r = await findPreview(song, { priority: true });
+  let r: Awaited<ReturnType<typeof findPreview>>;
+  try {
+    r = await findPreview(song, { priority: true });
+  } catch {
+    // 조회가 예외로 끝나도 '불러오는 중'이 남지 않게 (확인 불가로 처리)
+    if (!current(token)) return 'cancelled';
+    settle(token);
+    return 'unavailable';
+  }
   if (!current(token)) return 'cancelled';
   if (r.unavailable || !r.previewUrl) { settle(token); return r.unavailable ? 'unavailable' : r.adult ? 'adult' : 'none'; }
   usePreviewStore.getState().play(song.id, r.previewUrl, metaOf(song));
@@ -180,7 +203,10 @@ export function usePreview(song: PreviewSong | null | undefined, opts: { lazy?: 
     let alive = true;
     if (!song || opts.lazy) return;
     const id = song.id;
-    findPreview(song, { priority: true }).then(r => { if (alive) setFound({ id, url: r.unavailable ? false : r.previewUrl, adult: r.adult }); });
+    findPreview(song, { priority: true })
+      .catch(() => ({ previewUrl: null, unavailable: true, adult: false }))
+      // 조회가 예외로 끝나도 '찾는 중'에 머물지 않게 확인 불가(false — 누르면 다시 조회)로
+      .then(r => { if (alive) setFound({ id, url: r.unavailable ? false : r.previewUrl, adult: r.adult }); });
     return () => { alive = false; };
   }, [song?.id, song?.title, song?.artist, song?.previewUrl]); // eslint-disable-line react-hooks/exhaustive-deps
   return {

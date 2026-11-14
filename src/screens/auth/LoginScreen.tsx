@@ -13,6 +13,7 @@ import { Wave } from '@/components/ui/Wave';
 import { env } from '@/config';
 import type { RootScreen } from '@/navigation/types';
 import { appleSignInAvailable, getProviderCredential, SocialCancelled } from '@/services/socialAuth';
+import { track } from '@/services/analytics';
 import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
@@ -28,15 +29,19 @@ export default function LoginScreen({ navigation }: RootScreen<'Login'>) {
   const social = async (provider: SocialProvider) => {
     if (busy) return; // 다른 로그인이 진행 중이면 무시
     setBusy(provider);
+    const method = provider.toLowerCase();
+    track('login_started', { method });
     try {
       const r = await authApi.social(provider, await getProviderCredential(provider));
       if (!r.signupRequired && r.accessToken && r.refreshToken) {
         await signIn({ accessToken: r.accessToken, refreshToken: r.refreshToken, accessTokenExpiresIn: r.accessTokenExpiresIn ?? 0, refreshTokenExpiresIn: r.refreshTokenExpiresIn ?? 0 }, { method: provider.toLowerCase() });
       } else if (r.signupToken) {
+        // 처음 온 소셜 계정 — 가입 화면(sign_up_started는 가입 화면이 기록)
         navigation.navigate('Signup', { mode: 'social', provider, signupToken: r.signupToken, profile: r.profile });
       }
     } catch (e) {
-      if (!(e instanceof SocialCancelled)) toast(errorMessage(e), 'error');
+      if (e instanceof SocialCancelled) track('login_cancelled', { method });
+      else { track('login_failed', { method, code: (e as { code?: string }).code ?? null }); toast(errorMessage(e), 'error'); }
     } finally {
       setBusy(null);
     }

@@ -80,8 +80,9 @@ export default function PasswordResetScreen({ navigation, route }: RootScreen<'P
     if (password !== confirm) throw new Error('두 비밀번호가 달라요.');
     await authApi.passwordReset.reset(resetToken!, password);
     track('password_reset_completed');
-    // 자동 로그인하지 않는다 — 로그인 화면에 이메일을 채워 돌려보낸다
-    navigation.navigate('EmailLogin', { email, reset: true });
+    // 자동 로그인하지 않는다 — 로그인 화면에 이메일을 채워 돌려보낸다.
+    // navigate는 React Navigation 7에서 새 로그인 화면을 쌓아, 뒤로 가면 다 쓴 재설정 단계가 다시 나온다 → 있던 로그인 화면으로 돌아간다(없으면 새로)
+    navigation.popTo('EmailLogin', { email, reset: true });
   });
 
   const back = () => {

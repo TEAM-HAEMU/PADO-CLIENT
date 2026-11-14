@@ -7,6 +7,7 @@ import { errorMessage } from '@/api/errors';
 import type { ReportReason } from '@/api/types';
 import { Icon, Press, PrimaryButton, T } from '@/components/ui';
 import { ReportRadio } from '@/components/me/MeIcons';
+import { invalidateAfterBlock } from '@/hooks/api';
 import { Sheet } from '@/components/ui/Sheet';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
@@ -31,7 +32,7 @@ export default function ReportScreen({ navigation, route }: RootScreen<'Report'>
       let alreadyReported = false;
       try { await safetyApi.report(targetType, targetId, reason, detail.trim() || undefined); }
       catch (e) { if ((e as { code?: string }).code === 'R3' && block) alreadyReported = true; else throw e; }
-      if (block && userId) { await safetyApi.block(userId); qc.invalidateQueries({ queryKey: ['nearby'] }); qc.invalidateQueries({ queryKey: ['comments'] }); qc.invalidateQueries({ queryKey: ['commentCount'] }); qc.invalidateQueries({ queryKey: ['blocks'] }); }
+      if (block && userId) { await safetyApi.block(userId); invalidateAfterBlock(qc); }
       track('report_submitted', { target_type: targetType, reason, has_detail: !!detail.trim(), block: !!(block && userId) });
       toast(block ? (alreadyReported ? '이미 신고한 대상이라 차단만 했어요.' : '신고하고 차단했어요.') : '신고가 접수됐어요. 운영자가 확인할게요.', 'success');
       navigation.goBack();

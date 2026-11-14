@@ -3,6 +3,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { ShareCardData } from '@/components/share/StoryCard';
 import type { AgreementType, ReportTarget, SocialProfile, SocialProvider, Song, UserAgreement, UUID } from '@/api/types';
 
+
+/** 드랍을 연 곳 (drop_opened source) */
+export type DropOpenSource = 'map_pin' | 'map_list' | 'notification' | 'profile' | 'playlists' | 'link';
 export type TabParamList = {
   Map: undefined;
   Playlists: undefined;
@@ -24,7 +27,8 @@ export type RootStackParamList = {
   Tabs: NavigatorScreenParams<TabParamList>;
   /** 알림 — 프로필 오른쪽 위 종 아이콘에서 연다 (하단 바에서 빠짐) */
   Notifications: undefined;
-  PinPreview: { dropId: UUID };
+  /** source: 분석용 — 어디서 열었는지 (없으면 링크) */
+  PinPreview: { dropId: UUID; source?: DropOpenSource };
   /** queue: 전체 재생/셔플 — 미리듣기가 끝나면 다음 곡으로. autoplay: 열자마자 미리듣기 */
   Player: { songId: UUID; dropId?: UUID; queue?: UUID[]; autoplay?: boolean };
   Comments: { dropId: UUID };
@@ -41,8 +45,8 @@ export type RootStackParamList = {
   /** 인스타 스토리 · 다른 앱 공유 카드 */
   ShareCard: ShareCardData;
   // 상세
-  VoteDrop: { dropId: UUID };
-  PlaylistDrop: { dropId: UUID };
+  VoteDrop: { dropId: UUID; source?: DropOpenSource };
+  PlaylistDrop: { dropId: UUID; source?: DropOpenSource };
   /** openAdd: 방금 만든 플리 — 열리자마자 곡 담기 화면으로 */
   PlaylistDetail: { playlistId: UUID; openAdd?: boolean };
   AddSongs: { playlistId: UUID; existing: UUID[] } | { picker: 'vote' | 'newPlaylist'; existing: UUID[] };

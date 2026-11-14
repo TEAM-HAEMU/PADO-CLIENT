@@ -9,7 +9,7 @@ import { Wave } from '@/components/ui/Wave';
 import type { RootScreen } from '@/navigation/types';
 import { useLocation } from '@/services/location';
 import { useDropRadius } from '@/hooks/useDropRadius';
-import { formatRadius } from '@/utils/geo';
+import { permissionScope } from '@/utils/dropScope';
 import { usePrefs } from '@/store/prefs';
 import { colors, glow } from '@/theme/tokens';
 
@@ -25,7 +25,7 @@ export default function LocationPermissionScreen({ navigation }: RootScreen<'Loc
     }
   };
   const insets = useSafeAreaInsets();
-  const radius = formatRadius(useDropRadius().displayMeters);
+  const scope = permissionScope(useDropRadius());
   const request = useLocation(s => s.requestPermission);
   const done = usePrefs(s => s.setLocationPrompted);
   const finish = () => { done(); navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] }); };
@@ -35,7 +35,7 @@ export default function LocationPermissionScreen({ navigation }: RootScreen<'Loc
       <Wave style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }} />
       <AuthTitle
         title={'지금 있는 곳의 음악을\n들으려면 위치가 필요해요'}
-        desc={`내 주변 ${radius}에 남겨진 음악을 찾고,\n지금 선 자리에 곡을 남길 때만 위치를 사용해요.`}
+        desc={`${scope}에 남겨진 음악을 찾고,\n지금 선 자리에 곡을 남길 때만 위치를 사용해요.`}
         style={{ marginTop: insets.top + 80 }}
       />
       {/* 장식 — 내 자리에서 퍼지는 파문 */}

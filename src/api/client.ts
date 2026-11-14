@@ -1,7 +1,9 @@
 import { env } from '@/config';
 import { ApiError } from './errors';
 import type { TokenPair } from './types';
+import { newRequestId, REQUEST_ID_HEADER, responseRequestId } from './requestId';
 import { track } from '@/services/analytics';
+import { reportApiFailure } from '@/services/monitoring';
 
 export type AuthMode = 'required' | 'optional' | 'none';
 
@@ -24,21 +26,26 @@ export const setTokenBridge = (b: TokenBridge) => { bridge = b; };
 export type ReqBody = string | FormData;
 
 export interface RawResponse { status: number; text: string }
+/** requestId: 이 요청에 보낸 X-Request-Id (서버가 돌려준 값이 있으면 그 값) */
+export interface ApiResponse extends RawResponse { requestId: string }
 
 const TIMEOUT_MS = 15_000;
 
-async function transport(method: string, url: string, headers: Record<string, string>, body?: ReqBody): Promise<RawResponse> {
+async function transport(method: string, url: string, baseHeaders: Record<string, string>, body?: ReqBody): Promise<ApiResponse> {
+  // 요청마다 새 ID (재발급 뒤 재시도도 새 요청이라 새 ID) — 서버 로그와 앱 오류를 이 값으로 잇는다
+  const requestId = newRequestId();
+  const headers = { ...baseHeaders, [REQUEST_ID_HEADER]: requestId };
   // 목 서버는 목 모드에서만 불러온다 (운영 빌드에선 시드 데이터를 만들지 않음)
-  if (env.useMock) return (require('./mock/server') as typeof import('./mock/server')).mockFetch(method, url, headers, body);
+  if (env.useMock) return { ...(await (require('./mock/server') as typeof import('./mock/server')).mockFetch(method, url, headers, body)), requestId };
   // 멈춘 연결에서 요청이 무한정 걸려 있지 않게 타임아웃 (재발급 단일화가 전체를 막지 않도록)
   // 파일 업로드(FormData)는 느린 망에서 오래 걸릴 수 있어 넉넉하게
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), typeof body === 'string' || body === undefined ? TIMEOUT_MS : TIMEOUT_MS * 4);
   try {
     const res = await fetch(url, { method, headers, body, signal: ctrl.signal });
-    return { status: res.status, text: await res.text() };
+    return { status: res.status, text: await res.text(), requestId: responseRequestId(res.headers, requestId) };
   } catch {
-    return { status: 0, text: '' };
+    return { status: 0, text: '', requestId };
   } finally {
     clearTimeout(timer);
   }
@@ -114,9 +121,15 @@ export async function request<T = void>(method: string, path: string, opts: Requ
   }
   const data = parse(res.text);
   if (res.status >= 200 && res.status < 300) return data as T;
-  track('api_error', { method, path: path.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ':id'), status: res.status, code: (data as { code?: string } | undefined)?.code ?? null });
-  throw new ApiError(res.status, typeof data === 'object' ? (data as never) : null);
+  const error = new ApiError(res.status, typeof data === 'object' ? (data as never) : null, undefined, res.requestId);
+  const failure = { method, path: pathTemplate(path), status: res.status, code: (data as { code?: string } | undefined)?.code ?? null, requestId: res.requestId };
+  track('api_error', { method: failure.method, path: failure.path, status: failure.status, code: failure.code, request_id: failure.requestId });
+  reportApiFailure(failure, error);
+  throw error;
 }
+
+/** 경로의 UUID를 :id로 (분석·오류 묶음이 드랍마다 갈라지지 않게) */
+export const pathTemplate = (path: string) => path.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ':id');
 
 export const api = {
   get: <T>(path: string, o?: RequestOptions) => request<T>('GET', path, o),
