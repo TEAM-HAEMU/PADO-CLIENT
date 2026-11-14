@@ -72,21 +72,29 @@ const enrich: Types.EnrichmentPlugin = {
       ...(precise ? { lat: context.lat, lng: context.lng } : null),
       ...event.event_properties,
     };
+    // 정밀 위치는 상세 + 위치를 받았을 때만, 사용자 ID는 상세면 위치와 상관없이 (위치 권한이 없는 상세 사용자도 익명이 되지 않게)
     if (precise) { event.location_lat = context.lat; event.location_lng = context.lng; }
-    else { delete event.location_lat; delete event.location_lng; delete event.user_id; }
+    else { delete event.location_lat; delete event.location_lng; }
+    if (!detailed()) delete event.user_id;
     return event;
   },
 };
 
 async function start() {
   started = true;
-  await amplitude.init(env.amplitudeApiKey, undefined, {
-    optOut: false,
-    trackingSessionEvents: true, // session_start / session_end
-    // 기기 단위 익명 — IP·광고 ID·앱 세트 ID·IDFV·통신사는 모으지 않는다 (기종·OS·앱 버전·언어만)
-    trackingOptions: { ipAddress: false, adid: false, appSetId: false, idfv: false, carrier: false },
-    logLevel: __DEV__ ? amplitude.Types.LogLevel.Warn : amplitude.Types.LogLevel.None,
-  }).promise;
+  try {
+    await amplitude.init(env.amplitudeApiKey, undefined, {
+      optOut: false,
+      trackingSessionEvents: true, // session_start / session_end
+      // 기기 단위 익명 — IP·광고 ID·앱 세트 ID·IDFV·통신사는 모으지 않는다 (기종·OS·앱 버전·언어만)
+      trackingOptions: { ipAddress: false, adid: false, appSetId: false, idfv: false, carrier: false },
+      logLevel: __DEV__ ? amplitude.Types.LogLevel.Warn : amplitude.Types.LogLevel.None,
+    }).promise;
+  } catch (e) {
+    // 시작 못 했으면 시작 전으로 되돌린다 — 이벤트는 early에 계속 모으고, 다음 모드 적용 때 다시 시작
+    started = false;
+    throw e;
+  }
   amplitude.add(enrich);
   const envIdent = new amplitude.Identify();
   envIdent.set('app_env', appEnv());
@@ -108,6 +116,7 @@ async function setReplay(on: boolean) {
 /**
  * 모드 적용 (앱 시작·설정 변경). 상세 → 기본으로 내리면 기기 ID를 새로 만들어 이전 사용자 기록과 끊는다.
  * 상세로 올린 직후의 사용자 식별은 호출 측(auth)이 identifyUser로 한다.
+ * 모드(mode)는 바로 바뀐다. SDK 시작이 실패하면 거부된 Promise — 호출 측이 받아 처리한다 (store/prefs)
  */
 export async function setAnalyticsMode(next: AnalyticsMode) {
   const prev = mode;
@@ -141,6 +150,11 @@ export function track(name: string, props?: Record<string, unknown>) {
 export function setAnalyticsLocation(lat: number, lng: number) {
   context.lat = Math.round(lat * 1e6) / 1e6;
   context.lng = Math.round(lng * 1e6) / 1e6;
+}
+/** 위치 권한·위치 서비스를 끄면 — 마지막 좌표를 계속 붙이지 않게 */
+export function clearAnalyticsLocation() {
+  context.lat = undefined;
+  context.lng = undefined;
 }
 
 /** 대략적 지역 (시·군·구) — 역지오코딩 주소에서 (utils/address regionOf) */

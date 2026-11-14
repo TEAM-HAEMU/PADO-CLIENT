@@ -91,6 +91,16 @@ export function registerNavigation(ref: unknown) {
   if (active && navigation) navigation.registerNavigationContainer(ref);
 }
 
+/** 앱이 받아 처리한 오류(사용자 흐름은 계속됨)도 진단에 남긴다 — area 태그로 어디서 났는지. 꺼져 있으면 버림 */
+export function reportError(error: unknown, area: string) {
+  if (__DEV__) console.warn(`[${area}]`, error);
+  if (!active) return;
+  Sentry.captureException(error, scope => {
+    scope.setTags({ area });
+    return scope;
+  });
+}
+
 export interface ApiFailure { method: string; path: string; status: number; code: string | null; requestId: string }
 
 /**
