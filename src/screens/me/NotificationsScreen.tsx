@@ -14,6 +14,7 @@ import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
 import { useDrop, useNotifications, useSong } from '@/hooks/api';
 import { useDropLock } from '@/hooks/useDropLock';
+import type { RootScreen } from '@/navigation/types';
 import { lockMessage } from '@/utils/dropLock';
 import { colors, fonts } from '@/theme/tokens';
 import { formatRelative } from '@/utils/format';
@@ -52,7 +53,7 @@ const SectionGap = () => <View style={{ height: 12 }} />;
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
-  const nav = useNavigation();
+  const nav = useNavigation<RootScreen<'Notifications'>['navigation']>();
   const qc = useQueryClient();
   const { data = [], isLoading, refetch, isRefetching, isError, error } = useNotifications();
   const refresh = () => qc.invalidateQueries({ queryKey: ['notifications'] });
@@ -76,7 +77,8 @@ export default function NotificationsScreen() {
     else if (n.eventName === 'dropping-created') {
       // 이미 사라졌거나 지금 주변(반경 밖)에 없으면 — 말없이 지도로 보내면 고장처럼 보이니 이유를 알린다
       toast('이 드랍은 지금 근처에 없거나 사라졌어요.');
-      nav.navigate('Tabs', { screen: 'Map' });
+      // navigate는 탭(지도)을 한 벌 더 쌓는다 — 지도 화면이 둘이 되어 위치 감시·자동 재생이 겹친다. 맨 아래 탭으로 돌아간다
+      nav.popTo('Tabs', { screen: 'Map' });
     }
   };
 

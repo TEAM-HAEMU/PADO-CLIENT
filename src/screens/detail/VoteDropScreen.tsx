@@ -9,7 +9,7 @@ import { isVoteDetail, type VoteOption } from '@/api/types';
 import { Avatar, IconButton, Press, T, TopBar } from '@/components/ui';
 import { Glyph, VoteFill, VOTE_FILL_W } from '@/components/detail/glyphs';
 import { AddressPill, BgWave, CommentBar, DiscRow } from '@/components/detail/parts';
-import { qk, useComments, useDrop, useLikeCount, useMyLikes, useToggleLike } from '@/hooks/api';
+import { qk, useComments, useDrop, useLikeCount, useToggleLike, useIsLiked } from '@/hooks/api';
 import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
@@ -29,8 +29,7 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
   useDropOpenedEvent(dropId, 'VOTE', d, source);
   const comments = useComments(dropId).data ?? [];
   const likeCount = useLikeCount(dropId).data;
-  const myLikes = useMyLikes().data;
-  const liked = qc.getQueryData<boolean>(['liked', dropId]) ?? !!myLikes?.some(x => x.droppingId === dropId);
+  const liked = useIsLiked(dropId);
   const toggleLike = useToggleLike(dropId);
   const authed = useAuth(s => s.status === 'authed');
 
@@ -91,7 +90,7 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
           </View>
         ) : null}
       </ScrollView>
-      <CommentBar placeholder="이 투표에 한마디" onComment={() => navigation.navigate('Comments', { dropId })} liked={liked} likeCount={likeCount} onLike={() => (authed ? toggleLike.mutate(undefined, { onError: e => toast(errorMessage(e), 'error') }) : toast('로그인이 필요해요.'))} />
+      <CommentBar placeholder="이 투표에 한마디" onComment={() => navigation.navigate('Comments', { dropId })} liked={liked} likeCount={likeCount} onLike={() => (authed ? toggleLike.toggle() : toast('로그인이 필요해요.'))} />
     </View>
   );
 }

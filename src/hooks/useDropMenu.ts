@@ -11,7 +11,7 @@ import { errorMessage } from '@/api/errors';
 import { isPlaylistDetail, isVoteDetail, type DropDetail, type DropSummary, type Song, type UUID } from '@/api/types';
 import type { ShareCardData } from '@/components/share/StoryCard';
 import { toast } from '@/store/toast';
-import { useDrop, useDropAddress, useIsMyDrop } from './api';
+import { invalidateAfterDropRemoved, useDrop, useDropAddress, useIsMyDrop } from './api';
 import { useBlockUser } from './useBlockUser';
 
 export function useDropMenu(dropId: UUID | undefined, ownerId: UUID | undefined, title = '드랍', ownerName?: string, song?: Song) {
@@ -33,9 +33,7 @@ export function useDropMenu(dropId: UUID | undefined, ownerId: UUID | undefined,
         onPress: () =>
           dropApi.remove(dropId)
             .then(() => {
-              qc.invalidateQueries({ queryKey: ['nearby'] });
-              qc.invalidateQueries({ queryKey: ['myDrops'] });
-              qc.removeQueries({ queryKey: ['drop', dropId] });
+              invalidateAfterDropRemoved(qc, dropId);
               toast('드랍을 삭제했어요.');
               if (navigation.canGoBack()) navigation.goBack();
             })
