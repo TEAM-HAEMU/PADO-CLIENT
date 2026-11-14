@@ -34,7 +34,7 @@ import { colors, fonts, glow } from '@/theme/tokens';
 import type { TabParamList } from '@/navigation/types';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { formatAddress } from '@/utils/address';
-import { clusterPoints, clusterZoomRegion, geocodeDue, idSetKey, pickPins, shouldCluster, type GeocodeMark } from '@/utils/mapPins';
+import { clusterPoints, clusterZoomRegion, geocodeDue, idSetKey, pickPins, shouldCluster, singlePins, type GeocodeMark } from '@/utils/mapPins';
 
 const useGoogle = !!env.googleMapsKey || Platform.OS === 'android';
 
@@ -157,8 +157,10 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const [view, setView] = useState<Region | null>(null);
   const onRegionChangeComplete = useCallback((r: Region) => setView(r), []);
   const clustered = shouldCluster(view);
-  const pins = useMemo(() => (clustered ? [] : pickPins(sorted, view)), [clustered, sorted, view]);
   const clusters = useMemo(() => (clustered && view ? clusterPoints(drops, view) : []), [clustered, drops, view]);
+  // 1개짜리 묶음은 수 원 대신 보통 핀으로 — 핀 모드와 같은 DropMarker·같은 키라 확대·축소로 모드가 바뀌어도 그 핀은 다시 만들어지지 않는다
+  const pins = useMemo(() => (clustered ? singlePins(sorted, clusters) : pickPins(sorted, view)), [clustered, clusters, sorted, view]);
+  const groups = useMemo(() => clusters.filter(c => c.count > 1), [clusters]);
 
   // 주변 곡 자동 재생 — 가까운 음악 드랍부터 차례로 (지도 화면일 때, 앱을 내려도 계속)
   const musicDrops = useMemo(() => sorted.filter(x => !x.lock.locked).map(x => x.d).filter((d): d is MusicDropSummary => d.type === 'MUSIC'), [sorted]);
@@ -275,11 +277,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         onPanDrag={() => { follow.current = false; }}
         onMapReady={() => setMapReady(true)}
         onRegionChangeComplete={onRegionChangeComplete}
+        // Android Google 지도는 마커를 누르면 그 마커를 가운데로 옮긴다 — 묶음을 누를 땐 animateToRegion과 겹쳐 지도가 한 번 튀므로 묶음 모드에서만 끈다 (지도 단위 설정이라 마커별로는 못 정한다)
+        moveOnMarkerPress={!clustered}
       >
         {/* Apple 지도는 스타일을 못 바꾸므로 넓은 하늘빛 막을 깔아 디자인 톤에 맞춘다 (오버레이라 핀 아래에 그려짐) */}
         {!useGoogle ? <Polygon coordinates={tintArea(here)} fillColor="rgba(120,200,232,0.22)" strokeWidth={0} strokeColor="transparent" tappable={false} /> : null}
         {coords ? <MyLocationMarker latitude={coords.latitude} longitude={coords.longitude} /> : null}
-        {clusters.map(c => <ClusterMarker key={c.key} id={c.key} latitude={c.latitude} longitude={c.longitude} count={c.count} onPress={onClusterPress} />)}
+        {groups.map(c => <ClusterMarker key={c.key} id={c.key} latitude={c.latitude} longitude={c.longitude} count={c.count} onPress={onClusterPress} />)}
         {pins.map(({ item: { d, m, lock }, rank }) => (
           // 잠금이 풀리거나 잠기면 핀 모양이 통째로 바뀌므로 새 마커로
           <DropMarker

@@ -11,7 +11,7 @@ import type { DropType } from '@/api/types';
 import { DropPin, MeMarker, PIN_SIZE } from '@/components/map/DropPin';
 import { artUrl } from '@/utils/artUrl';
 import { clusterLabel, clusterSize, createPrefetcher } from '@/utils/mapPins';
-import { colors, fonts } from '@/theme/tokens';
+import { colors, dropShadow, fonts } from '@/theme/tokens';
 
 /** 앨범 아트 미리 받기 — 같은 주소는 한 번, 동시에 6개씩 (화면에 그리는 열린 핀만 부른다) */
 const art = createPrefetcher(u => Image.prefetch(u), 6);
@@ -107,7 +107,7 @@ const CLUSTER_PAD = 6;
 const CLUSTER_ANCHOR = { x: 0.5, y: 0.5 };
 
 /**
- * 드랍 묶음 — 하늘색 원 + 흰 테두리 + 흰 숫자 (어드민 지도 묶음과 같은 모양). 곡·커버·잠금 여부는 없다.
+ * 드랍 묶음(2개 이상) — 하늘색 원 + 흰 테두리 + 흰 숫자 (어드민 지도 묶음과 같은 모양). 곡·커버·잠금 여부는 없다. 1개짜리는 보통 핀(DropMarker)으로 그린다.
  * 모양이 숫자뿐이라 스냅샷 추적은 처음과 숫자가 바뀔 때만 잠깐 (그 외엔 tracksViewChanges 끔)
  */
 export const ClusterMarker = memo(function ClusterMarkerItem({ id, latitude, longitude, count, onPress }: { id: string; latitude: number; longitude: number; count: number; onPress: (id: string) => void }) {
@@ -124,8 +124,8 @@ export const ClusterMarker = memo(function ClusterMarkerItem({ id, latitude, lon
   return (
     <Marker coordinate={coordinate} anchor={CLUSTER_ANCHOR} tracksViewChanges={tracking} zIndex={2} onPress={press}>
       <View style={{ padding: CLUSTER_PAD }} accessible accessibilityRole="button" accessibilityLabel={`드랍 ${count}개, 눌러서 펼치기`}>
-        <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 3, borderColor: '#FFFFFF', backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: '#12214A', shadowOpacity: 0.18, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 3 }}>
-          <Text allowFontScaling={false} style={{ fontFamily: fonts.bold, fontSize: 13, lineHeight: 16, color: '#FFFFFF' }}>{clusterLabel(count)}</Text>
+        <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 3, borderColor: colors.page, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: dropShadow.shadowColor, shadowOpacity: 0.18, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 3 }}>
+          <Text allowFontScaling={false} style={{ fontFamily: fonts.bold, fontSize: 13, lineHeight: 16, color: colors.page }}>{clusterLabel(count)}</Text>
         </View>
       </View>
     </Marker>

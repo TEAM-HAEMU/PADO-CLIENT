@@ -47,11 +47,16 @@ export const CLUSTER_LNG_DELTA = 0.04;
 export const CLUSTER_COLUMNS = 5;
 /** 묶음을 눌렀을 때 가장 많이 확대하는 폭 — 처음 지도 폭과 같게 (한 점에 몰린 묶음도 이 줌에선 핀으로 보인다) */
 export const CLUSTER_MIN_ZOOM_DELTA = 0.012;
+/**
+ * 묶음 마커 수 상한 — 영역을 사방으로 넓혀 묶으므로 화면 밖 묶음도 마커가 된다.
+ * 넘치면 화면 가운데서 먼 묶음부터 뺀다 — 화면 밖 묶음이 먼저 빠진다 (화면 안 묶음은 드랍 500개를 고르게 뿌려도 40여 개).
+ */
+export const MAX_CLUSTERS = 60;
 
 /** 핀 대신 묶음을 그릴 줌인가 (영역을 아직 모르면 아니다) */
-export const shouldCluster = (r: MapRegion | null): r is MapRegion => !!r && r.longitudeDelta > CLUSTER_LNG_DELTA;
+export const shouldCluster = (r: MapRegion | null): boolean => !!r && r.longitudeDelta > CLUSTER_LNG_DELTA;
 
-export interface DropCluster {
+export interface DropCluster<T extends Coords = Coords> {
   /** 같은 줌·같은 칸이면 같은 키 (지도를 끌어도 묶음 마커가 다시 만들어지지 않게) */
   key: string;
   /** 묶인 드랍들의 평균 좌표 — 묶음을 그리는 자리 */
@@ -63,6 +68,8 @@ export interface DropCluster {
   maxLat: number;
   minLng: number;
   maxLng: number;
+  /** 1개짜리 묶음이면 그 드랍 — 묶음 원 대신 보통 핀으로 그린다 */
+  single: T | null;
 }
 
 /** 격자 칸 크기(경도, 도) — 화면 폭/columns를 2의 거듭제곱으로 맞춘다 (조금 확대·축소해서는 칸이 그대로라 묶음이 흔들리지 않게) */
@@ -75,19 +82,20 @@ export function clusterCell(lngDelta: number, columns = CLUSTER_COLUMNS) {
  * 칸은 경도 0·위도 0을 기준으로 고정이라 같은 줌에서 지도를 끌어도 같은 드랍은 같은 묶음에 남는다.
  * 칸 높이(위도)는 화면에서 정사각형에 가깝게 경도 칸 × cos(위도) — cos는 0.1 단위로 맞춰 위아래로 끌어도 칸이 바뀌지 않게.
  * 묶음끼리 한 칸보다 가까우면(칸 경계에 걸쳐 갈라진 무리) 큰 쪽으로 합친다 — 키는 큰 쪽 칸의 키.
+ * 묶음이 limit개를 넘으면 화면 가운데서 먼 것부터 뺀다 — 다 묶고 합친 뒤에 빼므로 남은 묶음의 수는 그대로 맞다. 남은 것의 순서는 바꾸지 않는다.
  */
-export function clusterPoints(points: readonly Coords[], region: MapRegion, columns = CLUSTER_COLUMNS): DropCluster[] {
+export function clusterPoints<T extends Coords>(points: readonly T[], region: MapRegion, columns = CLUSTER_COLUMNS, limit = MAX_CLUSTERS): DropCluster<T>[] {
   const cellLng = clusterCell(region.longitudeDelta, columns);
   const cos = Math.max(0.1, Math.round(Math.cos((region.latitude * Math.PI) / 180) * 10) / 10);
   const cellLat = cellLng * cos;
   const level = Math.round(Math.log2(cellLng));
-  const cells = new Map<string, { n: number; lat: number; lng: number; minLat: number; maxLat: number; minLng: number; maxLng: number }>();
+  const cells = new Map<string, { n: number; first: T; lat: number; lng: number; minLat: number; maxLat: number; minLng: number; maxLng: number }>();
   for (const p of points) {
     if (!inRegion(p, region)) continue;
     const key = `${level}:${Math.floor(p.longitude / cellLng)}:${Math.floor(p.latitude / cellLat)}`;
     const c = cells.get(key);
     if (!c) {
-      cells.set(key, { n: 1, lat: p.latitude, lng: p.longitude, minLat: p.latitude, maxLat: p.latitude, minLng: p.longitude, maxLng: p.longitude });
+      cells.set(key, { n: 1, first: p, lat: p.latitude, lng: p.longitude, minLat: p.latitude, maxLat: p.latitude, minLng: p.longitude, maxLng: p.longitude });
       continue;
     }
     c.n++;
@@ -114,7 +122,28 @@ export function clusterPoints(points: readonly Coords[], region: MapRegion, colu
     into.minLng = Math.min(into.minLng, c.minLng);
     into.maxLng = Math.max(into.maxLng, c.maxLng);
   }
-  return kept.map(c => ({ key: c.key, latitude: c.lat / c.n, longitude: c.lng / c.n, count: c.n, minLat: c.minLat, maxLat: c.maxLat, minLng: c.minLng, maxLng: c.maxLng }));
+  const out = kept.map(c => ({
+    key: c.key, latitude: c.lat / c.n, longitude: c.lng / c.n, count: c.n,
+    minLat: c.minLat, maxLat: c.maxLat, minLng: c.minLng, maxLng: c.maxLng, single: c.n === 1 ? c.first : null,
+  }));
+  if (out.length <= limit) return out;
+  // 화면 가운데서 먼 정도 — 영역 크기로 나눈 가로·세로 중 큰 쪽 (0.5 이하면 화면 안이라 화면 밖 묶음보다 늘 앞선다)
+  const far = (c: DropCluster<T>) => Math.max(Math.abs(c.longitude - region.longitude) / region.longitudeDelta, Math.abs(c.latitude - region.latitude) / region.latitudeDelta);
+  const keep = new Set([...out].sort((a, b) => far(a) - far(b)).slice(0, limit));
+  return out.filter(c => keep.has(c));
+}
+
+/**
+ * 묶음 모드에서 보통 핀으로 그릴 것 — 1개짜리 묶음의 드랍을 거리순 목록에서 찾아 pickPins와 같은 모양·순서로 (rank도 같은 뜻).
+ * 묶음은 드랍 목록 그대로를 묶고 거리순 목록의 d도 같은 객체라 객체로 찾는다.
+ */
+export function singlePins<T extends { d: Coords }>(sorted: readonly T[], clusters: readonly DropCluster<T['d']>[]): { item: T; rank: number }[] {
+  const singles = new Set<Coords>();
+  for (const c of clusters) if (c.single) singles.add(c.single);
+  const out: { item: T; rank: number }[] = [];
+  if (!singles.size) return out;
+  sorted.forEach((item, rank) => { if (singles.has(item.d)) out.push({ item, rank }); });
+  return out;
 }
 
 /**
@@ -122,7 +151,7 @@ export function clusterPoints(points: readonly Coords[], region: MapRegion, colu
  * CLUSTER_MIN_ZOOM_DELTA보다 더 들어가지는 않는다. 화면 가로세로 비율은 지금 그대로.
  * 아래쪽은 가까운 드랍 줄이 가리므로 가운데를 화면 위쪽으로 조금 올려 둔다(카메라는 아래로).
  */
-export function clusterZoomRegion(c: DropCluster, current: MapRegion): MapRegion {
+export function clusterZoomRegion(c: Pick<DropCluster, 'minLat' | 'maxLat' | 'minLng' | 'maxLng'>, current: MapRegion): MapRegion {
   const aspect = current.latitudeDelta / current.longitudeDelta;
   const fit = Math.max((c.maxLng - c.minLng) * 1.6, ((c.maxLat - c.minLat) * 1.6) / aspect);
   const longitudeDelta = Math.max(CLUSTER_MIN_ZOOM_DELTA, Math.min(fit, current.longitudeDelta / 2));

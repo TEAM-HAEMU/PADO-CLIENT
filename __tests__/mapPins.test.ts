@@ -1,7 +1,7 @@
 /* 지도 핀 고르기 · 축소 시 묶음 · 드랍 목록 키 · 역지오코딩 간격 · 아트 프리패처 */
 import {
   CLUSTER_LNG_DELTA, CLUSTER_MIN_ZOOM_DELTA, clusterCell, clusterLabel, clusterPoints, clusterSize, clusterZoomRegion, createPrefetcher,
-  GEOCODE_EVERY_MS, geocodeDue, idSetKey, inRegion, MAX_PINS, pickPins, shouldCluster,
+  GEOCODE_EVERY_MS, geocodeDue, idSetKey, inRegion, MAX_CLUSTERS, MAX_PINS, pickPins, shouldCluster, singlePins,
 } from '@/utils/mapPins';
 
 const here = { latitude: 35.1575, longitude: 129.0604 };
@@ -154,6 +154,83 @@ describe('clusterPoints', () => {
 
   test('빈 목록이면 빈 묶음', () => {
     expect(clusterPoints([], wide)).toEqual([]);
+  });
+
+  test('혼자 떨어진 드랍은 1개짜리 묶음으로, 그 드랍을 single로 준다 (여럿이면 null)', () => {
+    const lone = { ...east(9000), id: 'lone' };
+    const pts = [{ ...here, id: 'a' }, { ...north(30), id: 'b' }, lone];
+    const out = clusterPoints(pts, wide);
+    const one = out.find(c => c.count === 1)!;
+    expect(one.single).toBe(lone);
+    expect(out.find(c => c.count === 2)!.single).toBeNull();
+  });
+
+  test('이웃 칸 묶음에 합쳐진 1개짜리는 single이 아니다', () => {
+    const cell = clusterCell(wide.longitudeDelta);
+    const edge = { latitude: here.latitude, longitude: Math.ceil(here.longitude / cell) * cell };
+    const out = clusterPoints([east(-30, edge), east(-10, edge), east(10, edge)], wide);
+    expect(out).toHaveLength(1);
+    expect(out[0].single).toBeNull();
+  });
+
+  describe('묶음 수 상한', () => {
+    // 넓힌 영역(가로 ±0.2도·세로 ±0.3도)에 두 칸 간격으로 2개씩 — 서로 합쳐지지 않는 묶음 84개
+    const cell = clusterCell(wide.longitudeDelta);
+    const cellLat = cell * 0.8;
+    const pts: { latitude: number; longitude: number }[] = [];
+    for (let i = -3; i <= 3; i++) for (let j = -6; j < 6; j++) {
+      const p = { latitude: (Math.floor(here.latitude / cellLat) + j * 2 + 0.5) * cellLat, longitude: (Math.floor(here.longitude / cell) + i * 2 + 0.5) * cell };
+      pts.push(p, { ...p, longitude: p.longitude + cell * 0.1 });
+    }
+    const far = (c: { latitude: number; longitude: number }) => Math.max(Math.abs(c.longitude - wide.longitude) / wide.longitudeDelta, Math.abs(c.latitude - wide.latitude) / wide.latitudeDelta);
+    const all = clusterPoints(pts, wide, undefined, Infinity);
+    const capped = clusterPoints(pts, wide);
+
+    test('상한을 넘으면 상한까지만', () => {
+      expect(all.length).toBeGreaterThan(MAX_CLUSTERS);
+      expect(capped).toHaveLength(MAX_CLUSTERS);
+    });
+
+    test('화면 안 묶음은 다 남고 수도 그대로다', () => {
+      const onScreen = all.filter(c => far(c) <= 0.5);
+      expect(onScreen.length).toBeGreaterThan(0);
+      for (const c of onScreen) expect(capped.find(k => k.key === c.key)?.count).toBe(c.count);
+    });
+
+    test('빠지는 건 화면 가운데서 먼 묶음이고, 남은 순서는 그대로', () => {
+      const kept = new Set(capped.map(c => c.key));
+      const dropped = all.filter(c => !kept.has(c.key));
+      const keptFar = Math.max(...capped.map(far));
+      for (const c of dropped) expect(far(c)).toBeGreaterThanOrEqual(keptFar);
+      expect(capped.map(c => c.key)).toEqual(all.filter(c => kept.has(c.key)).map(c => c.key));
+    });
+
+    test('상한 이하면 그대로', () => {
+      expect(clusterPoints(pts, wide, undefined, all.length)).toEqual(all);
+    });
+  });
+});
+
+describe('singlePins', () => {
+  const wide = { ...here, latitudeDelta: 0.3, longitudeDelta: 0.2 };
+  const drops = [north(0), north(30), north(9000), north(-9000)];
+  // 지도 화면처럼 거리순 목록의 d는 드랍 목록의 객체 그대로
+  const sorted = [drops[1], drops[0], drops[3], drops[2]].map(d => ({ d }));
+
+  test('1개짜리 묶음의 드랍만, 거리순 목록 순서·순번으로', () => {
+    const clusters = clusterPoints(drops, wide);
+    expect(clusters.map(c => c.count).sort()).toEqual([1, 1, 2]);
+    expect(singlePins(sorted, clusters)).toEqual([{ item: sorted[2], rank: 2 }, { item: sorted[3], rank: 3 }]);
+  });
+
+  test('1개짜리가 없으면 빈 목록', () => {
+    expect(singlePins(sorted, clusterPoints(drops.slice(0, 2), wide))).toEqual([]);
+    expect(singlePins(sorted, [])).toEqual([]);
+  });
+
+  test('같은 좌표라도 다른 객체면 찾지 않는다 (드랍 목록 그대로 묶어야 한다)', () => {
+    const clusters = clusterPoints([{ ...drops[2] }], wide);
+    expect(singlePins(sorted, clusters)).toEqual([]);
   });
 });
 
