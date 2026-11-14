@@ -11,6 +11,8 @@ export const DEFAULT_RADIUS: DropRadius = { mode: 'DISTANCE', regionUnit: null, 
 export const WIDE_SEARCH_KM = 20_000;
 /** 같은 지역 모드에서 지역을 다시 물을 만큼 움직인 거리 */
 export const REGION_REFETCH_M = 300;
+/** 재생 반경 최솟값 — 실내 GPS 오차 때문에 이보다 작으면 드랍이 다 잠긴다 */
+export const MIN_PLAY_METERS = 50;
 
 const UNITS: RegionUnit[] = ['SIDO', 'SIGUNGU', 'DONG'];
 const isInt = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
@@ -22,14 +24,15 @@ function sanitizeRegion(r: unknown): DropRegion | null {
 }
 
 /**
- * 계약의 범위(표시 100m~500km 또는 전국, 재생 10~5000m이고 표시 이하) 밖이거나 모양이 이상하면 null.
+ * 계약의 범위(표시 100m~500km 또는 전국, 재생 50~5000m이고 표시 이하) 밖이거나 모양이 이상하면 null.
+ * 재생 반경이 50m 아래(최솟값을 올리기 전에 저장된 값)면 버리지 않고 50m로 올려 쓴다.
  * mode가 없으면 보기 모드 이전 백엔드 — 거리 모드로 본다
  */
 export function sanitizeRadius(r: unknown): DropRadius | null {
   const v = r as Partial<DropRadius> & Record<string, unknown> | null;
   if (!v || typeof v !== 'object') return null;
-  const play = v.playMeters;
-  if (!isInt(play) || play < 10 || play > 5000) return null;
+  if (!isInt(v.playMeters) || v.playMeters <= 0 || v.playMeters > 5000) return null;
+  const play = Math.max(MIN_PLAY_METERS, v.playMeters);
   const updatedAt = typeof v.updatedAt === 'string' ? v.updatedAt : null;
   const mode = v.mode ?? 'DISTANCE';
   if (mode === 'REGION') {
