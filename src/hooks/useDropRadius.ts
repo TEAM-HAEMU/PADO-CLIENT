@@ -16,12 +16,18 @@ export { DEFAULT_RADIUS, sanitizeRadius } from '@/utils/dropScope';
 
 const KEY = 'settings:dropRadius';
 
-export const cachedRadius = () => sanitizeRadius(kv.get<unknown>(KEY, null));
+/**
+ * 저장해 둔 값 — 이 훅은 지도 화면에서 GPS가 갱신될 때마다(렌더마다 여러 번) 불리므로 저장소 읽기·JSON 파싱은 앱 실행마다 한 번만.
+ * 이 키는 아래 fetchRadius만 쓰므로, 쓸 때 기억도 같이 바꾼다.
+ */
+let saved: { value: DropRadius | null } | null = null;
+export const cachedRadius = () => (saved ??= { value: sanitizeRadius(kv.get<unknown>(KEY, null)) }).value;
 
 async function fetchRadius(at: Coords | null) {
   const r = sanitizeRadius(await settingsApi.dropRadius(at));
   if (!r) throw new Error('bad drop radius');
   kv.set(KEY, r);
+  saved = { value: r };
   return r;
 }
 
