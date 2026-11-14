@@ -24,6 +24,7 @@ export const OPERATOR = {
 };
 
 const EFFECTIVE = '2026-10-07'; // 2026-09-30 Amplitude 분석 추가 (7일 전 고지)
+const PRIVACY_EFFECTIVE = '2026-11-05'; // 2026-10-27 AWS 이메일 발송(비밀번호 재설정 인증번호) 위탁 추가 (7일 전 고지)
 const O = OPERATOR;
 
 const SERVICE = `제1조 (목적)
@@ -164,7 +165,7 @@ const PRIVACY = `${O.company}(이하 "회사")는 ${O.service} 서비스 제공�
 
 # 5. 개인정보 처리의 위탁 및 외부 서비스 이용
 ■ 처리 위탁
-  - Amazon Web Services, Inc.: 서버 운영 및 데이터 보관 (보관 지역: 대한민국 서울, ap-northeast-2)
+  - Amazon Web Services, Inc.: 서버 운영, 데이터 보관 및 이메일 발송(비밀번호 재설정 인증번호) (보관 지역: 대한민국 서울, ap-northeast-2)
   - Amplitude, Inc.: 서비스 이용 통계 분석 (이용 데이터 분석에 동의한 경우)
 ■ 개인정보의 국외 이전 (Amplitude)
   - 이전받는 자: Amplitude, Inc. (미국, privacy@amplitude.com)
@@ -207,7 +208,7 @@ const PRIVACY = `${O.company}(이하 "회사")는 ${O.service} 서비스 제공�
 이 방침이 바뀌는 경우 시행 7일 전부터 앱 안에서 알립니다.
 
 부칙
-이 방침은 ${EFFECTIVE}부터 시행합니다.`;
+이 방침은 ${PRIVACY_EFFECTIVE}부터 시행합니다.`;
 
 const LOCATION = `제1조 (목적)
 이 약관은 ${O.company}(이하 "회사")가 제공하는 ${O.service}의 위치기반서비스를 이용함에 있어 회사와 개인위치정보주체(이하 "회원")의 권리·의무 및 책임, 기타 필요한 사항을 정합니다.
@@ -290,7 +291,7 @@ const MARKETING = `${O.company}(이하 "회사")는 아래와 같이 마케팅 �
 
 export const TERMS: Partial<Record<AgreementType, TermDoc>> = {
   SERVICE: { title: '서비스 이용약관', version: EFFECTIVE, body: SERVICE },
-  PRIVACY: { title: '개인정보 수집·이용 동의', version: EFFECTIVE, body: PRIVACY },
+  PRIVACY: { title: '개인정보 수집·이용 동의', version: PRIVACY_EFFECTIVE, body: PRIVACY },
   LOCATION: { title: '위치기반서비스 이용약관', version: EFFECTIVE, body: LOCATION },
   MARKETING: { title: '마케팅 정보 수신 동의', version: EFFECTIVE, body: MARKETING },
 };
