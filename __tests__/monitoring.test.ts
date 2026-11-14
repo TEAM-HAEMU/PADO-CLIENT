@@ -72,6 +72,15 @@ test('scrubData — 민감한 키는 가리고 request_id는 남긴다', () => {
   });
 });
 
+test('scrubData — URL을 담는 키(url로 끝나는 키·url.full·http.url·href)는 쿼리를 뺀다', () => {
+  const q = 'https://api.paado.app/api/v1/droppings/nearby?lat=35.1&lng=129.1';
+  const cut = `https://api.paado.app/api/v1/droppings/nearby?${FILTERED}`;
+  expect(scrubData({ url: q, 'url.full': q, 'http.url': q, request_url: q, redirectUrl: q, href: 'pado://signup?token=st-abc', 'http.method': 'GET' })).toEqual({
+    url: cut, 'url.full': cut, 'http.url': cut, request_url: cut, redirectUrl: cut, href: `pado://signup?${FILTERED}`, 'http.method': 'GET',
+  });
+  expect(scrubData({ nested: { 'url.full': 'https://itunes.apple.com/search?term=노래' } })).toEqual({ nested: { 'url.full': `https://itunes.apple.com/search?${FILTERED}` } });
+});
+
 describe('scrubBreadcrumb', () => {
   test('네트워크: 메서드·상태·쿼리 뺀 URL만 (본문·헤더 버림)', () => {
     const c = scrubBreadcrumb({ category: 'xhr', type: 'http', data: { method: 'GET', status_code: 200, url: 'https://api.paado.app/api/v1/droppings/nearby?lat=35.1&lng=129.1', request_body_size: 10, request_headers: { Authorization: 'Bearer x' } } });
@@ -125,6 +134,8 @@ test('scrubEvent — 화면 전환 거래의 route params·URL은 키째 뺀다 
     'route.params.profile': '{"nickname":"파도","email":"a@b.co"}',
     'route.url': 'pado://signup?token=st-abc',
     'route.path': '/signup',
+    'route.href': 'pado://signup?token=st-abc',
+    'previous_route.href': 'pado://login?code=st-abc',
     'previous_route.name': 'Login',
     'previous_route.params.mode': 'social',
     'route.has_been_seen': false,

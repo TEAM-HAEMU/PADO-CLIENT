@@ -78,7 +78,10 @@ export function scrubUrl(url: string): string {
   return scrubString(base);
 }
 
-/** 객체를 따라가며 민감한 키는 가리고, 문자열은 scrubString */
+/** URL을 담는 키 — 쿼리를 뺀다 (url, http.url, url.full, request_url·redirectUrl처럼 url로 끝나는 키, href) */
+const isUrlKey = (key: string) => /(url|href)$/i.test(key) || key.toLowerCase() === 'url.full';
+
+/** 객체를 따라가며 민감한 키는 가리고, 문자열은 scrubString (URL 키는 쿼리를 뺀다) */
 export function scrubData<T>(value: T, depth = 0): T {
   if (depth > 8) return FILTERED as unknown as T;
   if (typeof value === 'string') return scrubString(value) as unknown as T;
@@ -86,7 +89,7 @@ export function scrubData<T>(value: T, depth = 0): T {
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (k === 'url' && typeof v === 'string') out[k] = scrubUrl(v);
+      if (isUrlKey(k) && typeof v === 'string') out[k] = scrubUrl(v);
       else out[k] = isSensitiveKey(k) ? FILTERED : scrubData(v, depth + 1);
     }
     return out as T;
@@ -143,11 +146,11 @@ export interface EventLike {
 const DEVICE_CONTEXTS = new Set(['device', 'os', 'app', 'culture', 'react_native_context', 'runtime']);
 
 /**
- * 화면 전환 추적이 span에 붙일 수 있는 route params·URL·경로 (route.params.*, route.url, route.path, previous_route.*).
+ * 화면 전환 추적이 span에 붙일 수 있는 route params·URL·경로 (route.params.*, route.url, route.path, route.href, previous_route.*).
  * sendDefaultPii가 꺼져 있으면 SDK가 붙이지 않지만, 옵션이나 SDK 동작이 바뀌어도
  * 가입 화면(Signup)의 signupToken·소셜 프로필 같은 params가 나가지 않게 키째 뺀다. 화면 이름(route.name)·key는 남긴다
  */
-const ROUTE_DETAIL_KEY = /^(previous_)?route\.(params|url|path)(\.|$)/;
+const ROUTE_DETAIL_KEY = /^(previous_)?route\.(params|url|path|href)(\.|$)/;
 export function dropRouteDetails<T extends Record<string, unknown>>(data: T): T {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(data)) if (!ROUTE_DETAIL_KEY.test(k)) out[k] = v;
