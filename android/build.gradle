@@ -15,6 +15,8 @@ buildscript {
         classpath("com.android.tools.build:gradle")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+        // Sentry Android Gradle Plugin — 릴리스 빌드의 네이티브(NDK) 디버그 심볼 업로드 (app/build.gradle)
+        classpath("io.sentry:sentry-android-gradle-plugin:6.25.0")
     }
 }
 

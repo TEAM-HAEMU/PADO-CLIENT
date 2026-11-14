@@ -61,6 +61,13 @@ export const dropApi = {
   unvote: (id: UUID) => api.delete(`/droppings/${e(id)}/vote`),
 };
 
+// ── 운영 설정 (로그인 불필요)
+export const settingsApi = {
+  /** 좌표를 주면 같은 지역 모드일 때 그 좌표의 지역(region)도 온다. 응답 모양 검사는 hooks/useDropRadius */
+  dropRadius: (at?: { latitude: number; longitude: number } | null) =>
+    api.get<unknown>('/settings/drop-radius', { auth: 'none', query: at ? { latitude: at.latitude.toFixed(4), longitude: at.longitude.toFixed(4) } : undefined }),
+};
+
 // ── 좋아요
 export const likeApi = {
   toggle: (droppingId: UUID) => api.post<{ liked: boolean }>('/likes', { droppingId }),

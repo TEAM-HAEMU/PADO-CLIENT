@@ -18,3 +18,15 @@ test('artUrl — Spotify 썸네일 크기 선택', () => {
   expect(artUrl(u, 232)).toBe(u);
   expect(artUrl('https://is1-ssl.mzstatic.com/x.jpg', 26)).toBe('https://is1-ssl.mzstatic.com/x.jpg');
 });
+
+test('분석용 지역은 시·도 + 시·군·구까지만', () => {
+  const { regionOf } = require('@/utils/address') as typeof import('@/utils/address');
+  expect(regionOf('부산광역시 해운대구 우동 1408')).toBe('부산광역시 해운대구');
+  expect(regionOf('경기도 성남시 분당구 정자동 178-1')).toBe('경기도 성남시 분당구');
+  expect(regionOf('서울특별시 강남구')).toBe('서울특별시 강남구');
+  expect(regionOf('세종특별자치시 한누리대로 2130')).toBe('세종특별자치시');
+  expect(regionOf('제주특별자치도 제주시 연동')).toBe('제주특별자치도 제주시');
+  expect(regionOf('가락대로 1393')).toBeNull();
+  expect(regionOf('')).toBeNull();
+  expect(regionOf(null)).toBeNull();
+});

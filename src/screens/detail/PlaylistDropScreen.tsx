@@ -1,14 +1,13 @@
 /** 4.2 플레이리스트 드랍 (다른 사람이 남긴 플리) — Figma 'B 4.2 플레이리스트 드랍' */
 import React from 'react';
 import { FlatList, View } from 'react-native';
-import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { errorMessage } from '@/api/errors';
 import { isPlaylistDetail } from '@/api/types';
 import { IconButton, Press, T } from '@/components/ui';
 import { Glyph } from '@/components/detail/glyphs';
 import { BgWave, DiscRow, PlaylistHero } from '@/components/detail/parts';
-import { useCommentCount, useDrop, useLikeCount, useMyLikes, useToggleLike } from '@/hooks/api';
+import { useCommentCount, useDrop, useLikeCount, useToggleLike, useIsLiked } from '@/hooks/api';
+import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
@@ -20,24 +19,23 @@ import { expiryLabel } from '@/utils/format';
 import { shuffled } from '@/utils/shuffle';
 
 export default function PlaylistDropScreen({ navigation, route }: RootScreen<'PlaylistDrop'>) {
-  const { dropId } = route.params;
+  const { dropId, source } = route.params;
   const insets = useSafeAreaInsets();
-  const qc = useQueryClient();
   const drop = useDrop(dropId);
   const d = drop.data && isPlaylistDetail(drop.data) ? drop.data : null;
+  useDropOpenedEvent(dropId, 'PLAYLIST', d, source);
   // 플리 드랍 핀을 누르면 첫 곡 미리듣기를 바로
   const first = d?.songs[0];
   const autoStarted = React.useRef(false);
   React.useEffect(() => {
     if (!first || autoStarted.current) return;
     autoStarted.current = true;
-    startPreview({ id: first.songId, title: first.title, artist: first.artist, albumImagePath: first.albumImagePath, previewUrl: first.previewUrl });
-  }, [first]);
+    startPreview({ id: first.songId, title: first.title, artist: first.artist, albumImagePath: first.albumImagePath, previewUrl: first.previewUrl, dropId });
+  }, [first, dropId]);
   const playingKey = usePreviewStore(s => s.key);
   const likeCount = useLikeCount(dropId).data;
   const commentCount = useCommentCount(dropId).data;
-  const myLikes = useMyLikes().data;
-  const liked = qc.getQueryData<boolean>(['liked', dropId]) ?? !!myLikes?.some(x => x.droppingId === dropId);
+  const liked = useIsLiked(dropId);
   const toggleLike = useToggleLike(dropId);
   const authed = useAuth(s => s.status === 'authed');
   const menu = useDropMenu(dropId, drop.data?.userId, '플레이리스트 드랍', drop.data && 'username' in drop.data ? drop.data.username : undefined);
@@ -63,7 +61,7 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
           ) : null}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Press accessibilityLabel="좋아요" accessibilityState={{ selected: liked }} hitSlop={6} onPress={() => (authed ? toggleLike.mutate(undefined, { onError: e => toast(errorMessage(e), 'error') }) : toast('로그인이 필요해요.'))} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          <Press accessibilityLabel="좋아요" accessibilityState={{ selected: liked }} hitSlop={6} onPress={() => (authed ? toggleLike.toggle() : toast('로그인이 필요해요.'))} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
             <Glyph name="heart" color={liked ? '#EA383B' : '#E3E3E3'} />
             {count(likeCount)}
           </Press>

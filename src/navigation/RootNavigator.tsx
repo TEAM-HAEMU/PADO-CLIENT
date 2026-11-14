@@ -6,6 +6,7 @@ import { PadoSymbol } from '@/components/ui/Brand';
 import { Dock } from '@/components/ui/Dock';
 import { startNotificationStream, stopNotificationStream } from '@/services/notificationsStream';
 import { useLocation } from '@/services/location';
+import { useDropRadius } from '@/hooks/useDropRadius';
 import { openPendingLink } from './linking';
 import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
@@ -77,6 +78,8 @@ export function RootNavigator() {
   const refreshPermission = useLocation(s => s.refreshPermission);
 
   useEffect(() => { refreshPermission(); }, [refreshPermission]);
+  // 운영자 드랍 반경을 앱 시작 때 받아 둔다 (못 받으면 저장된 값·기본값)
+  useDropRadius();
   // 로그인 전에 눌렀던 링크가 있으면 로그인 직후 그 화면으로
   const needLocationNow = !locationPrompted && permission !== 'granted';
   useEffect(() => {

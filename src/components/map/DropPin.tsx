@@ -58,6 +58,8 @@ interface PinProps {
   /** 물결 애니메이션 (Google 지도에선 Marker tracksViewChanges가 켜져 있어야 보인다) */
   animated?: boolean;
   onImageLoad?: () => void;
+  /** 재생 반경 밖 — 곡·커버 없이 흐리게 (art·count는 무시) */
+  locked?: boolean;
 }
 
 /** 아트 한 변 A → 줄기 16 · 점(8×7) 중심 A+15.5 · 물결 반높이 14.5 */
@@ -68,7 +70,7 @@ export const PIN_SIZE = { normal: box(55), active: box(63) };
  * Figma 'stay music': 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 앨범 아트 + 아래로 반투명 줄기와 점.
  * Android 마커 비트맵은 overflow:hidden 클리핑을 못 그려서 앨범 아트는 Image 자체에 borderRadius를 준다
  */
-export function DropPin({ type, art, active, title, subtitle, count, animated, onImageLoad }: PinProps) {
+export function DropPin({ type, art, active, title, subtitle, count, animated, onImageLoad, locked }: PinProps) {
   const A = active ? 63 : 55;
   const B = 3;
   const inner = A - B * 2;
@@ -76,7 +78,7 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
   const b = active ? PIN_SIZE.active : PIN_SIZE.normal;
   const left = (b.w - A) / 2;
   return (
-    <View style={{ width: b.w, height: b.h }} accessible={!!title} accessibilityLabel={title ? `${title}${subtitle ? ` · ${subtitle}` : ''}` : undefined}>
+    <View style={{ width: b.w, height: b.h, opacity: locked ? 0.55 : 1 }} accessible={!!title} accessibilityLabel={title ? `${title}${subtitle ? ` · ${subtitle}` : ''}` : undefined}>
       {animated ? <AnimatedRipple cx={b.tipX} cy={b.tipY} rings={active ? 3 : 2} /> : null}
       <Svg width={b.w} height={b.h} style={{ position: 'absolute' }}>
         {animated ? null : <Ripple cx={b.tipX} cy={b.tipY} />}
@@ -90,7 +92,11 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
           Platform.OS === 'ios' ? (active ? glow(0.8, 14) : { shadowColor: '#12214A', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } }) : null,
         ]}
       >
-        {art ? (
+        {locked ? (
+          <View style={{ width: inner, height: inner, borderRadius: R - B, backgroundColor: colors.card2, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="lock" size={18} color={colors.ink3} />
+          </View>
+        ) : art ? (
           <MarkerArt images={[art]} size={inner} radius={R - B} onLoad={onImageLoad} />
         ) : (
           <View style={{ width: inner, height: inner, borderRadius: R - B, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
@@ -98,12 +104,12 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
           </View>
         )}
       </View>
-      {type === 'VOTE' && art ? (
+      {type === 'VOTE' && art && !locked ? (
         <View style={{ position: 'absolute', left: left + A - 14, top: -4, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent, borderWidth: 1.5, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="vote" size={11} color={colors.ink} strokeWidth={2.4} />
         </View>
       ) : null}
-      {type === 'PLAYLIST' && count ? (
+      {type === 'PLAYLIST' && count && !locked ? (
         <View style={{ position: 'absolute', left: left + A - 20, top: -4, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 9, backgroundColor: colors.primary, borderWidth: 1.5, borderColor: '#FFFFFF' }}>
           <T v="micro" c="page" style={{ fontSize: 10, lineHeight: 13 }}>{count}곡</T>
         </View>
@@ -137,20 +143,22 @@ export function MarkerArt({ images, size, radius, onLoad }: { images: (string | 
   );
 }
 
-/** 내 위치 — 입자 물결 링 */
-export function MeMarker() {
-  const dots: React.ReactNode[] = [];
-  for (let k = 0; k < 3; k++) {
-    const R = 22 + k * 14, n = 16 + k * 8;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2, s = 2.2 - k * 0.5;
-      dots.push(<Ellipse key={`${k}-${i}`} cx={60 + R * Math.cos(a)} cy={60 + R * Math.sin(a)} rx={s / 2} ry={s / 2} fill="#FFFFFF" opacity={(0.9 - k * 0.25) * (0.5 + 0.5 * Math.sin(i * 1.3))} />);
-    }
+/** 내 위치 링의 점 72개 — 늘 같은 모양이라 한 번만 만든다 */
+const ME_DOTS: React.ReactNode[] = [];
+for (let k = 0; k < 3; k++) {
+  const R = 22 + k * 14, n = 16 + k * 8;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2, s = 2.2 - k * 0.5;
+    ME_DOTS.push(<Ellipse key={`${k}-${i}`} cx={60 + R * Math.cos(a)} cy={60 + R * Math.sin(a)} rx={s / 2} ry={s / 2} fill="#FFFFFF" opacity={(0.9 - k * 0.25) * (0.5 + 0.5 * Math.sin(i * 1.3))} />);
   }
+}
+
+/** 내 위치 — 입자 물결 링 */
+export const MeMarker = React.memo(function MeMarkerView() {
   return (
     <View style={{ width: 120, height: 120, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={120} height={120} style={{ position: 'absolute' }}>{dots}</Svg>
+      <Svg width={120} height={120} style={{ position: 'absolute' }}>{ME_DOTS}</Svg>
       <View style={[{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, borderWidth: 4, borderColor: '#FFFFFF' }, glow(0.9, 14)]} />
     </View>
   );
-}
+});

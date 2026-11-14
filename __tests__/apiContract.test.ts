@@ -18,7 +18,6 @@ jest.mock('@/config', () => {
     useMock: !e.PADO_LIVE,
     googleMapsKey: '', kakaoAppKey: '', google: {},
   },
-  NEARBY_RADIUS_KM: 1,
   };
 });
 

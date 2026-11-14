@@ -68,10 +68,14 @@ function textOf(node: React.ReactNode): string {
 }
 
 // NativeWind 인터롭이 함수형 style을 버리므로 눌림 상태를 직접 들고 정적 style을 넘긴다
-export function Press({ style, children, onPressIn, onPressOut, onPress, onLongPress, accessibilityRole = 'button', ...rest }: Omit<PressableProps, 'style' | 'children'> & { style?: StyleProp<ViewStyle>; children?: React.ReactNode }) {
+/**
+ * trackAs: 분석용 고정 라벨. 버튼 글자·접근성 라벨에 닉네임·곡명·플리 이름처럼 바뀌는 값이 들어가면 꼭 준다
+ * (분석에 사용자가 쓴 내용이 들어가지 않게, 같은 버튼이 한 줄로 모이게)
+ */
+export function Press({ style, children, onPressIn, onPressOut, onPress, onLongPress, accessibilityRole = 'button', trackAs, ...rest }: Omit<PressableProps, 'style' | 'children'> & { style?: StyleProp<ViewStyle>; children?: React.ReactNode; trackAs?: string }) {
   const [pressed, setPressed] = React.useState(false);
-  // 분석: 모든 버튼 탭을 자동 기록 (라벨 → 접근성 라벨, 없으면 버튼 안 글자)
-  const label = () => rest.accessibilityLabel || rest.testID || textOf(children).slice(0, 60);
+  // 분석: 모든 버튼 탭을 자동 기록 (라벨 → trackAs, 접근성 라벨, 테스트 ID, 없으면 버튼 안 글자 순). 숫자는 #으로 바뀐다
+  const label = () => trackAs || rest.accessibilityLabel || rest.testID || textOf(children).slice(0, 60);
   return (
     <Pressable
       {...rest}

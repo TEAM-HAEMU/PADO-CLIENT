@@ -1,4 +1,4 @@
-/** 사용자 차단 — 확인창 → POST /blocks → 그 사람의 드랍·댓글이 바로 사라지게 목록을 다시 불러옴 */
+/** 사용자 차단 — 확인창 → POST /blocks → 그 사람의 드랍·댓글이 바로 사라지게 목록·상세·좋아요 목록을 다시 불러옴 (invalidateAfterBlock) */
 import { useQueryClient } from '@tanstack/react-query';
 import { safetyApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
@@ -6,6 +6,7 @@ import type { UUID } from '@/api/types';
 import { dialog } from '@/components/ui/Dialog';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
+import { invalidateAfterBlock } from './api';
 
 export function useBlockUser() {
   const qc = useQueryClient();
@@ -22,7 +23,7 @@ export function useBlockUser() {
             safetyApi.block(userId)
               .then(() => {
                 track('user_blocked', { source: opts.source });
-                for (const key of ['nearby', 'comments', 'commentCount', 'blocks']) qc.invalidateQueries({ queryKey: [key] });
+                invalidateAfterBlock(qc);
                 toast('차단했어요.', 'success');
                 opts.onBlocked?.();
               })

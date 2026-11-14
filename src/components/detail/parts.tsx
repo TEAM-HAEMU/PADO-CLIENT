@@ -42,7 +42,7 @@ export function CommentBar({ placeholder, onComment, liked, likeCount, onLike }:
   const insets = useSafeAreaInsets();
   return (
     <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 36, paddingTop: 10, paddingBottom: insets.bottom + 12, backgroundColor: colors.page }}>
-      <Press onPress={onComment} style={{ flex: 1, height: 33, borderRadius: 99, backgroundColor: '#F7F7F7', justifyContent: 'center', paddingHorizontal: 18 }}>
+      <Press onPress={onComment} trackAs="댓글 입력" style={{ flex: 1, height: 33, borderRadius: 99, backgroundColor: '#F7F7F7', justifyContent: 'center', paddingHorizontal: 18 }}>
         <T style={{ fontFamily: fonts.regular, fontSize: 11, lineHeight: 15, letterSpacing: -0.055, color: '#BABABA' }}>{placeholder}</T>
       </Press>
       <Press accessibilityLabel="좋아요" accessibilityState={{ selected: liked }} onPress={onLike} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
@@ -84,7 +84,7 @@ export function PlaylistHero({ images, title, meta, onPlay, onShuffle, onService
   );
 }
 
-export function DiscArt({ uri, size = 60, playing, loading, onPress, accessibilityLabel }: { uri?: string | null; size?: number; playing?: boolean; loading?: boolean; onPress?: () => void; accessibilityLabel?: string }) {
+export function DiscArt({ uri, size = 60, playing, loading, onPress, accessibilityLabel, trackAs = '앨범 아트' }: { uri?: string | null; size?: number; playing?: boolean; loading?: boolean; onPress?: () => void; accessibilityLabel?: string; trackAs?: string }) {
   const inner = (
     <>
       {uri ? (
@@ -98,7 +98,7 @@ export function DiscArt({ uri, size = 60, playing, loading, onPress, accessibili
     </>
   );
   const style: ViewStyle = { width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' };
-  return onPress ? <Press onPress={onPress} accessibilityLabel={accessibilityLabel} accessibilityState={{ selected: !!playing, busy: !!loading }} hitSlop={4} style={style}>{inner}</Press> : <View style={style}>{inner}</View>;
+  return onPress ? <Press onPress={onPress} accessibilityLabel={accessibilityLabel} trackAs={trackAs} accessibilityState={{ selected: !!playing, busy: !!loading }} hitSlop={4} style={style}>{inner}</Press> : <View style={style}>{inner}</View>;
 }
 
 export type DiscSong = { id: string; title: string; artist: string; albumImagePath?: string | null };
@@ -107,13 +107,13 @@ export type DiscSong = { id: string; title: string; artist: string; albumImagePa
 function PreviewDisc({ song }: { song: DiscSong }) {
   const p = usePreview(song, { lazy: true });
   const waiting = usePreviewStore(st => st.pending?.key === song.id || (st.key === song.id && st.buffering));
-  return <DiscArt uri={song.albumImagePath} playing={p.playing} loading={p.loading || waiting} onPress={p.toggle} accessibilityLabel={p.playing ? `${song.title} 일시정지` : `${song.title} 미리듣기`} />;
+  return <DiscArt uri={song.albumImagePath} playing={p.playing} loading={p.loading || waiting} onPress={p.toggle} accessibilityLabel={p.playing ? `${song.title} 일시정지` : `${song.title} 미리듣기`} trackAs={p.playing ? '곡 미리듣기 일시정지' : '곡 미리듣기'} />;
 }
 
 /** 오른쪽 요소: duration(있으면 3:12) + right. height 79(목록) / 67(시트). song을 주면 앨범 = 미리듣기 버튼, 나머지 = onPress */
-export function DiscRow({ art, song, title, artist, duration, right, onPress, onLongPress, onArt, artLabel, active, dim, height = 79, accessibilityLabel, style, children }: { art?: string | null; song?: DiscSong; title: string; artist: string; duration?: string; right?: React.ReactNode; onPress?: () => void; onLongPress?: () => void; onArt?: () => void; artLabel?: string; active?: boolean; dim?: boolean; height?: number; accessibilityLabel?: string; style?: ViewStyle; children?: React.ReactNode }) {
+export function DiscRow({ art, song, title, artist, duration, right, onPress, onLongPress, onArt, artLabel, active, dim, height = 79, accessibilityLabel, trackAs = '곡 행', style, children }: { trackAs?: string; art?: string | null; song?: DiscSong; title: string; artist: string; duration?: string; right?: React.ReactNode; onPress?: () => void; onLongPress?: () => void; onArt?: () => void; artLabel?: string; active?: boolean; dim?: boolean; height?: number; accessibilityLabel?: string; style?: ViewStyle; children?: React.ReactNode }) {
   return (
-    <Press onPress={onPress} onLongPress={onLongPress} accessibilityLabel={accessibilityLabel} accessibilityState={active ? { selected: true } : undefined} style={[{ height, borderRadius: 12, overflow: 'hidden', backgroundColor: active ? ROW_ON : colors.page, opacity: dim ? 0.5 : 1, justifyContent: 'center' }, style]}>
+    <Press onPress={onPress} onLongPress={onLongPress} accessibilityLabel={accessibilityLabel} trackAs={trackAs} accessibilityState={active ? { selected: true } : undefined} style={[{ height, borderRadius: 12, overflow: 'hidden', backgroundColor: active ? ROW_ON : colors.page, opacity: dim ? 0.5 : 1, justifyContent: 'center' }, style]}>
       {children}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 15, paddingRight: 16 }}>
         {song ? <PreviewDisc song={song} /> : <DiscArt uri={art} onPress={onArt} accessibilityLabel={artLabel} />}

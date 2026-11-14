@@ -31,8 +31,25 @@ jest.mock('@amplitude/analytics-react-native', () => {
     identify: jest.fn(),
     reset: jest.fn(),
     setOptOut: jest.fn(),
+    remove: jest.fn(() => ({ promise: Promise.resolve() })),
+    flush: jest.fn(() => ({ promise: Promise.resolve() })),
     Identify,
     Types: { LogLevel: { None: 0, Warn: 2 } },
   };
 });
 jest.mock('@amplitude/plugin-session-replay-react-native', () => ({ SessionReplayPlugin: function SessionReplayPlugin() {} }));
+
+/* Sentry — 네이티브 없이 호출만 기록 (전송 조건·걸러내기는 services/monitoringRules 순수 함수로 테스트) */
+jest.mock('@sentry/react-native', () => {
+  const scope = { setTags: jest.fn(() => scope), setFingerprint: jest.fn(() => scope) };
+  return {
+    init: jest.fn(),
+    close: jest.fn(() => Promise.resolve(true)),
+    addBreadcrumb: jest.fn(),
+    captureException: jest.fn((e, fn) => { if (typeof fn === 'function') fn(scope); return 'event-id'; }),
+    reactNavigationIntegration: jest.fn(() => ({ name: 'ReactNavigation', registerNavigationContainer: jest.fn() })),
+    wrap: c => c,
+    ErrorBoundary: ({ children }) => children,
+    __scope: scope,
+  };
+});
