@@ -35,9 +35,12 @@ const QUICK_MS = 3000;
 const WATCH_OPTS = { enableHighAccuracy: true, distanceFilter: 5, interval: 4000, fastestInterval: 2000 };
 /**
  * 감시가 이보다 오래 멈춰 있었으면(백그라운드 등) 들고 있던 좌표를 '지금 위치'로 믿지 않는다 — 새 위치를 받을 때까지 드랍 생성·잠금 판정에 안 씀.
- * 감시가 도는 동안엔 가만히 있어도(distanceFilter라 새 값이 안 옴) 낡은 게 아니다. 빠른 첫 위치의 maximumAge와 같은 2분.
+ * 감시가 도는 동안엔 가만히 있어도(distanceFilter라 새 값이 안 옴) 낡은 게 아니다. 10분 — 잠깐 다른 앱에 다녀온 정도로는 잠그지 않게 느슨하게.
+ * 알려진 한계: 감시가 도는 동안 신호만 끊기면(지하철·지하) 오류가 안 와 좌표가 계속 '지금 위치'로 남는다 (움직였어도 새 값이 올 때까지 그대로)
  */
-export const STALE_MS = 120_000;
+export const STALE_MS = 600_000;
+/** 드랍을 남길 수 있는 최대 위치 오차(m) — 이보다 크면(Android 대략적인 위치·iOS 정확한 위치 끔 등) 엉뚱한 자리에 남지 않게 막는다 */
+export const DROP_MAX_ACCURACY_M = 100;
 
 type PosError = { code?: number; message?: string };
 /**
@@ -83,6 +86,14 @@ interface LocationState {
 
 /** 드랍 생성·잠금 판정에 써도 되는 위치 — 낡은 좌표(stale)면 null */
 export const currentCoords = (s: Pick<LocationState, 'coords' | 'stale'>): Coords | null => (s.stale ? null : s.coords);
+/** 위치 오차가 커서 드랍을 남길 수 없다 (오차를 모르면 허용) */
+export const tooImpreciseToDrop = (s: Pick<LocationState, 'accuracy'>) => s.accuracy != null && s.accuracy > DROP_MAX_ACCURACY_M;
+/** 오차가 커서 드랍을 막을 때 안내 — 제목과 설명 (설정 열기 버튼과 함께) */
+export const PRECISE_DROP_TITLE = '정확한 위치를 켜야 드랍을 남길 수 있어요';
+export const preciseDropHint = () =>
+  Platform.OS === 'android'
+    ? "설정 > 권한 > 위치에서 '정확한 위치 사용'을 켜주세요. 이미 켜져 있다면 실외에서 잠시 뒤 다시 시도해주세요."
+    : "설정 > 위치에서 '정확한 위치'를 켜주세요. 이미 켜져 있다면 실외에서 잠시 뒤 다시 시도해주세요.";
 
 type Position = { coords: Coords & { accuracy?: number | null }; timestamp?: number };
 
@@ -92,8 +103,12 @@ let watchId: number | null = null;
 /** 다시 시작할 때마다 올린다 — 지난 회차의 늦은 콜백은 버린다 */
 let session = 0;
 let timers: ReturnType<typeof setTimeout>[] = [];
-/** 이번 회차에 위치를 한 번이라도 받았는지 */
+/** 이번 회차에 위치를 한 번이라도 받았는지 (빠른 첫 위치 포함) */
 let sessionFixed = false;
+/** 이번 회차에 감시가 직접 위치를 줬는지 — 빠른 첫 위치는 최대 2분 전 캐시라 '멈추는 순간까지 지금 위치'로 치지 않는다 */
+let watchFixed = false;
+/** 마지막으로 센 location_unavailable 이유 — 같은 이유를 거듭(포그라운드마다 다시 시작할 때 포함) 세지 않게. 위치를 받으면 비움 */
+let loggedReason: FixReason | null = null;
 /** coords가 '지금 위치'였다고 마지막으로 확인된 시각 — 위치를 받을 때, 위치를 받은 감시를 멈출 때 */
 let confirmedAt = 0;
 /** 앱이 백그라운드라 감시를 멈춰 둠 (앞으로 오면 다시 켬) */
@@ -102,10 +117,11 @@ let appSub: { remove: () => void } | null = null;
 
 export const useLocation = create<LocationState>((set, get) => {
   const halt = () => {
-    // 위치를 받은 감시가 멈추는 순간까지는 그 좌표가 지금 위치였다
-    if (watchId !== null && sessionFixed && get().coords && !get().stale) confirmedAt = Date.now();
+    // 위치를 준 감시가 멈추는 순간까지는 그 좌표가 지금 위치였다 (빠른 첫 위치만 받았으면 그 위치를 잡은 시각 그대로)
+    if (watchId !== null && watchFixed && get().coords && !get().stale) confirmedAt = Date.now();
     session++;
     sessionFixed = false;
+    watchFixed = false;
     timers.forEach(clearTimeout);
     timers = [];
     if (watchId !== null) Geolocation.clearWatch(watchId);
@@ -119,6 +135,7 @@ export const useLocation = create<LocationState>((set, get) => {
     const acc = pos.coords.accuracy;
     const c = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
     sessionFixed = true;
+    loggedReason = null;
     confirmedAt = at;
     setAnalyticsLocation(c.latitude, c.longitude);
     set({ coords: c, accuracy: typeof acc === 'number' && acc > 0 ? acc : null, fixedAt: at, stale: false, fix: 'ok', reason: null });
@@ -145,8 +162,11 @@ export const useLocation = create<LocationState>((set, get) => {
     } else {
       set({ stale: !!was.coords, fix: 'unavailable', reason });
     }
-    // 감시가 같은 오류를 거듭 내도 한 번만 센다
-    if (!(was.fix === 'unavailable' && was.reason === reason)) track('location_unavailable', { reason });
+    // 감시가 같은 오류를 거듭 내도, 포그라운드로 와 다시 시작해 같은 이유로 또 못 받아도 한 번만 센다
+    if (loggedReason !== reason) {
+      loggedReason = reason;
+      track('location_unavailable', { reason });
+    }
   };
   /**
    * 1) 기기가 최근(2분 안)에 잡아 둔 위치를 바로 한 번 (보통 즉시 옴) → 2) 정밀 감시 하나.
@@ -157,8 +177,6 @@ export const useLocation = create<LocationState>((set, get) => {
     halt();
     const s = session;
     let lastErr: PosError | undefined;
-    /** 감시가 위치를 줬으면 늦게 온 빠른 첫 위치(최대 2분 전 캐시)는 버린다 — 최신 위치를 덮지 않게 */
-    let watchFixed = false;
     const { coords } = get();
     if (!coords) set({ fix: 'locating', reason: null });
     else if (!fresh()) set({ stale: true, fix: 'locating', reason: null });
@@ -166,7 +184,7 @@ export const useLocation = create<LocationState>((set, get) => {
       if (s !== session || watchId !== null) return;
       watchId = Geolocation.watchPosition(p => {
         if (s !== session) return;
-        watchFixed = true;
+        watchFixed = true; // 감시가 위치를 줬으면 늦게 온 빠른 첫 위치(최대 2분 전 캐시)는 버린다 — 최신 위치를 덮지 않게
         got(p);
       }, e => {
         if (s !== session) return;
@@ -201,6 +219,8 @@ export const useLocation = create<LocationState>((set, get) => {
       if (holders > 0) halt();
     } else if (st === 'active' && paused) {
       paused = false;
+      // 설정에서 권한을 바꾸고 왔을 수 있다 — 화면 쪽 리스너 순서(begin이 fix를 locating으로 바꿈)와 상관없이 여기서 다시 읽는다
+      get().refreshPermission().catch(() => {});
       if (holders > 0) begin();
     }
   };
@@ -255,7 +275,10 @@ export const useLocation = create<LocationState>((set, get) => {
         if (released) return;
         released = true;
         holders--;
-        if (holders === 0) halt();
+        if (holders === 0) {
+          halt();
+          loggedReason = null;
+        }
       };
     },
     restart: () => { if (holders > 0 && !paused) begin(); },

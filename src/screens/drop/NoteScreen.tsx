@@ -1,18 +1,20 @@
 /** 3.3 한마디 남기기 — Figma 'B 3.3 한마디 남기기' (고른 곡 · 한마디 입력 · 추천 문구) → POST /droppings */
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { Linking, ScrollView, TextInput, View } from 'react-native';
+import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { errorMessage } from '@/api/errors';
 import type { CreateDropBody } from '@/api/types';
 import { PinGlyph } from '@/components/drop/glyphs';
 import { DiscArt } from '@/components/drop/parts';
 import { Chip, PrimaryButton, T, TopBar } from '@/components/ui';
+import { dialog } from '@/components/ui/Dialog';
 import { Wave } from '@/components/ui/Wave';
 import { useCreateDrop, useMyDrops } from '@/hooks/api';
 import { regionOf } from '@/utils/address';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
-import { currentCoords, useLocation } from '@/services/location';
+import { currentCoords, preciseDropHint, PRECISE_DROP_TITLE, tooImpreciseToDrop, useLocation } from '@/services/location';
 import { usePreviewStore } from '@/services/preview';
 import { draftArt, useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
@@ -26,7 +28,7 @@ const SUGGEST = ['퇴근길에 딱', '여기 풍경이랑 잘 어울려요', '�
 export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   const insets = useSafeAreaInsets();
   const draft = useDraft();
-  const { address, label } = useLocation();
+  const { address, label } = useLocation(useShallow(s => ({ address: s.address, label: s.label })));
   const [text, setText] = useState(draft.content);
   const [focus, setFocus] = useState(false);
   // 뒤로 갔다 와도 쓰던 메모가 남도록 초안에도 저장 (렌더 중이 아니라 반영 뒤에)
@@ -52,8 +54,11 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   const submit = () => {
     if (create.isPending) return;
     // 실제 위치를 못 받았거나(권한·위치 서비스 꺼짐) 낡은 좌표면 엉뚱한 곳에 드랍되지 않게 막는다 — 누르는 순간의 위치로
-    const coords = currentCoords(useLocation.getState());
+    const loc = useLocation.getState();
+    const coords = currentCoords(loc);
     if (!coords) return toast('지금 위치를 확인할 수 없어요. 위치 권한과 GPS를 확인해주세요.', 'error');
+    // 오차가 100m를 넘으면(대략적인 위치 등) 엉뚱한 자리에 남지 않게 막는다 — 오차를 모르면 그대로
+    if (tooImpreciseToDrop(loc)) return dialog.alert(PRECISE_DROP_TITLE, preciseDropHint(), [{ text: '닫기', style: 'cancel' }, { text: '설정 열기', onPress: () => { Linking.openSettings(); } }]);
     const pos = coords;
     const base = { content: text.trim(), latitude: pos.latitude, longitude: pos.longitude, address: (address || label || '현재 위치').slice(0, 200) };
     let body: CreateDropBody;

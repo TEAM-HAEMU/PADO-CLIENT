@@ -15,7 +15,7 @@ jest.mock('react-native-permissions', () => ({
 jest.mock('@/services/analytics', () => ({ track: jest.fn(), setAnalyticsLocation: jest.fn(), clearAnalyticsLocation: jest.fn(), setAnalyticsRegion: jest.fn() }));
 
 import { AppState, type AppStateStatus } from 'react-native';
-import { currentCoords, FIX_TIMEOUT_MS, STALE_MS, useLocation } from '@/services/location';
+import { currentCoords, DROP_MAX_ACCURACY_M, FIX_TIMEOUT_MS, STALE_MS, tooImpreciseToDrop, useLocation } from '@/services/location';
 
 const mockGeo = jest.requireMock('@react-native-community/geolocation').default as {
   getCurrentPosition: jest.Mock<void, [Cb, ErrCb, object]>;
@@ -206,6 +206,7 @@ test('백그라운드로 가면 감시를 멈추고, 잠깐이면 돌아와서 �
 test('가만히 있어 감시가 새 값을 안 줘도 감시가 도는 동안은 낡은 게 아니다', () => {
   hold();
   mockGeo.getCurrentPosition.mock.calls[0][0](pos(35, 129));
+  mockGeo.watchPosition.mock.calls[0][0](pos(35, 129)); // 감시는 켜질 때 한 번 위치를 주고, 그 뒤로는 움직여야(distanceFilter) 준다
   jest.advanceTimersByTime(STALE_MS * 5);
   appState('background');
   appState('active');
@@ -257,4 +258,62 @@ test('붙잡은 곳이 없으면 앞으로 와도 감시를 켜지 않고, 백�
   expect(mockGeo.getCurrentPosition).toHaveBeenCalledTimes(1);
   appState('active');
   expect(mockGeo.getCurrentPosition).toHaveBeenCalledTimes(2);
+});
+
+test('낡음 기준은 10분 — 5분 백그라운드에 있다 와도 좌표를 그대로 믿는다', () => {
+  expect(STALE_MS).toBe(600_000);
+  hold();
+  mockGeo.getCurrentPosition.mock.calls[0][0](pos(35, 129));
+  appState('background');
+  jest.advanceTimersByTime(5 * 60_000);
+  appState('active');
+  expect(st().stale).toBe(false);
+  expect(currentCoords(st())).toEqual({ latitude: 35, longitude: 129 });
+});
+
+test('빠른 첫 위치(캐시)만 받고 감시를 멈추면 믿음은 그 위치를 잡은 시각부터 센다', () => {
+  hold();
+  const t = Date.now();
+  mockGeo.getCurrentPosition.mock.calls[0][0]({ coords: { latitude: 35, longitude: 129 }, timestamp: t - 90_000 });
+  jest.advanceTimersByTime(60_000); // 감시는 켜졌지만 감시가 준 위치는 없음
+  appState('background');
+  jest.advanceTimersByTime(STALE_MS - 150_000 + 1000);
+  appState('active');
+  expect(st().stale).toBe(true);
+});
+
+test('감시가 위치를 줬으면 멈추는 순간까지 지금 위치로 친다', () => {
+  hold();
+  mockGeo.getCurrentPosition.mock.calls[0][0](pos(35, 129));
+  mockGeo.watchPosition.mock.calls[0][0](pos(35.01, 129));
+  jest.advanceTimersByTime(STALE_MS);
+  appState('background');
+  jest.advanceTimersByTime(STALE_MS - 1000);
+  appState('active');
+  expect(st().stale).toBe(false);
+});
+
+test('포그라운드로 오면 권한을 다시 읽고, 같은 이유로 또 못 받아도 location_unavailable은 한 번만', async () => {
+  hold();
+  mockGeo.getCurrentPosition.mock.calls[0][1]({ code: 1 });
+  await flush();
+  expect(st()).toMatchObject({ fix: 'unavailable', reason: 'denied' });
+  mockPerm.check.mockClear();
+  appState('background');
+  appState('active');
+  expect(mockPerm.check).toHaveBeenCalled(); // 화면 리스너 순서와 상관없이 권한을 다시 읽는다
+  await flush();
+  expect(st().fix).toBe('locating');
+  mockGeo.getCurrentPosition.mock.calls[1][1]({ code: 1 });
+  await flush();
+  expect(st()).toMatchObject({ fix: 'unavailable', reason: 'denied' });
+  expect(mockAnalytics.track.mock.calls.filter(c => c[0] === 'location_unavailable')).toHaveLength(1);
+});
+
+test('드랍 생성은 위치 오차 100m까지 (모르면 허용)', () => {
+  expect(DROP_MAX_ACCURACY_M).toBe(100);
+  expect(tooImpreciseToDrop({ accuracy: 100 })).toBe(false);
+  expect(tooImpreciseToDrop({ accuracy: 101 })).toBe(true);
+  expect(tooImpreciseToDrop({ accuracy: 3000 })).toBe(true);
+  expect(tooImpreciseToDrop({ accuracy: null })).toBe(false);
 });
