@@ -38,10 +38,11 @@ export function useScreenVisible() {
     let level = 0;
     for (let n: Nav | undefined = navigation; n; n = n.getParent(), level++) {
       const lv = level;
-      // 탭 내비게이터에는 이 이벤트가 없다 (오지 않을 뿐 해는 없음)
+      // 탭 내비게이터(bottom-tabs)도 탭을 바꿀 때 새로 고른 탭 화면에 transitionStart·transitionEnd를 data 없이 보낸다 —
+      // data를 꼭 ?.로 읽는다. 탭의 transitionStart는 '다시 보임'(closing 아님), transitionEnd는 closing이 아니라 무시
       const stack = n as unknown as NativeStackNavigationProp<ParamListBase>;
-      offs.push(stack.addListener('transitionStart', e => { if (!e.data.closing) { hidden.delete(lv); setCovered(hidden.size > 0); } }));
-      offs.push(stack.addListener('transitionEnd', e => { if (e.data.closing) { hidden.add(lv); setCovered(true); } }));
+      offs.push(stack.addListener('transitionStart', (e: { data?: { closing?: boolean } }) => { if (!e.data?.closing) { hidden.delete(lv); setCovered(hidden.size > 0); } }));
+      offs.push(stack.addListener('transitionEnd', (e: { data?: { closing?: boolean } }) => { if (e.data?.closing) { hidden.add(lv); setCovered(true); } }));
     }
     const check = () => setInOtherTab(otherTab(navigation, routeKey));
     offs.push(navigation.addListener('focus', check), navigation.addListener('blur', check));
