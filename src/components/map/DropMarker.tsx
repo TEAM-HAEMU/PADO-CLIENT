@@ -1,16 +1,17 @@
 /**
- * 지도 마커 — 드랍 핀 하나 · 내 위치.
+ * 지도 마커 — 드랍 핀 하나 · 많이 축소했을 때의 묶음 · 내 위치.
  * props는 원시값만 받고 memo로 감싼다 → GPS가 갱신돼 지도 화면이 다시 렌더돼도 바뀐 핀만 다시 그린다.
  * 마커 스냅샷 추적(tracksViewChanges)은 마커마다 — 처음 그릴 때, 자기 앨범 아트가 로드될 때, 모양이 바뀔 때만 잠깐 켠다
  * (Google 지도는 추적을 끄면 그 순간 모습으로 굳고, 켜 두면 계속 다시 찍어 비싸다).
  */
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Platform } from 'react-native';
+import { Image, Platform, Text, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 import type { DropType } from '@/api/types';
 import { DropPin, MeMarker, PIN_SIZE } from '@/components/map/DropPin';
 import { artUrl } from '@/utils/artUrl';
-import { createPrefetcher } from '@/utils/mapPins';
+import { clusterLabel, clusterSize, createPrefetcher } from '@/utils/mapPins';
+import { colors, dropShadow, fonts } from '@/theme/tokens';
 
 /** 앨범 아트 미리 받기 — 같은 주소는 한 번, 동시에 6개씩 (화면에 그리는 열린 핀만 부른다) */
 const art = createPrefetcher(u => Image.prefetch(u), 6);
@@ -97,6 +98,36 @@ export const DropMarker = memo(function DropMarkerItem({ id, latitude, longitude
       ) : (
         <DropPin type={type} art={image} active={active} animated={animated} onImageLoad={onImageLoad} title={title} subtitle={subtitle} count={count} />
       )}
+    </Marker>
+  );
+});
+
+// 묶음 둘레 여백 — Android 마커 비트맵은 뷰 밖 그림자를 잘라내므로 그림자 자리를 뷰 안에 둔다
+const CLUSTER_PAD = 6;
+const CLUSTER_ANCHOR = { x: 0.5, y: 0.5 };
+
+/**
+ * 드랍 묶음(2개 이상) — 하늘색 원 + 흰 테두리 + 흰 숫자 (어드민 지도 묶음과 같은 모양). 곡·커버·잠금 여부는 없다. 1개짜리는 보통 핀(DropMarker)으로 그린다.
+ * 모양이 숫자뿐이라 스냅샷 추적은 처음과 숫자가 바뀔 때만 잠깐 (그 외엔 tracksViewChanges 끔)
+ */
+export const ClusterMarker = memo(function ClusterMarkerItem({ id, latitude, longitude, count, onPress }: { id: string; latitude: number; longitude: number; count: number; onPress: (id: string) => void }) {
+  const [tracking, trackFor] = useTracking(800);
+  const prevCount = useRef(count);
+  useEffect(() => {
+    if (prevCount.current === count) return;
+    prevCount.current = count;
+    trackFor(600);
+  }, [count, trackFor]);
+  const press = useCallback(() => onPress(id), [onPress, id]);
+  const coordinate = useMemo(() => ({ latitude, longitude }), [latitude, longitude]);
+  const size = clusterSize(count);
+  return (
+    <Marker coordinate={coordinate} anchor={CLUSTER_ANCHOR} tracksViewChanges={tracking} zIndex={2} onPress={press}>
+      <View style={{ padding: CLUSTER_PAD }} accessible accessibilityRole="button" accessibilityLabel={`드랍 ${count}개, 눌러서 펼치기`}>
+        <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 3, borderColor: colors.page, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: dropShadow.shadowColor, shadowOpacity: 0.18, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 3 }}>
+          <Text allowFontScaling={false} style={{ fontFamily: fonts.bold, fontSize: 13, lineHeight: 16, color: colors.page }}>{clusterLabel(count)}</Text>
+        </View>
+      </View>
     </Marker>
   );
 });

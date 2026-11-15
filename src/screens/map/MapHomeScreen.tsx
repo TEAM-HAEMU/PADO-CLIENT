@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dropApi } from '@/api/endpoints';
 import type { DropSummary, MusicDropSummary } from '@/api/types';
 import type { DropOpenSource } from '@/navigation/types';
-import { DropMarker, MyLocationMarker } from '@/components/map/DropMarker';
+import { ClusterMarker, DropMarker, MyLocationMarker } from '@/components/map/DropMarker';
 import { Art, Icon, Press, T } from '@/components/ui';
 import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
@@ -34,7 +34,7 @@ import { colors, fonts, glow } from '@/theme/tokens';
 import type { TabParamList } from '@/navigation/types';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { formatAddress } from '@/utils/address';
-import { geocodeDue, idSetKey, pickPins, type GeocodeMark } from '@/utils/mapPins';
+import { clusterPoints, clusterZoomRegion, geocodeDue, idSetKey, pickPins, shouldCluster, singlePins, type GeocodeMark } from '@/utils/mapPins';
 
 const useGoogle = !!env.googleMapsKey || Platform.OS === 'android';
 
@@ -153,9 +153,14 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const sorted = useMemo(() => drops.map(d => ({ d, m: distanceM(here, d), lock: lockOf(d) })).sort((a, b) => a.m - b.m), [drops, here, lockOf]);
   const nearestId = sorted.find(x => !x.lock.locked)?.d.droppingId;
   // 지도에 그릴 핀 — 보이는 영역(넉넉히) 안에서 가까운 순 MAX_PINS개 (영역은 지도를 다 움직인 뒤에만 갱신)
+  // 많이 축소하면(CLUSTER_LNG_DELTA) 핀 대신 격자로 묶은 수 묶음만 — 묶음은 위치(GPS)와 무관하니 드랍 목록·영역이 바뀔 때만 다시 묶는다
   const [view, setView] = useState<Region | null>(null);
   const onRegionChangeComplete = useCallback((r: Region) => setView(r), []);
-  const pins = useMemo(() => pickPins(sorted, view), [sorted, view]);
+  const clustered = shouldCluster(view);
+  const clusters = useMemo(() => (clustered && view ? clusterPoints(drops, view) : []), [clustered, drops, view]);
+  // 1개짜리 묶음은 수 원 대신 보통 핀으로 — 핀 모드와 같은 DropMarker·같은 키라 확대·축소로 모드가 바뀌어도 그 핀은 다시 만들어지지 않는다
+  const pins = useMemo(() => (clustered ? singlePins(sorted, clusters) : pickPins(sorted, view)), [clustered, clusters, sorted, view]);
+  const groups = useMemo(() => clusters.filter(c => c.count > 1), [clusters]);
 
   // 주변 곡 자동 재생 — 가까운 음악 드랍부터 차례로 (지도 화면일 때, 앱을 내려도 계속)
   const musicDrops = useMemo(() => sorted.filter(x => !x.lock.locked).map(x => x.d).filter((d): d is MusicDropSummary => d.type === 'MUSIC'), [sorted]);
@@ -188,6 +193,17 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const onPinPress = useCallback((id: string) => {
     const x = latest.current.sorted.find(p => p.d.droppingId === id);
     if (x) latest.current.tapDrop(x, 'map_pin');
+  }, []);
+  // 묶음 누르기 — 묶인 드랍이 다 보이게 확대 (둘러보는 중이므로 내 위치 따라가기는 멈춘다)
+  const latestClusters = useRef({ clusters, view });
+  useEffect(() => { latestClusters.current = { clusters, view }; });
+  const onClusterPress = useCallback((key: string) => {
+    const { clusters: list, view: at } = latestClusters.current;
+    const c = list.find(x => x.key === key);
+    if (!c || !at) return;
+    follow.current = false;
+    track('map_cluster_tap', { count: c.count });
+    mapRef.current?.animateToRegion(clusterZoomRegion(c, at), 450);
   }, []);
 
   // 지도 첫 로드 (앱 실행마다 한 번) — 주변 드랍 수·열 수 있는 드랍 수·반경 (반경 관련 분포용)
@@ -261,10 +277,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         onPanDrag={() => { follow.current = false; }}
         onMapReady={() => setMapReady(true)}
         onRegionChangeComplete={onRegionChangeComplete}
+        // Android Google 지도는 마커를 누르면 그 마커를 가운데로 옮긴다 — 묶음을 누를 땐 animateToRegion과 겹쳐 지도가 한 번 튀므로 묶음 모드에서만 끈다 (지도 단위 설정이라 마커별로는 못 정한다)
+        moveOnMarkerPress={!clustered}
       >
         {/* Apple 지도는 스타일을 못 바꾸므로 넓은 하늘빛 막을 깔아 디자인 톤에 맞춘다 (오버레이라 핀 아래에 그려짐) */}
         {!useGoogle ? <Polygon coordinates={tintArea(here)} fillColor="rgba(120,200,232,0.22)" strokeWidth={0} strokeColor="transparent" tappable={false} /> : null}
         {coords ? <MyLocationMarker latitude={coords.latitude} longitude={coords.longitude} /> : null}
+        {groups.map(c => <ClusterMarker key={c.key} id={c.key} latitude={c.latitude} longitude={c.longitude} count={c.count} onPress={onClusterPress} />)}
         {pins.map(({ item: { d, m, lock }, rank }) => (
           // 잠금이 풀리거나 잠기면 핀 모양이 통째로 바뀌므로 새 마커로
           <DropMarker
