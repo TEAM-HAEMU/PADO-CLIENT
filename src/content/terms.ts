@@ -24,13 +24,13 @@ export const OPERATOR = {
 };
 
 const EFFECTIVE = '2026-10-07'; // 2026-09-30 Amplitude 분석 추가 (7일 전 고지)
-/** 위치기반서비스 이용약관만 따로 — 2026-11-13 표시 범위를 회사가 정하는 거리 또는 같은 행정구역으로 바꾸고 재생 거리 안내 추가 (7일 전 고지). 서버 TermType.LOCATION과 같은 값 */
-const LOCATION_EFFECTIVE = '2026-11-20';
+/** 위치기반서비스 이용약관만 따로 — 2026-11-13 표시 범위를 회사가 정하는 거리 또는 같은 행정구역으로 바꾸고 재생 거리 안내 추가 (백엔드 배포 2026-11-16 기준 7일 전 고지). 서버 TermType.LOCATION과 같은 값 */
+const LOCATION_EFFECTIVE = '2026-11-23';
 /**
  * 개인정보 처리방침만 따로 — 2026-11-13 앱 이용 분석을 기본(기기 단위 익명)·상세(선택) 두 단계로 나누고 자동 수집 항목·국외 이전 갱신,
- * AWS 이메일 발송(비밀번호 재설정 인증번호) 위탁, Sentry 오류 진단 위탁·국외 이전 추가 (7일 전 고지). 서버 TermType.PRIVACY와 같은 값
+ * AWS 이메일 발송(비밀번호 재설정 인증번호) 위탁, Sentry 오류 진단 위탁·국외 이전 추가 (백엔드 배포 2026-11-16 기준 7일 전 고지). 서버 TermType.PRIVACY와 같은 값
  */
-const PRIVACY_EFFECTIVE = '2026-11-20';
+const PRIVACY_EFFECTIVE = '2026-11-23';
 const O = OPERATOR;
 
 const SERVICE = `제1조 (목적)
