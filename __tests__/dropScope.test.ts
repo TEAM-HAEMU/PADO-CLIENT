@@ -1,5 +1,5 @@
 /* 드랍 보기 모드 — 응답 검사, 지도 문구, 주변 검색 거리, 다시 물을 기준 좌표 */
-import { DEFAULT_RADIUS, WIDE_SEARCH_KM, nextAnchor, permissionScope, regionFallbackMeters, sanitizeRadius, scopeLabel, searchKm, shortRegionName } from '@/utils/dropScope';
+import { DEFAULT_RADIUS, MIN_PLAY_METERS, WIDE_SEARCH_KM, nextAnchor, permissionScope, regionFallbackMeters, sanitizeRadius, scopeLabel, searchKm, shortRegionName } from '@/utils/dropScope';
 import type { DropRadius } from '@/api/types';
 
 const at = '2026-11-13T12:00:00.000+09:00';
@@ -28,6 +28,16 @@ test('거리 모드는 표시 반경 null을 전국으로, 500km까지 받는다
   expect(sanitizeRadius({ mode: 'NEARBY', displayMeters: 1000, playMeters: 100 })).toBeNull();
   // mode 없는 예전 응답에 표시 반경이 없으면 깨진 응답
   expect(sanitizeRadius({ playMeters: 500 })).toBeNull();
+});
+
+test('재생 반경은 50m부터 — 그 아래로 저장된 값은 50m로 올리고, 0 이하는 깨진 응답', () => {
+  expect(MIN_PLAY_METERS).toBe(50);
+  expect(sanitizeRadius({ mode: 'DISTANCE', displayMeters: 1000, playMeters: 50 })?.playMeters).toBe(50);
+  expect(sanitizeRadius({ mode: 'DISTANCE', displayMeters: 1000, playMeters: 49 })?.playMeters).toBe(50);
+  expect(sanitizeRadius({ mode: 'DISTANCE', displayMeters: 100, playMeters: 10 })?.playMeters).toBe(50);
+  expect(sanitizeRadius({ mode: 'REGION', regionUnit: 'DONG', playMeters: 10 })?.playMeters).toBe(50);
+  expect(sanitizeRadius({ mode: 'DISTANCE', displayMeters: 1000, playMeters: 0 })).toBeNull();
+  expect(sanitizeRadius({ mode: 'DISTANCE', displayMeters: 1000, playMeters: -5 })).toBeNull();
 });
 
 test('지도 문구 — 반경 5km / 전국 / 해운대구의 드랍', () => {
