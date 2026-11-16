@@ -4,17 +4,15 @@
  */
 import React from 'react';
 import { useWindowDimensions, View } from 'react-native';
-import { useQueryClient } from '@tanstack/react-query';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { errorMessage } from '@/api/errors';
 import { BarProgress, Spin } from '@/components/anim';
 import { PreviewCredit } from '@/components/music/PreviewRow';
 import { BackGlyph, HeadphonesGlyph, HeartGlyph, MoreGlyph, PlayCircleGlyph } from '@/components/player/glyphs';
 import { Art, Icon, Press, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
 import { useDropMenu } from '@/hooks/useDropMenu';
-import { useComments, useDrop, useDropAddress, useLikeCount, useMyLikes, useSong, useToggleLike } from '@/hooks/api';
+import { useComments, useDrop, useDropAddress, useLikeCount, useSong, useToggleLike, useIsLiked } from '@/hooks/api';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
 import { listenFull, listenLabel } from '@/services/listen';
@@ -36,7 +34,6 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const { songId, dropId, queue, autoplay } = route.params;
   const qIndex = queue ? queue.indexOf(songId) : -1;
   const nextId = queue && qIndex >= 0 ? queue[qIndex + 1] : undefined;
-  const qc = useQueryClient();
   const songQ = useSong(songId, { keepPrevious: !!queue });
   const song = songQ.data;
   const drop = useDrop(dropId).data;
@@ -44,8 +41,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const menu = useDropMenu(dropId, drop?.userId, '드랍', drop && 'username' in drop ? drop.username : undefined, song);
   const likeCount = useLikeCount(dropId).data;
   const comments = useComments(dropId).data;
-  const myLikes = useMyLikes().data;
-  const liked = dropId ? qc.getQueryData<boolean>(['liked', dropId]) ?? !!myLikes?.some(x => x.droppingId === dropId) : false;
+  const liked = useIsLiked(dropId);
   const toggleLike = useToggleLike(dropId ?? '');
   const authed = useAuth(s => s.status === 'authed');
   const service = usePrefs(s => s.service);
@@ -62,6 +58,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
     else if (nextId) { startedFor.current = songId; const t = setTimeout(() => navigation.setParams({ songId: nextId }), 1200); return () => clearTimeout(t); }
   }, [songId, song?.id, preview.loading, preview.available]); // eslint-disable-line react-hooks/exhaustive-deps
   const endedKey = usePreviewStore(st => st.endedKey);
+  const loaded = usePreviewStore(st => st.key === songId);
   const endedAtMount = React.useRef(usePreviewStore.getState().endedKey);
   React.useEffect(() => {
     if (endedKey === endedAtMount.current) return; // 이 화면에 오기 전에 끝난 곡은 무시
@@ -75,11 +72,16 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const listen = () => listenFull(usePrefs.getState().service, song);
   const pickService = () => navigation.navigate('ServicePicker', { song });
   // 사용자가 직접 누른 재생·일시정지 — 이후 자동 재생 효과가 덮어쓰지 않게 이 곡은 '시작됨'으로 표시
+  // 미리듣기 주소를 아직 찾는 중이면 누름을 무시한다 (그동안 available이 false라 전체 듣기로 외부 앱이 열리던 문제)
+  // — 미리듣기가 없다고 확정된 곡만 전체 듣기로 넘긴다
+  // (이미 플레이어에 올라 있는 곡이면 주소 조회와 무관하게 재생·일시정지)
+  const resolving = preview.loading && !loaded;
   const onMain = () => {
+    if (resolving) return;
     startedFor.current = songId;
-    return preview.available ? preview.toggle() : listen();
+    return preview.available || loaded ? preview.toggle() : listen();
   };
-  const like = () => (authed ? toggleLike.mutate(undefined, { onError: e => toast(errorMessage(e), 'error') }) : toast('로그인이 필요해요.'));
+  const like = () => (authed ? toggleLike.toggle() : toast('로그인이 필요해요.'));
   const hole = disc * 0.153; // Figma 가운데 흰 구멍 53.5 / 349
   const halo = disc * 0.249; // 반투명 링 87 / 349
   const bubbles = (comments ?? []).slice(0, compact ? 2 : 3);
@@ -143,7 +145,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
                 <Icon name="prev" size={22} color={colors.ink3} />
               </Press>
             )}
-            <Press onPress={onMain} accessibilityLabel={preview.playing ? '일시정지' : '재생'} style={{ width: 50, height: 50 }}>
+            <Press onPress={onMain} disabled={resolving} accessibilityLabel={preview.playing ? '일시정지' : '재생'} accessibilityState={{ busy: resolving, disabled: resolving }} style={{ width: 50, height: 50, opacity: resolving ? 0.4 : 1 }}>
               <PlayCircleGlyph playing={preview.playing} />
             </Press>
             {!queue ? headphones : (

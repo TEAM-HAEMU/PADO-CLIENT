@@ -14,6 +14,7 @@ module.exports = {
         'ink-3': '#8D9BC4',
         faint: '#C7C7C7',
         line: '#F4F4F4',
+        divider: '#EAEAEA',
         'line-strong': '#BDC7DC',
         field: '#FDFDFF',
         deep: '#F0FCFF',

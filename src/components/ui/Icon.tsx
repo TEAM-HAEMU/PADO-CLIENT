@@ -9,7 +9,7 @@ export type IconName =
   | 'search' | 'bell' | 'user' | 'map' | 'library' | 'plus' | 'play' | 'pause' | 'heart' | 'heartFill' | 'comment'
   | 'external' | 'check' | 'chevronLeft' | 'chevronRight' | 'chevronDown' | 'pin' | 'more' | 'shuffle' | 'close'
   | 'locate' | 'layers' | 'vote' | 'playlist' | 'music' | 'export' | 'wave' | 'link' | 'edit' | 'share' | 'alert'
-  | 'swap' | 'mail' | 'settings' | 'trash' | 'flag' | 'block' | 'send' | 'eye' | 'eyeOff' | 'camera' | 'prev' | 'next';
+  | 'swap' | 'mail' | 'settings' | 'trash' | 'flag' | 'block' | 'send' | 'eye' | 'eyeOff' | 'camera' | 'prev' | 'next' | 'lock';
 
 interface Props { name: IconName; size?: number; color?: string; strokeWidth?: number }
 
@@ -70,6 +70,7 @@ const PATHS: Record<IconName, (p: P) => React.ReactNode> = {
   block: p => <><Circle cx="12" cy="12" r="8.5" {...p} /><Path d="M6 6l12 12" {...p} /></>,
   send: p => <Path d="M4 12 20 4l-6 16-2.5-6.5z" {...p} />,
   eye: p => <><Path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" {...p} /><Circle cx="12" cy="12" r="3" {...p} /></>,
+  lock: p => <><Rect x="5" y="10.5" width="14" height="10" rx="2.5" {...p} /><Path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3" {...p} /></>,
   eyeOff: p => <><Path d="M3 3l18 18M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.7M6.3 7.3A16.5 16.5 0 0 0 2.5 12S6 18.5 12 18.5a9.4 9.4 0 0 0 4.2-1" {...p} /></>,
   camera: p => <><Path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z" {...p} /><Circle cx="12" cy="13" r="3.5" {...p} /></>,
 };

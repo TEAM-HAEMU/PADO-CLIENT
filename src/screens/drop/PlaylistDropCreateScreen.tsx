@@ -75,7 +75,7 @@ export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'Pla
             const on = !isNew && selectedId === p.id;
             const total = d?.songs.reduce((a, s) => a + (s.duration || 0), 0) ?? 0;
             return (
-              <Press key={p.id} accessibilityState={{ selected: on }} onPress={() => { setMode('existing'); set({ playlist: { kind: 'existing', playlistId: p.id, name: p.name, art: p.albumImageUrl } }); }} style={[card(on), { flexDirection: 'row', alignItems: 'center', gap: 14 }]}>
+              <Press key={p.id} trackAs="기존 플레이리스트 고르기" accessibilityState={{ selected: on }} onPress={() => { setMode('existing'); set({ playlist: { kind: 'existing', playlistId: p.id, name: p.name, art: p.albumImageUrl } }); }} style={[card(on), { flexDirection: 'row', alignItems: 'center', gap: 14 }]}>
                 <Collage images={d?.songs.map(s => s.albumImagePath) ?? [p.albumImageUrl]} size={60} radius={30} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <T numberOfLines={1} style={NAME}>{p.name}</T>

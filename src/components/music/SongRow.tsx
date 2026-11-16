@@ -14,7 +14,7 @@ export function SongRow({ song, selected, onPress, right, showPreview = true, in
   const p = usePreview(showPreview ? song : null, { lazy: true });
   const size = index !== undefined ? 48 : 60;
   return (
-    <Press onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: selected || p.playing ? colors.primarySoft : colors.page, opacity: dim ? 0.5 : 1 }}>
+    <Press onPress={onPress} trackAs="곡 행" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: selected || p.playing ? colors.primarySoft : colors.page, opacity: dim ? 0.5 : 1 }}>
       {index !== undefined ? <T v="caption" c={selected ? 'primary' : 'ink3'} style={{ width: 20 }}>{String(index + 1).padStart(2, '0')}</T> : null}
       <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#000000' }}>
         <View style={{ opacity: 0.8 }}><Art uri={song.albumImagePath} size={size} round /></View>

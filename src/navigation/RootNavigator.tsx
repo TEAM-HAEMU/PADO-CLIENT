@@ -6,6 +6,7 @@ import { PadoSymbol } from '@/components/ui/Brand';
 import { Dock } from '@/components/ui/Dock';
 import { startNotificationStream, stopNotificationStream } from '@/services/notificationsStream';
 import { useLocation } from '@/services/location';
+import { useDropRadius } from '@/hooks/useDropRadius';
 import { openPendingLink } from './linking';
 import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
@@ -32,6 +33,7 @@ import NoteScreen from '@/screens/drop/NoteScreen';
 import VoteCreateScreen from '@/screens/drop/VoteCreateScreen';
 import PlaylistDropCreateScreen from '@/screens/drop/PlaylistDropCreateScreen';
 import DropSuccessScreen from '@/screens/drop/DropSuccessScreen';
+import ShareCardScreen from '@/screens/drop/ShareCardScreen';
 import VoteDropScreen from '@/screens/detail/VoteDropScreen';
 import PlaylistDropScreen from '@/screens/detail/PlaylistDropScreen';
 import PlaylistDetailScreen from '@/screens/detail/PlaylistDetailScreen';
@@ -76,6 +78,8 @@ export function RootNavigator() {
   const refreshPermission = useLocation(s => s.refreshPermission);
 
   useEffect(() => { refreshPermission(); }, [refreshPermission]);
+  // 운영자 드랍 반경을 앱 시작 때 받아 둔다 (못 받으면 저장된 값·기본값)
+  useDropRadius();
   // 로그인 전에 눌렀던 링크가 있으면 로그인 직후 그 화면으로
   const needLocationNow = !locationPrompted && permission !== 'granted';
   useEffect(() => {
@@ -115,6 +119,7 @@ export function RootNavigator() {
           <Stack.Screen name="VoteCreate" component={VoteCreateScreen} />
           <Stack.Screen name="PlaylistDropCreate" component={PlaylistDropCreateScreen} />
           <Stack.Screen name="DropSuccess" component={DropSuccessScreen} options={{ animation: FADE, gestureEnabled: false }} />
+          <Stack.Screen name="ShareCard" component={ShareCardScreen} options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="VoteDrop" component={VoteDropScreen} />
           <Stack.Screen name="PlaylistDrop" component={PlaylistDropScreen} />
           <Stack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />

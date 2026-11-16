@@ -92,6 +92,7 @@ export function MiniDisc() {
         delayLongPress={450}
         accessibilityRole="button"
         accessibilityLabel={`재생 중인 곡 ${meta ? `${meta.title} · ${meta.artist}` : ''}`}
+        trackAs="미니 디스크"
         accessibilityHint={loading ? '불러오는 중' : paused ? '누르면 다시 재생' : '누르면 일시정지'}
         accessibilityState={{ selected: !paused }}
         style={[{ width: RING, height: RING, alignItems: 'center', justifyContent: 'center' }, glow(paused ? 0.15 : 0.55, 14)]}

@@ -14,7 +14,7 @@ export function PreviewRow({ song }: { song: Pick<Song, 'id' | 'title' | 'artist
   const p = usePreview(song);
   return (
     <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      <Press onPress={p.toggle} disabled={!p.available} accessibilityLabel="30초 미리듣기" style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', opacity: p.available ? 1 : 0.4 }}>
+      <Press onPress={p.toggle} accessibilityLabel="30초 미리듣기" style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', opacity: p.available ? 1 : 0.4 }}>
         {p.loading ? <ActivityIndicator color={colors.ink2} /> : <PlayCircleGlyph size={48} playing={p.playing} />}
       </Press>
       <Waveform songId={song.id} playing={p.playing} available={p.available} idle={30} />

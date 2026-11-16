@@ -1,4 +1,4 @@
-/** 5.4 설정 — 프로필 카드 · 재생 앱 · 거리 표시 · 알림 · 마케팅 동의 · 차단 · 계정 */
+/** 5.4 설정 — 프로필 카드 · 재생 앱 · 알림 · 마케팅 동의 · 차단 · 계정 */
 import React from 'react';
 import { Linking, ScrollView, View } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
@@ -9,7 +9,7 @@ import { userApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import { ServiceGlyph } from '@/components/ui/Brand';
 import { Avatar, Press, T, Toggle, TopBar } from '@/components/ui';
-import { Chevron, DistancePreview, MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
+import { Chevron, MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
 import { env } from '@/config';
 import { OPERATOR } from '@/content/terms';
@@ -18,7 +18,7 @@ import type { UserAgreement } from '@/api/types';
 import type { RootScreen } from '@/navigation/types';
 import { SERVICES } from '@/services/musicLinks';
 import { useAuth } from '@/store/auth';
-import { type DistanceMode, usePrefs } from '@/store/prefs';
+import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 
@@ -33,17 +33,17 @@ function Squircle({ glyph, tint, size = 18 }: { glyph: MeGlyphName; tint: string
 }
 /** 묶음 제목 — 12 Medium #7482AE, 자간 6% */
 const GroupLabel = ({ title }: { title: string }) => <T v="label" c="ink2" style={{ paddingLeft: 6 }}>{title}</T>;
-/** 묶음 — 제목 + #FBFBFB 카드(r22), 행 사이 #F4F4F4 구분선 */
+/** 묶음 — 제목 + 흰 바탕 행, 행 사이 회색 구분선 (회색 카드 없음) */
 const Group = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <View style={{ gap: 8 }}>
     <GroupLabel title={title} />
-    <View style={{ borderRadius: 22, backgroundColor: colors.card, overflow: 'hidden' }}>{children}</View>
+    <View>{children}</View>
   </View>
 );
 /** 설명 한 줄 — 11 Medium 옅은 회색 */
 const SUB = { color: '#CECECE' };
 const Row = ({ glyph, tint, title, sub, right, onPress, last }: { glyph: MeGlyphName; tint: string; title: string; sub?: string; right?: React.ReactNode; onPress?: () => void; last?: boolean }) => (
-  <Press onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, minHeight: 54, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.line }}>
+  <Press onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 6, paddingVertical: 10, minHeight: 54, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.divider }}>
     <Squircle glyph={glyph} tint={tint} />
     <View style={{ flex: 1, gap: 1 }}>
       <T v="bodyStrong" style={{ color: '#000000' }}>{title}</T>
@@ -52,9 +52,9 @@ const Row = ({ glyph, tint, title, sub, right, onPress, last }: { glyph: MeGlyph
     {right}
   </Press>
 );
-/** '재생' 묶음 행 — Figma는 행마다 따로 r12 카드, 아이콘은 #D0F4FF 바탕 r8 위 24px */
-const PlayRow = ({ glyph, title, sub, right, onPress }: { glyph: MeGlyphName; title: string; sub: string; right: React.ReactNode; onPress?: () => void }) => (
-  <Press onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.card }}>
+/** '재생' 묶음 행 — 아이콘은 #D0F4FF 바탕 r8 위 24px, 행 사이 회색 구분선 */
+const PlayRow = ({ glyph, title, sub, right, onPress, last }: { glyph: MeGlyphName; title: string; sub: string; right: React.ReactNode; onPress?: () => void; last?: boolean }) => (
+  <Press onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, paddingVertical: 12, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.divider }}>
     <View style={{ padding: 5, borderRadius: 8, backgroundColor: colors.iconTint }}><MeGlyph name={glyph} size={24} /></View>
     <View style={{ flex: 1, gap: 1 }}>
       <T v="bodyStrong" style={{ color: '#000000' }}>{title}</T>
@@ -66,7 +66,6 @@ const PlayRow = ({ glyph, title, sub, right, onPress }: { glyph: MeGlyphName; ti
 /** Figma 약관·로그아웃 바탕색 (연보라) */
 const LAVENDER = '#6F94FF';
 
-const MODES: { k: DistanceMode; label: string }[] = [{ k: 'plain', label: '기본' }, { k: 'radius', label: '반경' }, { k: 'gradient', label: '그라데이션' }];
 
 /** 스토어에 올라간 실제 버전 (iOS MARKETING_VERSION · Android versionName) */
 const APP_VERSION = getVersion();
@@ -110,7 +109,7 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, gap: 20, paddingBottom: insets.bottom + 32 }}>
         {/* Figma: 설정 가운데쯤(안전·약관 뒤)에 wave가 깔린다 */}
         <Wave scale={1.2} style={{ position: 'absolute', left: -78, right: 0, top: 770 }} />
-        <Press onPress={() => navigation.navigate('ProfileEdit')} style={{ flexDirection: 'row', alignItems: 'center', gap: 18, height: 80, paddingHorizontal: 10, borderRadius: 12, backgroundColor: colors.card }}>
+        <Press onPress={() => navigation.navigate('ProfileEdit')} trackAs="프로필 편집" style={{ flexDirection: 'row', alignItems: 'center', gap: 18, height: 80, paddingHorizontal: 6 }}>
           <Avatar uri={me?.profileImageUrl} name={me?.username} size={62} />
           <View style={{ flex: 1, gap: 4 }}>
             <T v="bodyStrong" style={{ fontSize: 14, lineHeight: 20, letterSpacing: 0, color: '#000000' }}>{me?.username ?? ' '}</T>
@@ -121,41 +120,17 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
 
         <View style={{ gap: 8 }}>
           <GroupLabel title="재생" />
+          <View>
           <PlayRow glyph="autoplay" title="주변 곡 자동 재생" sub="지도에서 가까운 드랍의 미리듣기를 차례로 들려줘요" right={<Toggle label="주변 곡 자동 재생" value={prefs.autoplayNearby} onChange={prefs.setAutoplayNearby} />} />
-          <PlayRow glyph="play" title="기본 재생 앱" sub="전체 듣기를 누르면 이 앱으로 열려요" onPress={chooseService} right={
+          <PlayRow glyph="play" title="기본 재생 앱" sub="전체 듣기를 누르면 이 앱으로 열려요" last onPress={chooseService} right={
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {prefs.service ? <ServiceGlyph service={prefs.service} size={18} /> : null}
               <T v="captionStrong" c="ink3">{prefs.service ? SERVICES[prefs.service].label : '매번 선택'}</T>
               <Chevron />
             </View>
           } />
-        </View>
-
-        <Group title="지도">
-          <View style={{ padding: 14, gap: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Squircle glyph="map" tint="#9BE7FF" size={20} />
-              <View style={{ flex: 1, gap: 1 }}>
-                <T v="bodyStrong" style={{ color: '#000000' }}>거리 표시 방식</T>
-                <T v="micro" style={{ color: '#D1D1D1' }}>핀까지의 거리를 지도에 어떻게 보여줄지 골라요</T>
-              </View>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {MODES.map(m => {
-                const on = prefs.distanceMode === m.k;
-                return (
-                  <Press key={m.k} onPress={() => prefs.setDistanceMode(m.k)} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={m.label} style={[{ flex: 1, alignItems: 'center', gap: 8, paddingTop: 8, paddingBottom: 10, borderRadius: 16, backgroundColor: colors.card2, borderWidth: on ? 1.5 : 1, borderColor: on ? colors.accent : '#FFFFFF' }, on ? { shadowColor: colors.accent, shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } } : {}]}>
-                    <DistancePreview mode={m.k} />
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      {on ? <MeGlyph name="checkCircle" size={15} /> : null}
-                      <T v="captionStrong" style={{ color: on ? colors.accent : colors.ink3 }}>{m.label}</T>
-                    </View>
-                  </Press>
-                );
-              })}
-            </View>
           </View>
-        </Group>
+        </View>
 
         <Group title="알림">
           <Row glyph="like" tint={colors.like} title="좋아요" sub="내 드랍을 누가 좋아하면" right={<Toggle label="좋아요 알림" value={prefs.notify.like} onChange={v => prefs.setNotify('like', v)} />} />
@@ -164,10 +139,11 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
           <Row glyph="mail" tint={colors.warning} title="마케팅 정보 수신" sub="이벤트·새 기능 소식" last right={<Toggle label="마케팅 정보 수신" value={marketing} onChange={setMarketing} />} />
         </Group>
 
-        {/* 디자인의 '안전' 묶음 — 이용 데이터 분석 동의(App Store 5.1.2)도 여기 둔다 */}
+        {/* 디자인의 '안전' 묶음 — 이용 분석 두 단계도 여기 둔다 (동의창 없이 설정에서만, App Store 5.1.2) */}
         <Group title="안전 · 개인정보">
           <Row glyph="block" tint={colors.ink3} title="차단한 사용자" onPress={() => navigation.navigate('BlockedUsers')} right={<Chevron />} />
-          <Row glyph="analytics" tint={colors.ink3} title="이용 데이터 분석" sub="동의하면 사용 기록·위치로 서비스를 개선해요 (선택, Amplitude)" last right={<Toggle label="이용 데이터 분석" value={prefs.analytics} onChange={prefs.setAnalytics} />} />
+          <Row glyph="analytics" tint={colors.ink3} title="이용 분석" sub="화면·버튼 사용을 기기 단위로 익명 수집" right={<Toggle label="이용 분석" value={prefs.analyticsMode !== 'off'} onChange={v => prefs.setAnalyticsMode(v ? 'basic' : 'off')} />} />
+          <Row glyph="analytics" tint={colors.ink3} title="상세 분석" sub="계정·정확한 위치·화면 기록 포함 (선택)" last right={<Toggle label="상세 분석" value={prefs.analyticsMode === 'detailed'} onChange={v => prefs.setAnalyticsMode(v ? 'detailed' : 'basic')} />} />
         </Group>
 
         <Group title="약관 및 정보">

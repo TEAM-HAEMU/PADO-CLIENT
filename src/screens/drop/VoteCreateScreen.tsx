@@ -24,7 +24,7 @@ function OptionRow({ song, index, onRemove }: { song: Song; index: number; onRem
       <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(240,252,255,0.8)', alignItems: 'center', justifyContent: 'center' }}>
         <T style={{ fontFamily: fonts.medium, fontSize: 12, lineHeight: 17, color: colors.primary }}>{String.fromCharCode(65 + index)}</T>
       </View>
-      <DiscArt uri={song.albumImagePath} playing={p.playing} loading={p.loading} onToggle={p.available ? p.toggle : undefined} />
+      <DiscArt uri={song.albumImagePath} playing={p.playing} loading={p.loading} onToggle={p.toggle} />
       <View style={{ flex: 1, gap: 4, marginLeft: 2 }}>
         <T numberOfLines={1} style={{ fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, letterSpacing: -0.24, color: '#090909' }}>{song.title}</T>
         <T numberOfLines={1} style={{ fontFamily: fonts.regular, fontSize: 10, lineHeight: 13, letterSpacing: -0.2, color: '#B9B9B9' }}>{song.artist}</T>

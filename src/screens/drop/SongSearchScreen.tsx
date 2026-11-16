@@ -12,6 +12,7 @@ import { useSongSearch } from '@/hooks/api';
 import { useDebounced } from '@/hooks/useDebounced';
 import type { RootScreen } from '@/navigation/types';
 import { startPreview, usePreviewStore } from '@/services/preview';
+import { noPreviewMessage } from '@/services/previewSource';
 import { toast } from '@/store/toast';
 import { useDraft } from '@/store/draft';
 import { colors, fonts } from '@/theme/tokens';
@@ -25,7 +26,7 @@ function ResultRow({ song, selected, playing, onPick, onToggle }: { song: Song; 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, height: 70, paddingLeft: 8, marginHorizontal: -8, borderRadius: 16, backgroundColor: selected ? colors.primarySoft : 'transparent' }}>
       <DiscArt uri={song.albumImagePath} playing={playing} onToggle={onToggle} />
-      <Press onPress={onPick} accessibilityState={{ selected }} style={{ flex: 1, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 20, paddingRight: 8 }}>
+      <Press onPress={onPick} trackAs="검색 결과 곡" accessibilityState={{ selected }} style={{ flex: 1, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 20, paddingRight: 8 }}>
         <View style={{ flex: 1, gap: 4 }}>
           <T numberOfLines={1} style={{ fontFamily: selected ? fonts.medium : fonts.regular, fontSize: 12, lineHeight: 17, letterSpacing: -0.24, color: selected ? colors.primary : '#090909' }}>{song.title}</T>
           <T numberOfLines={1} style={{ fontFamily: fonts.regular, fontSize: 10, lineHeight: 13, letterSpacing: -0.2, color: '#B9B9B9' }}>{song.artist}</T>
@@ -55,7 +56,7 @@ export default function SongSearchScreen({ navigation }: RootScreen<'SongSearch'
     if (picked?.id === song.id && st.key === song.id) return st.toggle();
     setPicked(song);
     const r = await startPreview(song);
-    if (r === 'none') toast('이 곡은 미리듣기를 지원하지 않아요.');
+    if (r === 'none' || r === 'adult') toast(noPreviewMessage({ adult: r === 'adult' }));
     else if (r === 'unavailable') toast('지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.', 'error');
   };
   // 아트를 누르면 미리듣기만 켜고 끈다 — 아직 안 고른 곡이면 고르면서 재생

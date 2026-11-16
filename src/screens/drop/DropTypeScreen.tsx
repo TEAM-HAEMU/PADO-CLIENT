@@ -7,7 +7,7 @@ import { ChevronGlyph, PinGlyph, VoteGlyph } from '@/components/drop/glyphs';
 import { Icon, Press, PrimaryButton, T } from '@/components/ui';
 import { Sheet } from '@/components/ui/Sheet';
 import type { RootScreen, RootStackParamList } from '@/navigation/types';
-import { useLocation } from '@/services/location';
+import { currentCoords, preciseDropHint, PRECISE_DROP_TITLE, tooImpreciseToDrop, useLocation } from '@/services/location';
 import { useDraft } from '@/store/draft';
 import { colors, fonts, glow } from '@/theme/tokens';
 
@@ -52,11 +52,15 @@ function Illustration({ type }: { type: DropType }) {
 export default function DropTypeScreen({ navigation }: RootScreen<'DropType'>) {
   const start = useDraft(s => s.start);
   const place = useLocation(s => s.address || s.label);
-  const hasFix = useLocation(s => !!s.coords);
+  const hasFix = useLocation(s => !!currentCoords(s)); // 낡은 좌표(백그라운드에서 오래 있다 돌아와 새 위치를 기다리는 중)는 없는 것으로
   const locating = useLocation(s => s.fix === 'locating');
+  // 오차가 100m를 넘으면(대략적인 위치 등) 드랍을 막는다 — 감시가 더 정확한 위치를 주면 바로 유형 선택으로 바뀐다
+  const imprecise = useLocation(tooImpreciseToDrop);
+  // 이 창이 떠 있는 동안도 위치 감시를 붙잡는다 (지도와 같은 감시 하나 — 따로 새로 만들지 않음)
+  React.useEffect(() => useLocation.getState().start(), []);
   const retry = async () => {
     const loc = useLocation.getState();
-    if ((await loc.refreshPermission()) === 'granted' || (await loc.requestPermission()) === 'granted') loc.start();
+    if ((await loc.refreshPermission()) === 'granted' || (await loc.requestPermission()) === 'granted') loc.restart();
     else Linking.openSettings();
   };
   if (!hasFix) {
@@ -72,6 +76,18 @@ export default function DropTypeScreen({ navigation }: RootScreen<'DropType'>) {
       </Sheet>
     );
   }
+  if (imprecise) {
+    return (
+      <Sheet>
+        <View style={{ alignItems: 'center', gap: 10, paddingVertical: 20, paddingHorizontal: 12 }}>
+          <Icon name="locate" size={28} color={colors.primary} />
+          <T v="title" style={{ textAlign: 'center' }}>{PRECISE_DROP_TITLE}</T>
+          <T v="caption" c="ink2" style={{ textAlign: 'center' }}>{preciseDropHint()}</T>
+          <PrimaryButton label="설정 열기" icon="settings" onPress={() => Linking.openSettings()} style={{ alignSelf: 'stretch', marginTop: 8 }} />
+        </View>
+      </Sheet>
+    );
+  }
   return (
     <Sheet>
       <View style={{ gap: 6, paddingLeft: 4, paddingBottom: 6, marginTop: -4 }}>
@@ -83,12 +99,12 @@ export default function DropTypeScreen({ navigation }: RootScreen<'DropType'>) {
           </View>
         ) : null}
       </View>
-      <View style={{ gap: 12, marginTop: 12 }}>
-        {TYPES.map(t => (
+      <View style={{ marginTop: 12 }}>
+        {TYPES.map((t, i) => (
           <Press
             key={t.type}
             onPress={() => { start(t.type); navigation.replace(t.route as 'SongSearch'); }}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 16, padding: 16, borderRadius: 22, backgroundColor: colors.card }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 18, paddingHorizontal: 6, borderTopWidth: i ? 1 : 0, borderTopColor: colors.divider }}
           >
             <Illustration type={t.type} />
             <View style={{ flex: 1, gap: 4 }}>

@@ -10,7 +10,7 @@ import { Glyph, type GlyphName } from '@/components/detail/glyphs';
 import type { RootScreen } from '@/navigation/types';
 import { openInService, SERVICES } from '@/services/musicLinks';
 import { usePreviewStore } from '@/services/preview';
-import { findItunes } from '@/services/itunes';
+import { findPreview, noPreviewMessage } from '@/services/previewSource';
 import { useDraft } from '@/store/draft';
 import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
@@ -25,7 +25,7 @@ export default function TrackMenuScreen({ navigation, route }: RootScreen<'Track
   const close = () => navigation.goBack();
 
   const items: [GlyphName, string, () => void, boolean?][] = [
-    ['play', '30초 미리듣기', async () => { const r = await findItunes(song.title, song.artist); if (r.previewUrl) { usePreviewStore.getState().play(song.id, r.previewUrl, { title: song.title, artist: song.artist, image: song.albumImagePath }); close(); } else toast(r.unavailable ? '지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.' : '이 곡은 미리듣기를 지원하지 않아요.'); }],
+    ['play', '30초 미리듣기', async () => { const r = await findPreview(song); if (r.previewUrl) { usePreviewStore.getState().play(song.id, r.previewUrl, { title: song.title, artist: song.artist, image: song.albumImagePath }); close(); } else toast(r.unavailable ? '지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.' : noPreviewMessage(r)); }],
     ['external', `${service ? SERVICES[service].label : '음악 앱'}에서 열기`, async () => { if (!service) return navigation.replace('ServicePicker', { song }); close(); if (!(await openInService(service, song))) toast(`${SERVICES[service].label}을(를) 열 수 없어요.`, 'error'); }],
     ['plus', '다른 플리에 담기', () => navigation.replace('PlaylistPicker', { song, excludeId: playlistId })],
     ['pin', '이 곡 여기에 드랍하기', () => { useDraft.getState().start('MUSIC'); useDraft.getState().set({ song }); navigation.replace('Note'); }, true],

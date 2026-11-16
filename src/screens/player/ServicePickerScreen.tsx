@@ -34,8 +34,8 @@ export default function ServicePickerScreen({ navigation, route }: RootScreen<'S
     await listenFull(pick, song);
   };
 
-  // Figma B 2.5 재생 앱 선택: 고른 줄은 #F2FCFF + #E2F8FF 테두리, 나머지는 #FBFBFB · 모서리 20 · 시안 라디오
-  const row = (on: boolean) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14, paddingLeft: 14, paddingRight: 16, paddingVertical: 14, borderRadius: 20, backgroundColor: on ? '#F2FCFF' : colors.card, borderWidth: 1.5, borderColor: on ? '#E2F8FF' : colors.card });
+  // 재생 앱 선택: 고른 줄은 #F2FCFF + #E2F8FF 테두리, 나머지는 흰 바탕 + 회색 테두리 · 모서리 20 · 시안 라디오
+  const row = (on: boolean) => ({ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14, paddingLeft: 14, paddingRight: 16, paddingVertical: 14, borderRadius: 20, backgroundColor: on ? '#F2FCFF' : colors.page, borderWidth: 1.5, borderColor: on ? '#E2F8FF' : colors.divider });
 
   return (
     <Sheet>

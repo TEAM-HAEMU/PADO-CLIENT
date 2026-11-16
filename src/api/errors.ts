@@ -1,14 +1,19 @@
 import type { ApiErrorBody } from './types';
 
-/** 서버 오류 → 앱에서 쓰는 에러. code는 명세의 오류 코드(S1, U2, D1 …) */
+/**
+ * 서버 오류 → 앱에서 쓰는 에러. code는 명세의 오류 코드(S1, U2, D1 …)
+ * requestId: 그 요청의 X-Request-Id (서버 로그 · Sentry request_id 태그 · Amplitude api_error와 같은 값). 디버깅용
+ */
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
-  constructor(status: number, body: Partial<ApiErrorBody> | null, fallback = '요청을 처리하지 못했어요.') {
+  readonly requestId?: string;
+  constructor(status: number, body: Partial<ApiErrorBody> | null, fallback = '요청을 처리하지 못했어요.', requestId?: string) {
     super(body?.message || fallback);
     this.name = 'ApiError';
     this.code = body?.code || (status === 0 ? 'NETWORK' : `HTTP_${status}`);
     this.status = status;
+    this.requestId = requestId;
   }
 }
 

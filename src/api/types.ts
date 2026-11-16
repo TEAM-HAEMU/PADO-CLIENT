@@ -97,6 +97,8 @@ export interface UpdateProfileBody {
 export interface SongLinks {
   spotify: string | null;
   youtubeMusic: string | null;
+  /** Apple Music 곡 링크 (백엔드가 ISRC로 찾음) */
+  appleMusic?: string | null;
 }
 
 export interface Song {
@@ -105,7 +107,34 @@ export interface Song {
   artist: string;
   duration: number; // seconds
   albumImagePath: string | null;
+  /** 국제 표준 녹음 코드 — 모르면 null */
+  isrc?: string | null;
+  /** 30초 미리듣기 (Apple Music, ISRC로 정확히 맞춘 곡). 없으면 null */
+  previewUrl?: string | null;
+  /** 19세 이상 곡 (Spotify explicit) — 백엔드가 내려 주면 미리듣기를 시도하지 않는다 */
+  explicit?: boolean | null;
   links: SongLinks;
+}
+
+// ── 드랍 보기 설정 (운영자가 관리, GET /settings/drop-radius?latitude&longitude)
+/** DISTANCE: 표시 반경 안 (displayMeters가 null이면 전국) / REGION: 내가 있는 행정구역 안 */
+export type VisibilityMode = 'DISTANCE' | 'REGION';
+export type RegionUnit = 'SIDO' | 'SIGUNGU' | 'DONG';
+
+/** 같은 지역 모드에서 보낸 좌표가 속한 지역 — name은 주소 형식 ("부산광역시 해운대구") */
+export interface DropRegion { unit: RegionUnit; code: string; name: string }
+
+export interface DropRadius {
+  mode: VisibilityMode;
+  /** REGION일 때만 */
+  regionUnit: RegionUnit | null;
+  /** 지도에 드랍이 보이는 범위(m) — DISTANCE에서 null이면 전국, REGION에서는 null */
+  displayMeters: number | null;
+  /** 이 안에 들어와야 드랍을 열고 들을 수 있음(m) — 앱에서만 적용, 두 모드 모두 */
+  playMeters: number;
+  /** REGION이고 좌표를 보냈을 때 그 좌표의 지역. 못 찾았으면(바다 등) null */
+  region: DropRegion | null;
+  updatedAt: string | null;
 }
 
 // ── 드랍 (주변 검색 / 내 드랍 목록 아이템)
@@ -125,6 +154,7 @@ export interface MusicDropSummary extends DropSummaryBase {
   title: string;
   artist: string;
   albumImageUrl: string | null;
+  previewUrl?: string | null;
 }
 
 export interface VoteDropSummary extends DropSummaryBase {
@@ -153,6 +183,7 @@ export interface MusicDropDetail {
   expiryDate: string;
   createdAt: string;
   albumImageUrl: string | null;
+  previewUrl?: string | null;
 }
 
 export interface VoteOption {
@@ -183,6 +214,7 @@ export interface PlaylistDropSong {
   title: string;
   artist: string;
   albumImagePath: string | null;
+  previewUrl?: string | null;
 }
 
 export interface PlaylistDropDetail {

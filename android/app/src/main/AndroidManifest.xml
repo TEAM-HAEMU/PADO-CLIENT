@@ -14,6 +14,7 @@
       <package android:name="com.google.android.apps.youtube.music" />
       <package android:name="com.apple.android.music" />
       <package android:name="com.kakao.talk" />
+      <package android:name="com.instagram.android" />
       <intent>
         <action android:name="android.intent.action.VIEW" />
         <data android:scheme="https" />

@@ -4,6 +4,7 @@
 # 필요한 Secrets (Settings › Secrets and variables › Actions):
 #   API_BASE_URL, KAKAO_NATIVE_APP_KEY, GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID,
 #   GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_ANDROID_API_KEY, AMPLITUDE_API_KEY
+#   (선택) SENTRY_DSN — 오류 진단, SENTRY_AUTH_TOKEN — 릴리스 소스맵·심볼 업로드 (없으면 경고만 내고 건너뜀)
 #   (Play AAB) ANDROID_UPLOAD_KEYSTORE_BASE64, ANDROID_UPLOAD_STORE_PASSWORD, ANDROID_UPLOAD_KEY_ALIAS, ANDROID_UPLOAD_KEY_PASSWORD
 #   업로드 키 Secret이 없으면 AAB 단계는 건너뜀
 name: Android APK
@@ -73,6 +74,7 @@ jobs:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
           AMPLITUDE_API_KEY: ${{ secrets.AMPLITUDE_API_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           {
             echo "API_BASE_URL=$API_BASE_URL"
@@ -83,11 +85,14 @@ jobs:
             echo "GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY"
             echo "GOOGLE_MAPS_ANDROID_API_KEY=$GOOGLE_MAPS_ANDROID_API_KEY"
             echo "AMPLITUDE_API_KEY=$AMPLITUDE_API_KEY"
+            echo "SENTRY_DSN=$SENTRY_DSN"
           } > .env
           node scripts/sync-native-env.js
 
       - name: 빌드 (release · arm64)
         working-directory: android
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: >
           ./gradlew assembleRelease --no-daemon
           -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
@@ -103,6 +108,7 @@ jobs:
         if: github.event_name != 'pull_request'
         working-directory: android
         env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
           PADO_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
           PADO_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}

@@ -12,13 +12,15 @@ export interface ItunesMatch {
   appleMusicUrl: string | null;
   /** 네트워크 오류·요청 한도 초과로 확인하지 못함 (캐시하지 않음) */
   unavailable?: boolean;
+  /** 19세 이상 곡이라 미리듣기를 제공하지 않음 */
+  adult?: boolean;
 }
 
 const mem = new Map<string, ItunesMatch>();
 const inflight = new Map<string, Promise<ItunesMatch>>();
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 
-type Row = { trackName: string; artistName: string; previewUrl?: string; trackViewUrl?: string };
+type Row = { trackName: string; artistName: string; previewUrl?: string; trackViewUrl?: string; trackTimeMillis?: number };
 
 // iTunes Search는 IP당 분당 약 20회 제한 — 요청 간격을 두고, 403(한도 초과)이면 잠시 쉰다
 const MIN_GAP_MS = 1_200;
@@ -56,17 +58,26 @@ async function query(term: string, country: string, priority = false): Promise<R
   }
 }
 
-/** 제목·가수가 모두 대충 맞는 곡만 — 엉뚱한 곡을 틀지 않게 */
-function pick(list: Row[], title: string, artist: string, allowFuzzy = true) {
+/** 곡 길이가 맞는지 (초) — 길이를 모르면 판단하지 않는다 */
+const sameLength = (r: Row, duration?: number, tolerance = 3) => !!duration && !!r.trackTimeMillis && Math.abs(r.trackTimeMillis / 1000 - duration) <= tolerance;
+
+/** 제목·가수가 모두 대충 맞는 곡만 — 엉뚱한 곡을 틀지 않게. duration(초)을 알면 길이로 한 번 더 확인한다 */
+function pick(list: Row[], title: string, artist: string, allowFuzzy = true, duration?: number) {
   const t = norm(title);
   const a = norm(artist.split(/,|&| feat\.?| x /i)[0] ?? artist);
   const titleOk = (r: Row) => { const n = norm(r.trackName); return !!n && (n.includes(t) || t.includes(n)); };
   const artistOk = (r: Row) => { const n = norm(r.artistName); return !!a && (n.includes(a) || a.includes(n)); };
-  const exact = list.find(r => titleOk(r) && artistOk(r)) ?? list.find(titleOk);
+  // 제목·가수가 다 맞으면 그중 길이가 맞는 판본을 먼저 (라이브·리마스터 구분)
+  const both = list.filter(r => titleOk(r) && artistOk(r));
+  const exact = both.find(r => sameLength(r, duration)) ?? both[0];
   if (exact) return exact;
-  // 한글 제목/가수는 iTunes에 영문 음역으로 올라가 있는 경우가 많다 (난춘 → Nan Chun).
-  // 검색 자체가 음역을 고려하므로, 한글이 섞였으면 검색 1순위 결과를 믿는다
-  return allowFuzzy && /[\u3131-\u318E\uAC00-\uD7A3]/.test(title + artist) ? list[0] ?? null : null;
+  // 제목만 맞는 곡은 같은 제목의 다른 가수 곡일 수 있다 → 길이를 알면 길이까지 맞아야 쓴다
+  const titleOnly = list.find(r => titleOk(r) && (!duration || sameLength(r, duration)));
+  if (titleOnly) return titleOnly;
+  // 한글 제목/가수는 iTunes에 영문 표기로 올라가 있는 경우가 많다 (좋은 밤 좋은 꿈 → Good Night Good Dream).
+  // 예전엔 검색 1순위를 그대로 믿었다가 전혀 다른 곡을 틀었다 → 길이가 2초 안으로 맞을 때만 쓴다
+  if (!allowFuzzy || !/[\u3131-\u318E\uAC00-\uD7A3]/.test(title + artist)) return null;
+  return list.find(r => sameLength(r, duration, 2)) ?? null;
 }
 
 /** 기기 캐시는 최근 500곡까지만 (오래된 것부터 지움) */
@@ -79,7 +90,7 @@ function persist(key: string, value: ItunesMatch) {
   kv.set('itunes:index', index);
 }
 
-async function lookup(key: string, title: string, artist: string, priority: boolean): Promise<ItunesMatch> {
+async function lookup(key: string, title: string, artist: string, priority: boolean, duration?: number): Promise<ItunesMatch> {
   let result: ItunesMatch = { previewUrl: null, appleMusicUrl: null };
   let failed = false;
   let fuzzy: Row | null = null;
@@ -89,9 +100,9 @@ async function lookup(key: string, title: string, artist: string, priority: bool
   for (const [i, country] of ['us', 'kr'].entries()) {
     const list = both ? await both[i] : await query(term, country);
     if (list === null) { failed = true; continue; }
-    const best = pick(list, title, artist, false);
+    const best = pick(list, title, artist, false, duration);
     if (best) { result = { previewUrl: best.previewUrl ?? null, appleMusicUrl: best.trackViewUrl ?? null }; break; }
-    fuzzy ??= pick(list, title, artist, true); // 한글 제목: 정확한 매칭이 두 스토어 모두 없을 때만 1순위를 쓴다
+    fuzzy ??= pick(list, title, artist, true, duration); // 한글 제목: 정확한 매칭이 두 스토어 모두 없을 때만, 길이가 맞는 곡을 쓴다
   }
   if (result.previewUrl || result.appleMusicUrl) { mem.set(key, result); persist(key, result); return result; }
   if (fuzzy) {
@@ -106,14 +117,14 @@ async function lookup(key: string, title: string, artist: string, priority: bool
 /** 테스트용 */
 export const pickForTest = pick;
 
-export async function findItunes(title: string, artist: string, opts: { priority?: boolean } = {}): Promise<ItunesMatch> {
+export async function findItunes(title: string, artist: string, opts: { priority?: boolean; duration?: number } = {}): Promise<ItunesMatch> {
   const key = `itunes:${norm(title)}:${norm(artist)}`;
   const hit = mem.get(key) ?? kv.get<ItunesMatch | null>(key, null);
   if (hit) { mem.set(key, hit); return hit; }
   // 같은 곡을 여러 행이 동시에 물어도 요청은 한 번 (iTunes 분당 요청 제한)
   let p = inflight.get(key);
   if (!p) {
-    p = lookup(key, title, artist, !!opts.priority).finally(() => inflight.delete(key));
+    p = lookup(key, title, artist, !!opts.priority, opts.duration).finally(() => inflight.delete(key));
     inflight.set(key, p);
   }
   return p;

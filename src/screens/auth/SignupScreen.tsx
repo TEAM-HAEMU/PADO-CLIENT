@@ -2,7 +2,7 @@
  * 1.3 계정 만들기 (Figma B 1.4 계정 만들기) — 이메일 가입(/auth/register) · 소셜 가입 완료(/oauth2/signup) 공용.
  * 약관 목록은 GET /terms 응답으로 구성 (SERVICE·PRIVACY·LOCATION 필수, MARKETING 선택).
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +18,7 @@ import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
 import { type ServiceId, usePrefs } from '@/store/prefs';
 import { getProviderCredential } from '@/services/socialAuth';
+import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 
@@ -34,6 +35,8 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
   const p = route.params;
   const social = p.mode === 'social' ? p : null;
   const providerEmail = social?.profile?.email ?? null;
+  const method = social ? social.provider.toLowerCase() : 'email';
+  useEffect(() => { track('sign_up_started', { method }); }, [method]);
 
   const terms = useQuery({ queryKey: ['terms'], queryFn: authApi.terms }).data ?? FALLBACK_TERMS;
   const [email, setEmail] = useState(providerEmail ?? '');
@@ -90,6 +93,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
       }
     } catch (e) {
       const code = (e as { code?: string }).code;
+      track('sign_up_failed', { method, code: code ?? null });
       if (code === 'U15' && social) {
         // 이미 가입된 계정 — 명세대로 소셜 로그인을 다시 호출하면 기존 회원으로 로그인된다
         try {

@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PADO · 걷다가 만나는 누군가의 노래</title>
-<meta name="description" content="PADO(파도)는 지금 있는 곳에 좋아하는 음악을 남기고, 주변에 남겨진 음악을 지도에서 찾아 듣는 앱입니다.">
-<meta property="og:title" content="PADO · 걷다가 만나는 누군가의 노래">
-<meta property="og:description" content="지금 서 있는 곳에 좋아하는 음악을 남기고, 이 길에 남겨진 음악을 지도에서 찾아 들어요.">
+<title>파도 · 이 길 어딘가에 노래가 떨어져 있어요</title>
+<meta name="description" content="파도는 길거리에 음악을 떨어뜨려 추천하고, 주변에 떨어진 음악을 주워 듣는 앱입니다.">
+<meta property="og:title" content="파도 · 이 길 어딘가에 노래가 떨어져 있어요">
+<meta property="og:description" content="길거리에 음악을 떨어뜨려 추천하고, 주변에 떨어진 음악을 주워 들어봐요.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{SITE_URL}}">
 <meta property="og:image" content="{{SITE_URL}}assets/og.png">
@@ -19,130 +19,210 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <link rel="stylesheet" href="site.css">
 <style>
-  .phone { display: block; width: 100%; height: auto; border-radius: 40px; border: 9px solid var(--ink); background: var(--ink); }
-  .hero { text-align: center; padding: 96px 0 0; overflow: hidden; position: relative; }
-  /* 폰 아래가 섹션 경계에서 잘리는 부분: 점점 흐려지며 다음 섹션 회색으로 녹아들게 */
-  .hero::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 200px; pointer-events: none; background: linear-gradient(to bottom, rgba(249, 250, 251, 0), var(--gray) 92%); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); -webkit-mask-image: linear-gradient(to bottom, transparent, #000 55%); mask-image: linear-gradient(to bottom, transparent, #000 55%); }
-  .hero h1 { font-size: clamp(40px, 6.4vw, 72px); line-height: 1.22; }
-  .hero p { margin: 22px auto 32px; font-size: 20px; max-width: 26em; }
-  .hero .stores { justify-content: center; }
-  .hero .phone { width: min(360px, 74vw); margin: 72px auto -160px; }
-  .sec { padding: 160px 0; }
-  .gray { background: var(--gray); }
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
-  .split h2 { font-size: clamp(32px, 4.4vw, 52px); line-height: 1.3; }
-  .split p { font-size: 19px; margin: 20px 0 0; max-width: 24em; }
-  .split .phone { width: min(330px, 72vw); justify-self: center; }
-  .list { margin-top: 44px; border-top: 1px solid var(--line); }
-  .list button { all: unset; display: block; width: 100%; cursor: pointer; padding: 22px 0; border-bottom: 1px solid var(--line); }
-  .list button:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
-  .list b { display: block; font-size: 20px; color: #6B7684; font-weight: 700; transition: color .2s; }
-  .list span { display: none; font-size: 16px; margin-top: 6px; }
-  .list button[aria-selected="true"] b { color: var(--ink); }
-  .list button[aria-selected="true"] span { display: block; }
-  .end { text-align: center; padding: 160px 0; }
+  .cta { display: inline-flex; align-items: center; height: 56px; padding: 0 28px; border-radius: 16px; background: var(--blue); color: #fff; font-size: 17px; font-weight: 700; text-decoration: none; }
+  .cta:hover { filter: brightness(1.05); }
+  .phone { display: block; width: 100%; height: auto; border-radius: 40px; border: 9px solid var(--ink); background: var(--ink); box-shadow: 0 30px 80px rgba(18, 33, 74, .16); }
+
+  /* 첫 화면 — 스크롤하면 지도 속 노래(CD)가 폰 양옆으로 물방울처럼 떠오른다 */
+  .hero { text-align: center; padding: 88px 0 110px; position: relative; overflow: hidden; }
+  .hero h1 { font-size: clamp(38px, 6vw, 64px); line-height: 1.2; }
+  .hero .sub { margin: 20px auto 30px; font-size: 19px; line-height: 1.65; }
+  .stage { position: relative; width: min(300px, 70vw); margin: 64px auto 0; }
+  .drop { position: absolute; left: 50%; top: 42%; width: var(--s); height: var(--s); margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2); will-change: transform, opacity; opacity: 0; z-index: 2; }
+  .drop .cd { width: 100%; height: 100%; border-radius: 50%; background: center / cover; box-shadow: 0 12px 30px rgba(18, 33, 74, .2); position: relative; animation: bob 4s ease-in-out infinite; animation-delay: var(--d); }
+  .drop .cd::before { content: ""; position: absolute; inset: 13%; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, .45); }
+  .drop .cd::after { content: ""; position: absolute; left: 50%; top: 50%; width: 16%; height: 16%; transform: translate(-50%, -50%); border-radius: 50%; background: #fff; }
+  .drop .lab { position: absolute; top: 50%; transform: translateY(-50%); white-space: nowrap; font-size: 14px; line-height: 1.4; }
+  .drop .lab b { display: block; color: #8B95A1; font-weight: 700; }
+  .drop .lab span { color: #B0B8C1; }
+  .drop.l .lab { right: calc(100% + 14px); text-align: right; }
+  .drop.r .lab { left: calc(100% + 14px); text-align: left; }
+  @keyframes bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+
+  /* 기능 — 폰은 고정, 스크롤하면 화면·문장·튀어나오는 노래가 단계마다 바뀐다 (아래 단계 탭) */
+  .story { position: relative; height: 400vh; background: var(--gray); }
+  .story .pin { position: sticky; top: 0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 72px 20px 28px; box-sizing: border-box; }
+  .story h2 { text-align: center; font-size: clamp(28px, 4vw, 46px); line-height: 1.3; min-height: 2.6em; transition: opacity .3s; }
+  .story .screen { position: relative; width: min(260px, 52vw); margin: 22px 0 26px; flex-shrink: 1; }
+  .story .screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 31px; opacity: 0; transition: opacity .45s ease; }
+  .story .screen img.on { opacity: 1; }
+  .story .frame { position: relative; aspect-ratio: 1 / 2; border-radius: 40px; border: 9px solid var(--ink); background: var(--ink); box-shadow: 0 30px 80px rgba(18, 33, 74, .16); overflow: hidden; }
+  .story .pops .drop { top: 40%; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .tabs button { all: unset; cursor: pointer; padding: 11px 20px; border-radius: 999px; background: #EEF1F4; color: #6B7684; font-size: 16px; font-weight: 700; transition: background .25s, color .25s; }
+  .tabs button[aria-selected="true"] { background: var(--ink); color: #fff; }
+  .tabs button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+  .end { text-align: center; padding: 150px 0; }
   .end h2 { font-size: clamp(32px, 4.6vw, 54px); line-height: 1.3; }
   .end p { margin: 18px 0 32px; font-size: 19px; }
-  .end .stores { justify-content: center; }
-  /* 스크롤하면 아래에서 올라오며 나타남 (JS가 켜졌을 때만, 모션 줄이기 설정이면 끔) */
-  .js .rv { opacity: 0; transform: translateY(36px); transition: opacity .8s ease, transform .8s cubic-bezier(.2, .7, .2, 1); }
-  .js .rv.on { opacity: 1; transform: none; }
-  .js .rv.d1 { transition-delay: .08s; } .js .rv.d2 { transition-delay: .16s; }
-  #dropShot { transition: opacity .25s ease; }
-  #dropShot.fade { opacity: 0; }
-  @media (prefers-reduced-motion: reduce) { .js .rv { opacity: 1; transform: none; transition: none; } #dropShot { transition: none; } }
-  @media (max-width: 860px) {
-    .split { grid-template-columns: 1fr; gap: 48px; }
-    .sec, .end { padding: 110px 0; }
-    .rev .phone { order: 2; }
+
+  /* 곡·한마디 글씨는 양옆에 자리가 넉넉할 때만 (좁으면 CD만) */
+  @media (max-width: 1180px) { .drop .lab { display: none; } }
+  @media (max-width: 760px) {
+    .hero { padding: 56px 0 80px; }
+    .hero .sub { font-size: 17px; }
+    .tabs button { padding: 9px 14px; font-size: 14px; }
+    .end { padding: 110px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .drop .cd { animation: none; }
+    .story .screen img, .story h2 { transition: none; }
   }
 </style>
 </head>
 <body>
 <!--HEADER-->
-
 <main>
   <section class="hero">
     <div class="wrap">
-      <h1 class="rv">걷다가 만나는<br>누군가의 노래</h1>
-      <p class="rv d1">지금 서 있는 곳에 좋아하는 음악을 남기고, 이 길에 남겨진 음악을 지도에서 찾아 들어요.</p>
-      <div class="stores"><span class="store" aria-disabled="true" aria-label="App Store 출시 준비 중">App Store 출시 준비 중</span><span class="store" aria-disabled="true" aria-label="Google Play 출시 준비 중">Google Play 출시 준비 중</span></div>
-      <img class="phone rv d2" src="assets/01_map.jpg" alt="PADO 지도 화면 — 주변에 남겨진 노래가 핀으로 보인다" width="1000" height="2174">
-    </div>
-  </section>
-
-  <section class="sec gray" id="how">
-    <div class="wrap split">
-      <div class="rv"><h2>지도를 열면<br>노래가 보여요</h2><p>내 주변 1km 안에 사람들이 남긴 곡이 핀으로 떠올라요. 누르면 어떤 곡인지, 어떤 말과 함께 남겼는지 볼 수 있어요.</p></div>
-      <img class="phone rv d1" src="assets/02_pinPreview.jpg" alt="핀을 누르면 나오는 곡 정보 화면" width="1000" height="2174" loading="lazy">
-    </div>
-  </section>
-
-  <section class="sec" id="drop">
-    <div class="wrap split rev">
-      <img class="phone rv d1" id="dropShot" role="tabpanel" src="assets/05_dropSuccess.jpg" alt="곡을 남긴 화면" width="1000" height="2174" loading="lazy">
-      <div class="rv">
-        <h2>지금 선 자리에<br>한 곡을 남겨요</h2>
-        <div class="list" role="tablist" aria-label="남기는 방법">
-          <button role="tab" aria-selected="true" tabindex="0" aria-controls="dropShot" data-img="assets/05_dropSuccess.jpg" data-alt="곡을 남긴 화면"><b>한 곡 남기기</b><span>곡을 검색하고 짧은 말을 붙여 이 자리에 남겨요.</span></button>
-          <button role="tab" aria-selected="false" tabindex="-1" aria-controls="dropShot" data-img="assets/06_voteDrop.jpg" data-alt="투표 화면"><b>골라 달라고 묻기</b><span>후보 곡을 몇 개 올려 두면 지나가는 사람들이 하나를 골라요.</span></button>
-          <button role="tab" aria-selected="false" tabindex="-1" aria-controls="dropShot" data-img="assets/07_playlistDetail.jpg" data-alt="플레이리스트 화면"><b>여러 곡 묶어 두기</b><span>이 동네에 어울리는 곡들을 플레이리스트로 한 번에 남겨요.</span></button>
-        </div>
+      <h1>이 길 어딘가에<br>노래가 떨어져 있어요</h1>
+      <p class="sub">길거리에 음악을 떨어뜨려 추천하고<br>주변에 떨어진 음악을 주워 들어봐요</p>
+      <a class="cta" href="beta.html">베타 테스트 참여하기</a>
+      <div class="stage" id="stage">
+        <img class="phone" src="assets/n_01_map.jpg" alt="파도 지도 화면 — 주변에 떨어진 노래가 핀으로 보인다" width="1000" height="2000">
       </div>
     </div>
   </section>
 
-  <section class="sec gray">
-    <div class="wrap split">
-      <div class="rv"><h2>미리 들어보고<br>마음에 들면 끝까지</h2><p>30초 미리듣기로 바로 들어보고, 전체 곡은 평소 쓰는 음악 앱에서 이어 들어요.</p></div>
-      <img class="phone rv d1" src="assets/03_player.jpg" alt="재생 화면" width="1000" height="2174" loading="lazy">
+  <section class="story" id="how" aria-label="파도 사용 흐름">
+    <div class="pin">
+      <h2 id="stepTitle">지도를 열면<br>주변에 떨어진 노래가 보여요</h2>
+      <div class="screen">
+        <div class="frame">
+          <img class="on" src="assets/n_01_map.jpg" alt="지도 화면" width="1000" height="2000">
+          <img src="assets/n_04_dropType.jpg" alt="무엇을 남길지 고르는 화면" width="1000" height="2000" loading="lazy">
+          <img src="assets/n_03_vote.jpg" alt="투표 화면" width="1000" height="2000" loading="lazy">
+          <img src="assets/n_05_notifications.jpg" alt="좋아요·댓글 알림 화면" width="1000" height="2000" loading="lazy">
+        </div>
+        <div class="pops" id="pops"></div>
+      </div>
+      <div class="tabs" role="tablist" aria-label="단계" id="tabs">
+        <button role="tab" aria-selected="true">발견하기</button>
+        <button role="tab" aria-selected="false">떨어뜨리기</button>
+        <button role="tab" aria-selected="false">물어보기</button>
+        <button role="tab" aria-selected="false">답 받기</button>
+      </div>
     </div>
   </section>
 
-  <section class="sec">
-    <div class="wrap split rev">
-      <img class="phone rv d1" src="assets/08_comments.jpg" alt="곡에 달린 댓글 화면" width="1000" height="2174" loading="lazy">
-      <div class="rv"><h2>남긴 노래에<br>누군가 답해요</h2><p>지나가던 사람이 좋아요를 누르고 한마디를 남기면 알림으로 알려 드려요. 같은 길을 걷는 사람과 노래로 이야기해요.</p></div>
-    </div>
-  </section>
-
-  <section class="end gray">
+  <section class="end" id="drop">
     <div class="wrap">
-      <h2 class="rv">곧 스토어에서<br>만날 수 있어요</h2>
-      <p>조금만 기다려 주세요. App Store와 Google Play에 곧 올라가요.</p>
-      <div class="stores"><span class="store" aria-disabled="true" aria-label="App Store 출시 준비 중">App Store 출시 준비 중</span><span class="store" aria-disabled="true" aria-label="Google Play 출시 준비 중">Google Play 출시 준비 중</span></div>
+      <h2>스토어 출시 전에<br>먼저 써 보세요</h2>
+      <p>지금 베타 테스트에 참여하면 iPhone·Android에서 바로 설치할 수 있어요.</p>
+      <a class="cta" href="beta.html">베타 테스트 참여하기</a>
     </div>
   </section>
 </main>
-
 <!--FOOTER-->
 <script>
-  document.documentElement.classList.add('js');
-  // 스크롤 등장 — 화면에 들어오면 한 번만 나타남
   (() => {
-    const els = document.querySelectorAll('.rv');
-    if (!('IntersectionObserver' in window)) { els.forEach(e => e.classList.add('on')); return; }
-    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('on'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -12% 0px' });
-    els.forEach(e => io.observe(e));
-  })();
-  // 남기는 방법 탭 — 고른 항목에 맞춰 화면 바꾸기 (클릭·좌우/위아래 화살표)
-  (() => {
-    const tabs = [...document.querySelectorAll('.list [role=tab]')], img = document.getElementById('dropShot');
-    tabs.forEach(x => { const i = new Image(); i.src = x.dataset.img; }); // 미리 받아 두기
-    const pick = (t, focus) => {
-      tabs.forEach(x => { const on = x === t; x.setAttribute('aria-selected', String(on)); x.tabIndex = on ? 0 : -1; });
-      if (focus) t.focus();
-      if (img.getAttribute('src') === t.dataset.img) return;
-      img.classList.add('fade');
-      setTimeout(() => { img.src = t.dataset.img; img.alt = t.dataset.alt; img.classList.remove('fade'); }, 200);
-    };
-    tabs.forEach((t, i) => {
-      t.addEventListener('click', () => pick(t));
-      t.addEventListener('keydown', e => {
-        const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-        if (d) { e.preventDefault(); pick(tabs[(i + d + tabs.length) % tabs.length], true); }
+    // 가상의 곡(직접 만든 커버) — 실제 곡이 아니에요
+    const SONGS = [
+      ['노을 정류장', '해변의 오후', '노을 질 때 이 다리 위에서'],
+      ['새벽 세 시', '모래알', '밤 산책엔 이 노래'],
+      ['여름의 끝에서', '윤슬', '바닷바람 맞으면서'],
+      ['우리 동네', '파란 자전거', '버스 정류장에서 듣기 좋아요'],
+      ['바람이 분다면', '은하수 다방', '비 오는 날 이 골목'],
+      ['늦은 산책', '한강 피크닉', '여기 오면 꼭 이거'],
+    ];
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+    const ease = t => 1 - Math.pow(1 - t, 3);
+
+    // CD 하나 만들기 — 좌우(side)에 따라 곡·한마디를 바깥쪽에 연하게
+    function makeDrop(i, side, size) {
+      const [t, a, note] = SONGS[i];
+      const el = document.createElement('div');
+      el.className = 'drop ' + (side < 0 ? 'l' : 'r');
+      el.style.setProperty('--s', size + 'px');
+      el.style.setProperty('--d', (i * 0.35) + 's');
+      el.innerHTML = `<div class="cd" style="background-image:url(assets/covers/c${i}.jpg)"></div><div class="lab"><b>${t} · ${a}</b><span>“${note}”</span></div>`;
+      el.setAttribute('aria-hidden', 'true');
+      return el;
+    }
+    // 진행도(0~1)에 맞춰 폰 가운데에서 목표 위치로 — 하나씩 차례로(샤라락)
+    function place(items, p) {
+      items.forEach((it, i) => {
+        const k = ease(clamp((p - i * 0.09) / 0.45));
+        it.el.style.opacity = k;
+        it.el.style.transform = `translate(${it.x * k}px, ${it.y * k}px) scale(${0.3 + 0.7 * k})`;
       });
-    });
+    }
+
+    // ---- 첫 화면
+    const stage = document.getElementById('stage');
+    const narrow = () => innerWidth < 760;
+    // 화면 밖으로 나가지 않는 가로 거리 — 글씨가 보이는 넓은 화면은 글씨 자리(약 200px)까지 비운다
+    const reach = (w, size) => Math.min(innerWidth >= 1180 ? w * 1.05 : w * 0.95, innerWidth / 2 - size / 2 - (innerWidth >= 1180 ? 230 : 12));
+    const HERO = () => {
+      const w = stage.offsetWidth, n = narrow();
+      const dx = reach(w, n ? 58 : 100), gap = n || innerWidth < 1180 ? 0 : 60;
+      return [[-1, 0], [1, 0], [-1, 1], [1, 1], [-1, 2], [1, 2]].slice(0, n ? 4 : 6)
+        .map(([s, j], i) => ({ i, side: s, x: s * (dx + (j % 2) * gap), y: -w * 0.55 + j * (n ? w * 0.5 : w * 0.44), size: n ? 58 : [96, 88, 80, 100, 86, 76][i] }));
+    };
+    let heroItems = [];
+    function buildHero() {
+      heroItems.forEach(it => it.el.remove());
+      heroItems = HERO().map(d => { const el = makeDrop(d.i, d.side, d.size); stage.appendChild(el); return { ...d, el }; });
+    }
+    buildHero();
+    let heroP = 0, autoplayed = false;
+    const heroProgress = () => clamp(scrollY / (innerHeight * 0.45));
+    if (reduce) place(heroItems, 1);
+    else {
+      place(heroItems, 0);
+      // 스크롤이 없으면 잠시 뒤 저절로 한 번 펼친다 (첫 화면이 비어 보이지 않게)
+      setTimeout(() => {
+        if (scrollY > 0 || autoplayed) return;
+        autoplayed = true; const t0 = performance.now();
+        const step = now => { heroP = clamp((now - t0) / 1400); place(heroItems, Math.max(heroP, heroProgress())); if (heroP < 1) requestAnimationFrame(step); };
+        requestAnimationFrame(step);
+      }, 1600);
+    }
+
+    // ---- 기능 (고정된 폰 + 단계 탭)
+    const STEPS = [
+      ['지도를 열면<br>주변에 떨어진 노래가 보여요', [0, 1, 2]],
+      ['지금 선 자리에<br>노래 한 곡을 떨어뜨려요', [3]],
+      ['골라 달라고<br>지나가는 사람에게 물어봐요', [4, 5]],
+      ['누군가 주워 들으면<br>좋아요와 한마디가 돌아와요', [1]],
+    ];
+    const story = document.getElementById('how'), title = document.getElementById('stepTitle');
+    const shots = story.querySelectorAll('.screen img'), tabs = [...document.querySelectorAll('#tabs button')], pops = document.getElementById('pops');
+    let cur = -1, popItems = [], popT0 = 0;
+    function setStep(n) {
+      if (n === cur) return; cur = n;
+      shots.forEach((s, i) => s.classList.toggle('on', i === n));
+      tabs.forEach((t, i) => { t.setAttribute('aria-selected', String(i === n)); t.tabIndex = i === n ? 0 : -1; });
+      title.innerHTML = STEPS[n][0];
+      popItems.forEach(it => it.el.remove());
+      const w = pops.parentElement.offsetWidth, nar = narrow();
+      popItems = STEPS[n][1].map((i, j) => {
+        const side = j % 2 === 0 ? 1 : -1, size = nar ? 56 : 84;
+        const d = { i, side, x: side * reach(w, size), y: -w * 0.45 + j * w * 0.45, size };
+        const el = makeDrop(i, side, size); pops.appendChild(el); return { ...d, el };
+      });
+      if (reduce) place(popItems, 1);
+      else { popT0 = performance.now(); const anim = now => { const k = clamp((now - popT0) / 900); place(popItems, k); if (k < 1) requestAnimationFrame(anim); }; requestAnimationFrame(anim); }
+    }
+    setStep(0);
+    tabs.forEach((t, i) => t.addEventListener('click', () => {
+      const top = story.offsetTop + (story.offsetHeight - innerHeight) * (i + 0.5) / 4;
+      scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' });
+    }));
+
+    let ticking = false;
+    addEventListener('scroll', () => {
+      if (ticking) return; ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        if (!reduce) place(heroItems, Math.max(heroP, heroProgress()));
+        const p = clamp((scrollY - story.offsetTop) / (story.offsetHeight - innerHeight));
+        setStep(Math.min(3, Math.floor(p * 4)));
+      });
+    }, { passive: true });
+    addEventListener('resize', () => { buildHero(); place(heroItems, reduce ? 1 : Math.max(heroP, heroProgress())); const n = cur; cur = -1; setStep(n); });
   })();
 </script>
 </body>

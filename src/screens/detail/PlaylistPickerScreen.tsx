@@ -48,7 +48,7 @@ export default function PlaylistPickerScreen({ navigation, route }: RootScreen<'
       ) : (
         <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8 }}>
           {lists.map(p => (
-            <Press key={p.id} onPress={() => add(p.id, p.name)} accessibilityLabel={`${p.name}에 담기`} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 10, paddingRight: 14, paddingVertical: 10, borderRadius: 18, borderWidth: 1, backgroundColor: busy === p.id ? '#F8FDFF' : '#FDFCFC', borderColor: busy === p.id ? '#D3F2FC' : '#F6F4F4' }}>
+            <Press key={p.id} onPress={() => add(p.id, p.name)} accessibilityLabel={`${p.name}에 담기`} trackAs="플레이리스트에 담기" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 10, paddingRight: 14, paddingVertical: 10, borderRadius: 18, borderWidth: 1, backgroundColor: busy === p.id ? '#F8FDFF' : '#FDFCFC', borderColor: busy === p.id ? '#D3F2FC' : '#F6F4F4' }}>
               <Art uri={p.albumImageUrl} size={48} radius={12} />
               <T numberOfLines={1} style={{ flex: 1, fontFamily: fonts.medium, fontSize: 15, lineHeight: 22, letterSpacing: -0.15, color: '#000000' }}>{p.name}</T>
               {busy === p.id ? <ActivityIndicator color={colors.accent} /> : <Glyph name="plus" color="#B7B7B7" />}

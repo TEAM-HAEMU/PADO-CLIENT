@@ -1,0 +1,14 @@
+diff --git a/node_modules/@react-native-community/geolocation/ios/RNCGeolocation.mm b/node_modules/@react-native-community/geolocation/ios/RNCGeolocation.mm
+index 03df64d..810b8a2 100644
+--- a/node_modules/@react-native-community/geolocation/ios/RNCGeolocation.mm
++++ b/node_modules/@react-native-community/geolocation/ios/RNCGeolocation.mm
+@@ -412,7 +412,8 @@ RCT_REMAP_METHOD(getCurrentPosition, getCurrentPosition:(RNCGeolocationOptions)o
+                           useSignificantChanges:options.useSignificantChanges];
+ 
+   if (didPause) {
+-    [self startObserving];
++    // PADO: 인자 없는 startObserving은 RCTEventEmitter의 빈 메서드라 감시가 영영 멈췄다 → 저장해 둔 감시 옵션으로 다시 켠다
++    [self startObserving:_observerOptions];
+   }
+ }
+ 

@@ -209,6 +209,7 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				00EEFC60759A1932668264C0 /* [CP] Embed Pods Frameworks */,
 				E235C05ADACE081382539298 /* [CP] Copy Pods Resources */,
+				5E17C0DE0A1B2C3D4E5F6071 /* Upload Debug Symbols to Sentry */,
 			);
 			buildRules = (
 			);
@@ -326,7 +327,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"\\\"$WITH_ENVIRONMENT\\\" \\\"$REACT_NATIVE_XCODE\\\"\"\n";
+			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\nSENTRY_XCODE=\"$SRCROOT/../node_modules/@sentry/react-native/scripts/sentry-xcode.sh\"\n\n# Sentry: 릴리스 빌드면 번들을 만들면서 소스맵을 올린다 (Debug는 건너뜀, 토큰이 없으면 경고만 — scripts/sentry-xcode-env.sh)\n. \"$SRCROOT/../scripts/sentry-xcode-env.sh\"\n# with-environment.sh는 인자를 명령 하나로 실행하므로 환경(NODE_BINARY)만 불러오고 Sentry 스크립트는 직접 부른다\n. \"$WITH_ENVIRONMENT\"\n/bin/sh \"$SENTRY_XCODE\" \"$REACT_NATIVE_XCODE\"\n\n# 업로드 실패는 경고로 넘기므로, 릴리스 번들이 실제로 만들어졌는지 따로 확인한다\nif ! echo \"$CONFIGURATION\" | grep -iq debug && [ -z \"$SKIP_BUNDLING\" ] && [ ! -f \"$CONFIGURATION_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/main.jsbundle\" ]; then\n  echo \"error: main.jsbundle이 없어요 — JS 번들링이 실패했어요. 위 로그를 확인하세요.\"\n  exit 1\nfi\n";
 		};
 		00EEFC60759A1932668264C0 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -344,6 +345,22 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-PADO/Pods-PADO-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
+		};
+		5E17C0DE0A1B2C3D4E5F6071 /* Upload Debug Symbols to Sentry */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(DWARF_DSYM_FOLDER_PATH)/$(DWARF_DSYM_FILE_NAME)/Contents/Resources/DWARF/$(TARGET_NAME)",
+			);
+			name = "Upload Debug Symbols to Sentry";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Sentry: 릴리스 빌드의 dSYM(네이티브 충돌 심볼)을 올린다 (Debug는 건너뜀, 토큰이 없으면 경고만 — scripts/sentry-xcode-env.sh)\n. \"$SRCROOT/../scripts/sentry-xcode-env.sh\"\n/bin/sh \"$SRCROOT/../node_modules/@sentry/react-native/scripts/sentry-xcode-debug-files.sh\"\n";
 		};
 		C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;

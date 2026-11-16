@@ -3,14 +3,14 @@ import * as Keychain from 'react-native-keychain';
 import { create } from 'zustand';
 import { setTokenBridge } from '@/api/client';
 import { authApi, userApi } from '@/api/endpoints';
-import { identifyUser, resetUser, track, userIdFromToken } from '@/services/analytics';
+import { analyticsMode, identifyUser, resetUser, track, userIdFromToken } from '@/services/analytics';
 import type { TokenPair } from '@/api/types';
 import { queryClient } from '@/hooks/queryClient';
 import { kv } from './storage';
 import { usePreviewStore } from '@/services/preview';
 import { signOutProviders } from '@/services/socialAuth';
 import { useDraft } from './draft';
-import { setOnAnalyticsEnabled } from './prefs';
+import { setOnDetailedAnalyticsEnabled } from './prefs';
 
 const SERVICE = 'pado.session';
 
@@ -80,12 +80,13 @@ setTokenBridge({
   onExpired: () => { if (useAuth.getState().status === 'authed') useAuth.getState().signOut({ callServer: false }); },
 });
 
-/** 분석 사용자 식별 — 토큰의 sub(사용자 ID), 없으면 닉네임 기반 */
+/** 분석 사용자 식별 (상세 분석일 때만 실제로 보냄) — 토큰의 sub(사용자 ID), 없으면 닉네임 기반 */
 function identifyCurrentUser(token: string) {
+  if (analyticsMode() !== 'detailed') return;
   userApi.me()
     .then(me => identifyUser(userIdFromToken(token) ?? `u:${me.username}`, me))
     .catch(() => {});
 }
 
-// 로그인한 뒤에 분석에 동의하면 그때 사용자 식별
-setOnAnalyticsEnabled(() => { const t = useAuth.getState().accessToken; if (t) identifyCurrentUser(t); });
+// 로그인한 뒤에 상세 분석을 켜면 그때 사용자 식별
+setOnDetailedAnalyticsEnabled(() => { const t = useAuth.getState().accessToken; if (t) identifyCurrentUser(t); });
