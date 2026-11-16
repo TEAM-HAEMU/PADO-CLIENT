@@ -8,10 +8,10 @@ import MapView, { Polygon, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { useIsFocused } from '@react-navigation/native';
-import { useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { dropApi } from '@/api/endpoints';
+import { dropApi, regionApi } from '@/api/endpoints';
 import type { DropSummary, MusicDropSummary } from '@/api/types';
 import type { DropOpenSource } from '@/navigation/types';
 import { ClusterMarker, DropMarker, MyLocationMarker } from '@/components/map/DropMarker';
@@ -23,6 +23,7 @@ import { useDropLock } from '@/hooks/useDropLock';
 import { markScopeTipSeen, useDropRadius, useScopeTip } from '@/hooks/useDropRadius';
 import { ScopeTip } from '@/components/map/ScopeTip';
 import type { ScopeTipText } from '@/utils/scopeTip';
+import { placeKey, placeLevel, placeName, sanitizeRegionsAt } from '@/utils/mapPlace';
 import { scopeLabel } from '@/utils/dropScope';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
@@ -159,6 +160,26 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   // 많이 축소하면(CLUSTER_LNG_DELTA) 핀 대신 격자로 묶은 수 묶음만 — 묶음은 위치(GPS)와 무관하니 드랍 목록·영역이 바뀔 때만 다시 묶는다
   const [view, setView] = useState<Region | null>(null);
   const onRegionChangeComplete = useCallback((r: Region) => setView(r), []);
+
+  // 지도 위 제목 — 화면 가운데 지점의 지역 이름을 확대 수준에 맞게(넓게 보면 시·도, 중간이면 시·군·구, 가까우면 동).
+  // 지도를 움직이다 멈추고 0.4초 뒤에 묻는다. 가까운 지점은 같은 요청으로 묶고 한 번 받은 이름은 다시 쓴다.
+  // 못 받으면(예전 서버·오프라인) 지금처럼 내 위치의 동 이름
+  const [placeAt, setPlaceAt] = useState<{ latitude: number; longitude: number; level: ReturnType<typeof placeLevel> } | null>(null);
+  useEffect(() => {
+    if (!view) return;
+    const t = setTimeout(() => setPlaceAt({ latitude: view.latitude, longitude: view.longitude, level: placeLevel(view.latitudeDelta) }), 400);
+    return () => clearTimeout(t);
+  }, [view]);
+  const place = useQuery({
+    queryKey: ['placeAt', placeAt ? placeKey(placeAt.latitude, placeAt.longitude, placeAt.level) : 'none'],
+    enabled: !!placeAt,
+    queryFn: async () => sanitizeRegionsAt(await regionApi.at(placeAt!.latitude, placeAt!.longitude)),
+    staleTime: Infinity,
+    gcTime: 30 * 60_000,
+    retry: 0,
+    placeholderData: keepPreviousData,
+  });
+  const centerName = place.data && placeAt ? placeName(place.data, placeAt.level) : null;
   const clustered = shouldCluster(view);
   const clusters = useMemo(() => (clustered && view ? clusterPoints(drops, view) : []), [clustered, drops, view]);
   // 1개짜리 묶음은 수 원 대신 보통 핀으로 — 핀 모드와 같은 DropMarker·같은 키라 확대·축소로 모드가 바뀌어도 그 핀은 다시 만들어지지 않는다
@@ -326,7 +347,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       {/* 상단 페이드 + 동 이름 */}
       <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.96)', 'rgba(255,255,255,0.85)', 'rgba(255,255,255,0)']} locations={[0, insets.top / (insets.top + 96), 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 96 }} />
       <Press onPress={recenter} accessibilityHint="내 위치로 지도를 다시 맞춰요" trackAs="동 이름 (내 위치로)" style={{ position: 'absolute', top: insets.top + 12, left: 20, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-        <T v="title">{coords ? label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
+        <T v="title">{coords ? centerName || label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
         <Caret />
       </Press>
       {shownTip ? <ScopeTip title={shownTip.title} body={shownTip.body} top={insets.top + 50} /> : null}
