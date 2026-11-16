@@ -93,7 +93,11 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
   const panel = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - progress.value) * height + drag.value }] }));
 
   return (
-    <View pointerEvents={closingNow ? 'none' : 'auto'} style={{ flex: 1, justifyContent: 'flex-end' }}>
+    // collapsable={false}: 닫기 시작할 때 pointerEvents가 'none'이 되면 Fabric이 평평하게 펴 두었던 이 View를 새로 만들고
+    // 배경·시트를 그 안으로 옮긴다. 화면 제거와 그 옮기기가 한 프레임 안에 겹치면(기기 애니메이션 꺼짐 → 닫힘 애니메이션이 즉시 끝남)
+    // react-native-screens가 먼저 제거 전환(startViewTransition)을 걸어 둔 배경이 옛 부모에서 떨어지지 않아
+    // Android가 "addViewAt: … The specified child already has a parent"로 죽는다 → 처음부터 실제 View로 두어 닫을 때 뷰 구조가 바뀌지 않게
+    <View collapsable={false} pointerEvents={closingNow ? 'none' : 'auto'} style={{ flex: 1, justifyContent: 'flex-end' }}>
       <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: `rgba(0,0,0,${dim * 0.4})` }, backdrop]}>
         <Pressable style={{ flex: 1 }} onPress={dismissible ? close : undefined} accessible={dismissible} accessibilityLabel="닫기" />
       </Animated.View>
