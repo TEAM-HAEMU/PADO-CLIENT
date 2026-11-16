@@ -17,6 +17,7 @@ import { MarkerArt } from '@/components/map/DropPin';
 import { env } from '@/config';
 import { invalidateAfterDropRemoved, qk, useMe, useMyDrops, useMyLikeCount, useMyLikes, useMyPlaylists, useUnreadCount } from '@/hooks/api';
 import { likeApi } from '@/api/endpoints';
+import { dropPlace } from '@/utils/address';
 import { artUrl } from '@/utils/artUrl';
 import { dropArt, dropSub, dropTitle } from '@/screens/map/MapHomeScreen';
 import { toast } from '@/store/toast';
@@ -175,7 +176,7 @@ export default function ProfileScreen() {
                   <View style={{ flex: 1, gap: 2 }}>
                     <T v="bodyStrong" numberOfLines={1} style={ROW_TITLE}>{dropTitle(d)}</T>
                     <T v="caption" c="ink2" numberOfLines={1}>{d.content || (d.type === 'MUSIC' ? d.artist : dropSub(d))}</T>
-                    <Address text={d.address} />
+                    <Address text={dropPlace(d)} />
                   </View>
                   <LikeBadge n={likeCounts[i]?.data} />
                 </Press>
@@ -190,7 +191,7 @@ export default function ProfileScreen() {
                 <Art uri={l.imageUrl} size={52} radius={12} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <T v="bodyStrong" numberOfLines={1} style={ROW_TITLE}>{l.title ?? l.topic ?? l.playlistName}</T>
-                  <Address text={l.address} />
+                  <Address text={dropPlace(l)} />
                 </View>
                 <MeGlyph name="heart" size={14} color={colors.like} />
               </Press>

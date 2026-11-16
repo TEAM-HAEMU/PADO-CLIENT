@@ -17,6 +17,7 @@ import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { useDropMenu } from '@/hooks/useDropMenu';
 import { colors, fonts } from '@/theme/tokens';
+import { dropPlace } from '@/utils/address';
 import { expiryLabel, formatRelative } from '@/utils/format';
 import { track } from '@/services/analytics';
 
@@ -60,7 +61,7 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 22, paddingBottom: insets.bottom + 90 }}>
         <View style={{ gap: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <AddressPill address={d.address} />
+            <AddressPill address={dropPlace(d)} />
             <T v="tiny" c="faint">{formatRelative(d.createdAt)} · {expiryLabel(d.expiryDate)}</T>
           </View>
           <T style={{ fontFamily: fonts.semibold, fontSize: 20, lineHeight: 28, letterSpacing: -0.4, color: '#090909' }}>{d.topic}</T>

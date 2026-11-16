@@ -156,6 +156,8 @@ interface DropSummaryBase {
   latitude: number;
   longitude: number;
   address: string;
+  /** 서버가 찾은 드랍 자리의 장소 이름(카카오 — 가게·건물 등). 새 필드라 예전 서버·못 찾은 드랍은 없거나 null → 주소를 보여 준다 */
+  placeName?: string | null;
   isMyDropping: boolean;
   /** 같은 지역 재생 판정용 — 새 필드라 예전 서버·백필 안 된 드랍은 없거나 null (그러면 거리로만 판정) */
   regionCodes?: RegionCodes | null;
@@ -197,6 +199,8 @@ export interface MusicDropDetail {
   createdAt: string;
   albumImageUrl: string | null;
   previewUrl?: string | null;
+  /** 서버가 찾은 드랍 자리의 장소 이름(카카오 — 가게·건물 등). 새 필드라 예전 서버·못 찾은 드랍은 없거나 null → 주소를 보여 준다 */
+  placeName?: string | null;
 }
 
 export interface VoteOption {
@@ -216,6 +220,8 @@ export interface VoteDropDetail {
   latitude: number;
   longitude: number;
   address: string;
+  /** 서버가 찾은 드랍 자리의 장소 이름(카카오 — 가게·건물 등). 새 필드라 예전 서버·못 찾은 드랍은 없거나 null → 주소를 보여 준다 */
+  placeName?: string | null;
   expiryDate: string;
   createdAt: string;
   totalVotes: number;
@@ -239,6 +245,8 @@ export interface PlaylistDropDetail {
   latitude: number;
   longitude: number;
   address: string;
+  /** 서버가 찾은 드랍 자리의 장소 이름(카카오 — 가게·건물 등). 새 필드라 예전 서버·못 찾은 드랍은 없거나 null → 주소를 보여 준다 */
+  placeName?: string | null;
   expiryDate: string;
   createdAt: string;
 }
@@ -273,6 +281,8 @@ export interface LikedDrop {
   playlistName?: string;
   imageUrl: string | null;
   address: string;
+  /** 서버가 찾은 드랍 자리의 장소 이름(카카오 — 가게·건물 등). 새 필드라 예전 서버·못 찾은 드랍은 없거나 null → 주소를 보여 준다 */
+  placeName?: string | null;
 }
 
 // ── 댓글
