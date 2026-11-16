@@ -150,6 +150,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
 
   // 재생 반경 밖(내 드랍·좋아요한 드랍 제외)은 잠금 — 핀은 흐리게 곡·커버 없이, 눌러도 안 열리고, 자동 재생에서도 뺀다
   const lockOf = useDropLock();
+  const radius = useDropRadius();
   const sorted = useMemo(() => drops.map(d => ({ d, m: distanceM(here, d), lock: lockOf(d) })).sort((a, b) => a.m - b.m), [drops, here, lockOf]);
   const nearestId = sorted.find(x => !x.lock.locked)?.d.droppingId;
   // 지도에 그릴 핀 — 보이는 영역(넉넉히) 안에서 가까운 순 MAX_PINS개 (영역은 지도를 다 움직인 뒤에만 갱신)
@@ -185,7 +186,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const tapDrop = ({ d, m, lock }: (typeof sorted)[number], source: DropOpenSource) => {
     if (!lock.locked) return openDrop(d, source);
     track('drop_locked_tap', { drop_id: d.droppingId, type: d.type, source, distance_m: Math.round(m), remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) });
-    toast(lockMessage(lock));
+    toast(lockMessage(lock, radius));
   };
   // 핀 누르기 — 마커가 다시 렌더되지 않게 고정 함수 하나 (누른 순간의 최신 목록·핸들러를 ref로 읽는다)
   const latest = useRef({ sorted, tapDrop });
@@ -207,7 +208,6 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   }, []);
 
   // 지도 첫 로드 (앱 실행마다 한 번) — 주변 드랍 수·열 수 있는 드랍 수·반경 (반경 관련 분포용)
-  const radius = useDropRadius();
   useEffect(() => {
     if (mapLoadTracked || !coords || !nearby.isSuccess) return;
     mapLoadTracked = true;
@@ -222,6 +222,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       play_m: radius.playMeters,
       visibility_mode: radius.mode,
       region_unit: radius.regionUnit,
+      play_mode: radius.playMode,
     });
   }, [coords, nearby.isSuccess, sorted, radius]);
 

@@ -119,10 +119,15 @@ export interface Song {
 // ── 드랍 보기 설정 (운영자가 관리, GET /settings/drop-radius?latitude&longitude)
 /** DISTANCE: 표시 반경 안 (displayMeters가 null이면 전국) / REGION: 내가 있는 행정구역 안 */
 export type VisibilityMode = 'DISTANCE' | 'REGION';
+/** 재생(드랍 열기·듣기) 기준 — DISTANCE: 재생 반경 안 / REGION: 재생 반경 안 또는 내가 있는 지역 안 */
+export type PlayMode = 'DISTANCE' | 'REGION';
 export type RegionUnit = 'SIDO' | 'SIGUNGU' | 'DONG';
 
 /** 같은 지역 모드에서 보낸 좌표가 속한 지역 — name은 주소 형식 ("부산광역시 해운대구") */
 export interface DropRegion { unit: RegionUnit; code: string; name: string }
+
+/** 드랍이 놓인 지역 코드 (시·도 2자리, 시·군·구 5자리, 행정동 10자리). 모르는 단위는 null */
+export interface RegionCodes { sido: string | null; sigungu: string | null; dong: string | null }
 
 export interface DropRadius {
   mode: VisibilityMode;
@@ -134,6 +139,12 @@ export interface DropRadius {
   playMeters: number;
   /** REGION이고 좌표를 보냈을 때 그 좌표의 지역. 못 찾았으면(바다 등) null */
   region: DropRegion | null;
+  /** 재생 기준 (보기 모드와 따로) — REGION이면 같은 지역 드랍도 열림. 새 필드가 없는 예전 서버는 DISTANCE */
+  playMode: PlayMode;
+  /** playMode REGION일 때만 */
+  playRegionUnit: RegionUnit | null;
+  /** playMode REGION이고 좌표를 보냈을 때 그 좌표의 지역(playRegionUnit 단위). 없으면 거리로만 판정 */
+  playRegion: DropRegion | null;
   updatedAt: string | null;
 }
 
@@ -146,6 +157,8 @@ interface DropSummaryBase {
   longitude: number;
   address: string;
   isMyDropping: boolean;
+  /** 같은 지역 재생 판정용 — 새 필드라 예전 서버·백필 안 된 드랍은 없거나 null (그러면 거리로만 판정) */
+  regionCodes?: RegionCodes | null;
 }
 
 export interface MusicDropSummary extends DropSummaryBase {
