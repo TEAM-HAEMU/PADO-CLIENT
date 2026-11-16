@@ -1,11 +1,12 @@
 /**
- * 드랍 보기 범위 (계약: handoff/visibility-mode-contract.md) — 서버 응답 검사, 화면 문구, 주변 검색 거리.
+ * 드랍 보기 범위 (계약: handoff/visibility-mode-contract.md)·재생 기준 (handoff/play-region-contract.md) — 서버 응답 검사, 화면 문구, 주변 검색 거리.
  * 네이티브 의존 없음 (jest에서 바로 시험)
  */
 import type { DropRadius, DropRegion, RegionUnit } from '@/api/types';
 import { distanceM, formatRadius, type Coords } from '@/utils/geo';
 
-export const DEFAULT_RADIUS: DropRadius = { mode: 'DISTANCE', regionUnit: null, displayMeters: 5000, playMeters: 500, region: null, updatedAt: null };
+const DISTANCE_PLAY = { playMode: 'DISTANCE', playRegionUnit: null, playRegion: null } as const;
+export const DEFAULT_RADIUS: DropRadius = { mode: 'DISTANCE', regionUnit: null, displayMeters: 5000, playMeters: 500, region: null, ...DISTANCE_PLAY, updatedAt: null };
 
 /** 전국·같은 지역 모드에서 주변 검색에 보내는 거리(km) — 서버가 설정대로 고른다 */
 export const WIDE_SEARCH_KM = 20_000;
@@ -24,6 +25,17 @@ function sanitizeRegion(r: unknown): DropRegion | null {
 }
 
 /**
+ * 재생 기준 — playMode가 REGION이고 단위가 맞을 때만 REGION. 없거나(예전 서버) 이상하면 거리(DISTANCE).
+ * playRegion은 단위가 playRegionUnit과 같을 때만 받는다 (좌표를 안 보냈거나 지역을 못 찾았으면 null — 그동안은 거리로만 판정)
+ */
+function sanitizePlay(v: Record<string, unknown>): Pick<DropRadius, 'playMode' | 'playRegionUnit' | 'playRegion'> {
+  const unit = v.playRegionUnit as RegionUnit;
+  if (v.playMode !== 'REGION' || !UNITS.includes(unit)) return DISTANCE_PLAY;
+  const region = sanitizeRegion(v.playRegion);
+  return { playMode: 'REGION', playRegionUnit: unit, playRegion: region?.unit === unit ? region : null };
+}
+
+/**
  * 계약의 범위(표시 100m~500km 또는 전국, 재생 50~5000m이고 표시 이하) 밖이거나 모양이 이상하면 null.
  * 재생 반경이 50m 아래(최솟값을 올리기 전에 저장된 값)면 버리지 않고 50m로 올려 쓴다.
  * mode가 없으면 보기 모드 이전 백엔드 — 거리 모드로 본다
@@ -35,17 +47,24 @@ export function sanitizeRadius(r: unknown): DropRadius | null {
   const play = Math.max(MIN_PLAY_METERS, v.playMeters);
   const updatedAt = typeof v.updatedAt === 'string' ? v.updatedAt : null;
   const mode = v.mode ?? 'DISTANCE';
+  const playRule = sanitizePlay(v);
   if (mode === 'REGION') {
     if (!UNITS.includes(v.regionUnit as RegionUnit)) return null;
-    return { mode, regionUnit: v.regionUnit as RegionUnit, displayMeters: null, playMeters: play, region: sanitizeRegion(v.region), updatedAt };
+    return { mode, regionUnit: v.regionUnit as RegionUnit, displayMeters: null, playMeters: play, region: sanitizeRegion(v.region), ...playRule, updatedAt };
   }
   if (mode !== 'DISTANCE') return null;
   const display = v.displayMeters;
   // 예전 백엔드는 표시 반경이 항상 숫자 — mode 없이 null이면 깨진 응답
   if (display == null && v.mode === undefined) return null;
   if (display != null && (!isInt(display) || display < 100 || display > 500_000 || play > display)) return null;
-  return { mode, regionUnit: null, displayMeters: display ?? null, playMeters: play, region: null, updatedAt };
+  return { mode, regionUnit: null, displayMeters: display ?? null, playMeters: play, region: null, ...playRule, updatedAt };
 }
+
+/** 좌표가 설정 응답을 바꾸는지 — 보기·재생 중 하나라도 같은 지역 기준이면 위치가 바뀔 때 다시 묻는다 */
+export const needsCoords = (r: DropRadius | null) => r?.mode === 'REGION' || r?.playMode === 'REGION';
+
+/** 재생 판정에 쓰는 지역 — 재생 기준이 같은 지역이고 내 지역을 알 때만, 아니면 null(거리로만) */
+export const playRegionOf = (r: DropRadius): DropRegion | null => (r.playMode === 'REGION' ? r.playRegion : null);
 
 /** 같은 지역 모드인데 지역을 못 찾았을 때 서버가 쓰는 거리 — 재생 반경의 10배 또는 5km 중 큰 값 */
 export const regionFallbackMeters = (r: DropRadius) => Math.max(r.playMeters * 10, 5000);

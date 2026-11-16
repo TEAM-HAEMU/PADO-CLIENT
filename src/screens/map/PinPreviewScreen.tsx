@@ -15,7 +15,7 @@ import { ServiceGlyph } from '@/components/ui/Brand';
 import { Sheet } from '@/components/ui/Sheet';
 import { PreviewCredit } from '@/components/music/PreviewRow';
 import { CommentGlyph, HeartGlyph, MoreGlyph, PinGlyph, PlayCircleGlyph } from '@/components/player/glyphs';
-import { useCommentCount, useDrop, useDropAddress, useLikeCount, useSong, useToggleLike, useIsLiked } from '@/hooks/api';
+import { useCommentCount, useDrop, useDropPlace, useLikeCount, useSong, useToggleLike, useIsLiked } from '@/hooks/api';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
 import type { ServiceId } from '@/store/prefs';
@@ -59,7 +59,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const toggleLike = useToggleLike(dropId);
   const authed = useAuth(s => s.status === 'authed');
   const menu = useDropMenu(dropId, d?.userId, '드랍', d && 'username' in d ? d.username : undefined, song.data);
-  const address = useDropAddress(dropId);
+  const address = useDropPlace(dropId, d);
   // 투표·플리 드랍은 넘겨받은 화면이 센다
   useDropOpenedEvent(dropId, 'MUSIC', music, source);
 

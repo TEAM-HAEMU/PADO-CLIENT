@@ -98,7 +98,7 @@ test('반경 표시', () => {
 
 test('반경 설정 — 계약 범위 밖·이상한 모양은 버린다', () => {
   // 보기 모드 이전 백엔드(mode 없음)는 거리 모드로 본다
-  expect(sanitizeRadius({ displayMeters: 3000, playMeters: 200, updatedAt: '2026-11-13T12:00:00.000+09:00' })).toEqual({ mode: 'DISTANCE', regionUnit: null, displayMeters: 3000, playMeters: 200, region: null, updatedAt: '2026-11-13T12:00:00.000+09:00' });
+  expect(sanitizeRadius({ displayMeters: 3000, playMeters: 200, updatedAt: '2026-11-13T12:00:00.000+09:00' })).toEqual({ mode: 'DISTANCE', regionUnit: null, displayMeters: 3000, playMeters: 200, region: null, playMode: 'DISTANCE', playRegionUnit: null, playRegion: null, updatedAt: '2026-11-13T12:00:00.000+09:00' });
   expect(sanitizeRadius({ displayMeters: 5000, playMeters: 500, updatedAt: null })).toEqual(DEFAULT_RADIUS);
   expect(sanitizeRadius({ displayMeters: 50, playMeters: 10 })).toBeNull();
   expect(sanitizeRadius({ displayMeters: 1000, playMeters: 2000 })).toBeNull();

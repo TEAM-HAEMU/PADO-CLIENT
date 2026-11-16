@@ -14,6 +14,7 @@ import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
 import { useDrop, useNotifications, useSong } from '@/hooks/api';
 import { useDropLock } from '@/hooks/useDropLock';
+import { useDropRadius } from '@/hooks/useDropRadius';
 import type { RootScreen } from '@/navigation/types';
 import { lockMessage } from '@/utils/dropLock';
 import { colors, fonts } from '@/theme/tokens';
@@ -65,6 +66,7 @@ export default function NotificationsScreen() {
   ].filter(s => s.data.length);
 
   const lockOf = useDropLock();
+  const radius = useDropRadius();
   const open = async (n: AppNotification) => {
     track('notification_opened', { event: n.eventName, unread: !n.readAt, has_drop: !!(str(n.data.droppingId) ?? findNearbyDrop(n.data)) });
     if (!n.readAt) notificationApi.read(n.id).then(refresh).catch(() => {});
@@ -72,7 +74,7 @@ export default function NotificationsScreen() {
     // 주변 새 드랍도 재생 반경 밖이면 지도와 같이 열지 않는다 (위치를 아는 드랍만 — 내 드랍·좋아요한 드랍은 열림)
     const known = dropId ? cachedSummary(dropId) : undefined;
     const lock = known ? lockOf(known) : null;
-    if (lock?.locked) { track('drop_locked_tap', { drop_id: dropId, type: known?.type, source: 'notification', remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) }); toast(lockMessage(lock)); }
+    if (lock?.locked) { track('drop_locked_tap', { drop_id: dropId, type: known?.type, source: 'notification', remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) }); toast(lockMessage(lock, radius)); }
     else if (dropId) nav.navigate('PinPreview', { dropId, source: 'notification' });
     else if (n.eventName === 'dropping-created') {
       // 이미 사라졌거나 지금 주변(반경 밖)에 없으면 — 말없이 지도로 보내면 고장처럼 보이니 이유를 알린다
