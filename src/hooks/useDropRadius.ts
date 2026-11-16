@@ -5,11 +5,13 @@
  * 위치는 주소가 아니라 좌표로 보낸다(서버가 행정구역을 판정).
  */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { create } from 'zustand';
 import { settingsApi } from '@/api/endpoints';
 import type { DropRadius } from '@/api/types';
 import { useLocation } from '@/services/location';
 import { kv } from '@/store/storage';
 import { DEFAULT_RADIUS, needsCoords, nextAnchor, sanitizeRadius } from '@/utils/dropScope';
+import { readSig, scopeSig, scopeTip, type ScopeSig } from '@/utils/scopeTip';
 import type { Coords } from '@/utils/geo';
 
 export { DEFAULT_RADIUS, sanitizeRadius } from '@/utils/dropScope';
@@ -23,9 +25,35 @@ const KEY = 'settings:dropRadius';
 let saved: { value: DropRadius | null } | null = null;
 export const cachedRadius = () => (saved ??= { value: sanitizeRadius(kv.get<unknown>(KEY, null)) }).value;
 
+/** 지난번에 사용자에게 알려 준(또는 처음 받은) 보기·재생 규칙 */
+const SEEN_KEY = 'settings:scopeSeen';
+
+/** 설정이 바뀌어 지도에 한 번 띄울 안내 — 지도 화면이 띄운 뒤 markScopeTipSeen으로 지운다 */
+export const useScopeTip = create<{ tip: { text: string; sig: ScopeSig } | null }>(() => ({ tip: null }));
+
+export function markScopeTipSeen(sig: ScopeSig) {
+  kv.set(SEEN_KEY, sig);
+  useScopeTip.setState({ tip: null });
+}
+
+/**
+ * 서버에서 새 설정을 받았을 때 — 지난번에 알려 준 규칙과 다르면 안내를 걸어 둔다.
+ * 처음 쓰는 기기(저장값 없음)는 알릴 게 없으니 지금 값을 기준으로 삼는다. 예전 앱에서 올라온 기기는 그때 받아 둔 설정이 기준
+ */
+function noteScopeChange(prev: DropRadius | null, r: DropRadius) {
+  let seen = readSig(kv.get<unknown>(SEEN_KEY, null));
+  if (!seen) {
+    seen = prev ? scopeSig(prev) : scopeSig(r);
+    kv.set(SEEN_KEY, seen);
+  }
+  const text = scopeTip(seen, r);
+  useScopeTip.setState({ tip: text ? { text, sig: scopeSig(r) } : null });
+}
+
 async function fetchRadius(at: Coords | null) {
   const r = sanitizeRadius(await settingsApi.dropRadius(at));
   if (!r) throw new Error('bad drop radius');
+  noteScopeChange(cachedRadius(), r);
   kv.set(KEY, r);
   saved = { value: r };
   return r;

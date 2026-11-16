@@ -20,7 +20,8 @@ import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useDropLock } from '@/hooks/useDropLock';
-import { useDropRadius } from '@/hooks/useDropRadius';
+import { markScopeTipSeen, useDropRadius, useScopeTip } from '@/hooks/useDropRadius';
+import { ScopeTip } from '@/components/map/ScopeTip';
 import { scopeLabel } from '@/utils/dropScope';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
@@ -253,6 +254,21 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     // 줌은 사용자가 맞춘 그대로 두고 가운데만 옮긴다
     mapRef.current?.animateCamera({ center: { latitude: coords.latitude - 0.0012, longitude: coords.longitude } }, { duration: 600 });
   }, [coords, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 보기·재생 범위가 바뀌었으면 지역 이름 아래에 한 번 알려 준다 — 지도가 뜨고 잠시 뒤, 이 화면이 맨 앞일 때만(시트가 열려 있으면 미룸).
+  // 띄우는 순간 본 것으로 기록하고, 화면 어디든 처음 누르거나 다른 화면으로 가면 닫는다
+  const scopeTip = useScopeTip(s => s.tip);
+  const [shownTip, setShownTip] = useState<string | null>(null);
+  useEffect(() => {
+    if (!scopeTip || !focused || !mapReady || !coords || shownTip) return;
+    const t = setTimeout(() => {
+      setShownTip(scopeTip.text);
+      markScopeTipSeen(scopeTip.sig);
+      track('scope_tip_shown', { visibility_mode: scopeTip.sig.mode, region_unit: scopeTip.sig.regionUnit, play_mode: scopeTip.sig.playMode, play_region_unit: scopeTip.sig.playRegionUnit });
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [scopeTip, focused, mapReady, !!coords, shownTip]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!focused) setShownTip(null); }, [focused]);
+
   // 다른 탭에 갔다가 지도로 돌아오면 다시 내 위치로 (보던 곳을 끌어 둔 채였어도)
   const wasFocused = useRef(focused);
   useEffect(() => {
@@ -261,7 +277,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   }, [focused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.page }}>
+    // 안내 말풍선은 화면 어디든 처음 누르면 닫는다 — 누른 동작은 그대로 지도·버튼으로 간다(가로채지 않음)
+    <View style={{ flex: 1, backgroundColor: colors.page }} onStartShouldSetResponderCapture={() => { if (shownTip) setShownTip(null); return false; }}>
       <MapView
         ref={mapRef}
         style={{ flex: 1 }}
@@ -311,6 +328,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         <T v="title">{coords ? label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
         <Caret />
       </Press>
+      {shownTip ? <ScopeTip text={shownTip} top={insets.top + 48} /> : null}
 
       {/* 하단 짙은 페이드 + 가까운 드랍 */}
       {/* Figma 'fade': #040916 0.98 → 0.7(55%) → 0 */}
