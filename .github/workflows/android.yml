@@ -89,6 +89,14 @@ jobs:
           } > .env
           node scripts/sync-native-env.js
 
+      # sentry-cli는 토큰 말고도 org·project·주소가 있어야 한다 — 토큰 Secret이 있을 때만 android/sentry.properties를 만든다 (커밋 안 되는 파일, 기본값은 스크립트에)
+      - name: Sentry 업로드 설정
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then echo "SENTRY_AUTH_TOKEN 없음 — 소스맵 업로드 없이 빌드"; exit 0; fi
+          node scripts/sentry-properties.js
+
       - name: 빌드 (release · arm64)
         working-directory: android
         env:
