@@ -12,6 +12,7 @@ jest.mock('@/store/toast', () => ({ toast: (...a: unknown[]) => mockToast(...a) 
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNav }));
 jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ getQueriesData: () => [], invalidateQueries: jest.fn() }) }));
 jest.mock('@/hooks/useDropLock', () => ({ useDropLock: () => () => null }));
+jest.mock('@/hooks/useDropRadius', () => ({ useDropRadius: () => require('@/utils/dropScope').DEFAULT_RADIUS }));
 jest.mock('@/hooks/api', () => ({
   useDrop: () => ({ data: undefined }),
   useSong: () => ({ data: undefined }),

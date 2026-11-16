@@ -12,7 +12,7 @@ jest.mock('@/components/ui/ScreenState', () => require('./setup/screenEnv').mock
 jest.mock('react-native-linear-gradient', () => () => null);
 jest.mock('@/hooks/useDropMenu', () => ({ useDropMenu: () => ({ open: jest.fn() }) }));
 jest.mock('@/hooks/api', () => ({
-  useComments: () => ({ data: [] }), useDrop: () => ({ data: undefined }), useDropAddress: () => undefined, useLikeCount: () => ({ data: 0 }),
+  useComments: () => ({ data: [] }), useDrop: () => ({ data: undefined }), useDropPlace: () => undefined, useLikeCount: () => ({ data: 0 }),
   useSong: () => ({ data: { id: 'song-1', title: '곡', artist: '가수', duration: 200, albumImagePath: null }, isPlaceholderData: false }),
   useToggleLike: () => ({ toggle: jest.fn() }), useIsLiked: () => false,
 }));

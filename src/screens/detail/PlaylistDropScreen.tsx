@@ -15,6 +15,7 @@ import { toast } from '@/store/toast';
 import { startPreview, usePreviewStore } from '@/services/preview';
 import { useDropMenu } from '@/hooks/useDropMenu';
 import { colors, fonts } from '@/theme/tokens';
+import { dropPlace } from '@/utils/address';
 import { expiryLabel } from '@/utils/format';
 import { shuffled } from '@/utils/shuffle';
 
@@ -81,7 +82,7 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
             <PlaylistHero
               images={d.songs.map(s => s.albumImagePath)}
               title={d.playlistName}
-              meta={`${d.songs.length}곡 · ${d.address} · ${expiryLabel(d.expiryDate)}`}
+              meta={`${d.songs.length}곡 · ${dropPlace(d)} · ${expiryLabel(d.expiryDate)}`}
               onPlay={() => { const q = d.songs.map(s => s.songId); if (q.length) navigation.navigate('Player', { songId: q[0], dropId, queue: q, autoplay: true }); }}
               onShuffle={() => { const q = shuffled(d.songs.map(s => s.songId)); if (q.length) navigation.navigate('Player', { songId: q[0], dropId, queue: q, autoplay: true }); }}
             />

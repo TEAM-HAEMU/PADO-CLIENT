@@ -5,6 +5,7 @@ import { errorMessage } from '@/api/errors';
 import type { CreateDropBody, LikedDrop, UUID } from '@/api/types';
 import { useDropRadius } from '@/hooks/useDropRadius';
 import { searchKm } from '@/utils/dropScope';
+import { dropPlace, type DropPlaceFields } from '@/utils/address';
 import { useAuth } from '@/store/auth';
 import type { Coords } from '@/services/location';
 import { track } from '@/services/analytics';
@@ -148,15 +149,16 @@ export function useIsMyDrop(dropId: UUID | undefined) {
   return !!nearby.find(x => x.droppingId === dropId)?.isMyDropping || !!mine?.some(d => d.droppingId === dropId);
 }
 
-/** 드랍 주소 — MUSIC 상세 응답엔 address가 없어서, 캐시된 목록(주변·내 드랍·좋아요)에서 찾는다 */
-export function useDropAddress(dropId: UUID | undefined, fromDetail?: string | null) {
+/**
+ * 드랍 자리 표시 — 장소 이름(placeName)이 있으면 그것, 없으면 주소 (utils/address dropPlace).
+ * MUSIC 상세 응답엔 address가 없어서 캐시된 목록(주변·내 드랍·좋아요)에서도 찾는다 — 상세가 먼저, 장소 이름이 주소보다 먼저
+ */
+export function useDropPlace(dropId: UUID | undefined, detail?: DropPlaceFields | null) {
   const qc = useQueryClient();
   useMyDrops();
-  if (fromDetail) return fromDetail;
-  if (!dropId) return undefined;
-  for (const key of [['nearby'], ['myDrops'], ['myLikes']]) {
-    const hit = qc.getQueriesData<{ droppingId: string; address?: string }[]>({ queryKey: key }).flatMap(([, v]) => (Array.isArray(v) ? v : [])).find(x => x.droppingId === dropId && x.address);
-    if (hit?.address) return hit.address;
-  }
-  return undefined;
+  const cached = dropId
+    ? [['nearby'], ['myDrops'], ['myLikes']].flatMap(key =>
+        qc.getQueriesData<(DropPlaceFields & { droppingId: string })[]>({ queryKey: key }).flatMap(([, v]) => (Array.isArray(v) ? v : [])).filter(x => x?.droppingId === dropId))
+    : [];
+  return dropPlace(detail, ...cached) || undefined;
 }

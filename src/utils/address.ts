@@ -38,3 +38,18 @@ export function regionOf(address: string | null | undefined): string | null {
   }
   return out.join(' ');
 }
+
+/** 드랍의 장소 표시에 쓰는 필드 — 목록·상세·좋아요 응답 공통 (음악 상세엔 둘 다 없을 수 있다) */
+export interface DropPlaceFields { placeName?: string | null; address?: string | null }
+
+const text = (v: unknown) => (typeof v === 'string' ? clean(v) : '');
+
+/**
+ * 드랍 자리 표시 — 서버가 찾은 장소 이름(placeName)이 있으면 그것을 먼저, 없으면 지금처럼 주소. 둘 다 없으면 ''.
+ * 여러 출처(상세 응답, 받아 둔 목록)를 주면 어느 출처의 장소 이름이든 주소보다 앞선다 (앞 출처가 먼저)
+ */
+export function dropPlace(...from: (DropPlaceFields | null | undefined)[]): string {
+  for (const d of from) { const p = text(d?.placeName); if (p) return p; }
+  for (const d of from) { const a = text(d?.address); if (a) return a; }
+  return '';
+}

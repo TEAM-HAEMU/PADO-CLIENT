@@ -11,6 +11,7 @@ import { listStatus } from '@/components/ui/ScreenState';
 import { Glyph } from '@/components/detail/glyphs';
 import { BgWave } from '@/components/detail/parts';
 import { useMyDrops, useMyLikes, useMyPlaylists } from '@/hooks/api';
+import { dropPlace } from '@/utils/address';
 import { colors, fonts } from '@/theme/tokens';
 import { useNavigation } from '@react-navigation/native';
 
@@ -78,7 +79,7 @@ export default function PlaylistsScreen() {
           listStatus(myDropsQ, '드랍한 플리를 불러오지 못했어요') ?? (droppedPlaylists.length ? (
             <View style={grid}>
               {droppedPlaylists.map(d => (
-                <Cell key={d.droppingId} size={cell} cover={<Art uri={d.firstAlbumImageUrl} size={cell} radius={18.9} />} title={d.playlistName} sub={`${d.songIds.length}곡 · ${d.address}`} onPress={() => nav.navigate('PlaylistDrop', { dropId: d.droppingId, source: 'playlists' })} />
+                <Cell key={d.droppingId} size={cell} cover={<Art uri={d.firstAlbumImageUrl} size={cell} radius={18.9} />} title={d.playlistName} sub={`${d.songIds.length}곡 · ${dropPlace(d)}`} onPress={() => nav.navigate('PlaylistDrop', { dropId: d.droppingId, source: 'playlists' })} />
               ))}
             </View>
           ) : (
@@ -87,7 +88,7 @@ export default function PlaylistsScreen() {
         ) : listStatus(likesQ, '좋아요한 드랍을 불러오지 못했어요') ?? (likes.length ? (
           <View style={grid}>
             {likes.map(l => (
-              <Cell key={l.droppingId} size={cell} cover={<Art uri={l.imageUrl} size={cell} radius={18.9} />} title={l.title ?? l.topic ?? l.playlistName ?? ''} sub={`${l.droppingType === 'MUSIC' ? l.artist ?? '' : l.droppingType === 'VOTE' ? '투표' : '플레이리스트'} · ${l.address}`} onPress={() => nav.navigate(l.droppingType === 'VOTE' ? 'VoteDrop' : l.droppingType === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: l.droppingId, source: 'playlists' })} />
+              <Cell key={l.droppingId} size={cell} cover={<Art uri={l.imageUrl} size={cell} radius={18.9} />} title={l.title ?? l.topic ?? l.playlistName ?? ''} sub={`${l.droppingType === 'MUSIC' ? l.artist ?? '' : l.droppingType === 'VOTE' ? '투표' : '플레이리스트'} · ${dropPlace(l)}`} onPress={() => nav.navigate(l.droppingType === 'VOTE' ? 'VoteDrop' : l.droppingType === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: l.droppingId, source: 'playlists' })} />
             ))}
           </View>
         ) : (

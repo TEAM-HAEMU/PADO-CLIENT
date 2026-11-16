@@ -5,7 +5,7 @@ import type { DropRadius } from '@/api/types';
 const at = '2026-11-13T12:00:00.000+09:00';
 const region = (over: Partial<DropRadius> = {}): DropRadius => ({
   mode: 'REGION', regionUnit: 'SIGUNGU', displayMeters: null, playMeters: 500,
-  region: { unit: 'SIGUNGU', code: '26350', name: '부산광역시 해운대구' }, updatedAt: at, ...over,
+  region: { unit: 'SIGUNGU', code: '26350', name: '부산광역시 해운대구' }, playMode: 'DISTANCE', playRegionUnit: null, playRegion: null, updatedAt: at, ...over,
 });
 
 test('같은 지역 모드 응답은 단위·지역을 그대로 받고 표시 반경은 버린다', () => {
@@ -13,14 +13,14 @@ test('같은 지역 모드 응답은 단위·지역을 그대로 받고 표시 �
     .toEqual(region());
   // 지역을 못 찾았거나(바다) 좌표를 안 보냈으면 region null
   expect(sanitizeRadius({ mode: 'REGION', regionUnit: 'DONG', displayMeters: null, playMeters: 500, region: null, updatedAt: null }))
-    .toEqual({ mode: 'REGION', regionUnit: 'DONG', displayMeters: null, playMeters: 500, region: null, updatedAt: null });
+    .toEqual({ mode: 'REGION', regionUnit: 'DONG', displayMeters: null, playMeters: 500, region: null, playMode: 'DISTANCE', playRegionUnit: null, playRegion: null, updatedAt: null });
   expect(sanitizeRadius({ mode: 'REGION', regionUnit: 'SIGUNGU', playMeters: 500, region: { unit: 'SIGUNGU', code: 1 } })?.region).toBeNull();
   expect(sanitizeRadius({ mode: 'REGION', regionUnit: 'CITY', playMeters: 500 })).toBeNull();
 });
 
 test('거리 모드는 표시 반경 null을 전국으로, 500km까지 받는다', () => {
   expect(sanitizeRadius({ mode: 'DISTANCE', regionUnit: null, displayMeters: null, playMeters: 5000, region: null, updatedAt: at }))
-    .toEqual({ mode: 'DISTANCE', regionUnit: null, displayMeters: null, playMeters: 5000, region: null, updatedAt: at });
+    .toEqual({ mode: 'DISTANCE', regionUnit: null, displayMeters: null, playMeters: 5000, region: null, playMode: 'DISTANCE', playRegionUnit: null, playRegion: null, updatedAt: at });
   expect(sanitizeRadius({ mode: 'DISTANCE', displayMeters: 500_000, playMeters: 5000 })?.displayMeters).toBe(500_000);
   expect(sanitizeRadius({ mode: 'DISTANCE', displayMeters: 500_001, playMeters: 500 })).toBeNull();
   expect(sanitizeRadius({ mode: 'DISTANCE', displayMeters: 1000, playMeters: 1001 })).toBeNull();

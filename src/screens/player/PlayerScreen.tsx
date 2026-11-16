@@ -12,7 +12,7 @@ import { BackGlyph, HeadphonesGlyph, HeartGlyph, MoreGlyph, PlayCircleGlyph } fr
 import { Art, Icon, Press, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
 import { useDropMenu } from '@/hooks/useDropMenu';
-import { useComments, useDrop, useDropAddress, useLikeCount, useSong, useToggleLike, useIsLiked } from '@/hooks/api';
+import { useComments, useDrop, useDropPlace, useLikeCount, useSong, useToggleLike, useIsLiked } from '@/hooks/api';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
 import { listenFull, listenLabel } from '@/services/listen';
@@ -45,7 +45,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const toggleLike = useToggleLike(dropId ?? '');
   const authed = useAuth(s => s.status === 'authed');
   const service = usePrefs(s => s.service);
-  const address = useDropAddress(dropId, drop && 'address' in drop ? (drop as { address?: string }).address : null);
+  const address = useDropPlace(dropId, drop);
 
   // 화면을 닫아도 듣던 곡은 계속 (다른 곡을 틀 때만 바뀜 — 지도 미니 디스크·잠금화면에서 제어)
 

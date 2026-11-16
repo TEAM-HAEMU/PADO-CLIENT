@@ -3,10 +3,16 @@
  * 서버는 막지 않고 앱에서만 적용한다. 내 드랍·내가 좋아요한 드랍은 어디서든 열린다. 위치를 모르면 예외 말고는 모두 잠금.
  * 위치 오차(accuracy)가 재생 반경의 2배보다 크면 위치를 모르는 것과 같게 잠근다 — Android '대략적인 위치'·iOS '정확한 위치' 끔은
  * 오차가 수 km라 그 좌표로는 반경 안인지 알 수 없다. 그보다 작은 오차는 좌표를 그대로 믿는다 (느슨하게). 오차를 모르면(null)도 그대로 믿는다.
+ * 재생 기준이 같은 지역(playRegion이 있음)이면 내 지역과 지역 코드가 같은 드랍도 열린다 (handoff/play-region-contract.md).
+ * 지역은 거리를 대신하지 않고 더하는 것 — 경계 바로 옆 드랍이 잠기지 않게 재생 반경 안이면 지역이 달라도 열림.
  */
-import { distanceM, type Coords } from '@/utils/geo';
+import type { DropRadius, DropRegion, RegionCodes, RegionUnit } from '@/api/types';
+import { distanceM, formatRadius, type Coords } from '@/utils/geo';
+import { playRegionOf, shortRegionName } from '@/utils/dropScope';
 
-export interface LockTarget { droppingId: string; latitude: number; longitude: number; isMyDropping?: boolean }
+export interface LockTarget { droppingId: string; latitude: number; longitude: number; isMyDropping?: boolean; regionCodes?: RegionCodes | null }
+/** 같은 지역 재생 판정에 쓰는 내 지역 (설정 응답의 playRegion) */
+export type PlayRegion = Pick<DropRegion, 'unit' | 'code'>;
 /** 지금 위치 + 오차 반경(m, 모르면 null) */
 export interface LockHere extends Coords { accuracy?: number | null }
 /** remainingM: 몇 m 더 가까이 가야 열리는지 (위치를 모르거나 오차가 커서 판정할 수 없으면 null, imprecise: 오차가 커서) */
@@ -21,12 +27,25 @@ export const IMPRECISE_FACTOR = 2;
 
 const exempt = (d: LockTarget, alwaysOpen?: ReadonlySet<string>) => !!d.isMyDropping || !!alwaysOpen?.has(d.droppingId);
 
-/** wasOpen: 바로 전에 열려 있던 드랍인지 (그러면 재생 반경 + LOCK_GRACE_M까지 열어 둔다) */
-export function dropLock(d: LockTarget, here: LockHere | null, playMeters: number, alwaysOpen?: ReadonlySet<string>, wasOpen = false): DropLock {
+const UNIT_KEY: Record<RegionUnit, keyof RegionCodes> = { SIDO: 'sido', SIGUNGU: 'sigungu', DONG: 'dong' };
+
+/** 드랍이 내 지역(같은 단위 코드) 안인지 — 지역을 모르거나 드랍 코드가 없으면(백필 전) false */
+export function sameRegion(d: LockTarget, region: PlayRegion | null | undefined) {
+  if (!region?.code) return false;
+  const key = UNIT_KEY[region.unit];
+  return !!key && d.regionCodes?.[key] === region.code;
+}
+
+/**
+ * wasOpen: 바로 전에 열려 있던 드랍인지 (그러면 재생 반경 + LOCK_GRACE_M까지 열어 둔다)
+ * region: 재생 기준이 같은 지역일 때 내 지역 — 위치를 알고 오차가 크지 않을 때만 쓴다 (내 지역도 그 좌표로 판정한 것이라)
+ */
+export function dropLock(d: LockTarget, here: LockHere | null, playMeters: number, alwaysOpen?: ReadonlySet<string>, wasOpen = false, region?: PlayRegion | null): DropLock {
   if (exempt(d, alwaysOpen)) return OPEN;
   if (!here) return { locked: true, remainingM: null };
   const grace = wasOpen ? LOCK_GRACE_M : 0;
   if (here.accuracy != null && here.accuracy > playMeters * IMPRECISE_FACTOR + grace) return { locked: true, remainingM: null, imprecise: true };
+  if (sameRegion(d, region)) return OPEN;
   const m = distanceM(here, d);
   return m <= playMeters + grace ? OPEN : { locked: true, remainingM: m - playMeters };
 }
@@ -41,11 +60,11 @@ export function dropLock(d: LockTarget, here: LockHere | null, playMeters: numbe
 export function lockJudge() {
   const opened = new Set<string>();
   const last = new Map<string, DropLock>();
-  return (d: LockTarget, here: LockHere | null, playMeters: number, alwaysOpen?: ReadonlySet<string>, awaiting = false): DropLock => {
+  return (d: LockTarget, here: LockHere | null, playMeters: number, alwaysOpen?: ReadonlySet<string>, awaiting = false, region?: PlayRegion | null): DropLock => {
     if (exempt(d, alwaysOpen)) return OPEN;
     const prev = last.get(d.droppingId);
     if (awaiting && prev) return prev;
-    const lock = dropLock(d, here, playMeters, alwaysOpen, opened.has(d.droppingId));
+    const lock = dropLock(d, here, playMeters, alwaysOpen, opened.has(d.droppingId), region);
     if (!lock.locked) opened.add(d.droppingId);
     else if (lock.remainingM !== null) opened.delete(d.droppingId);
     last.set(d.droppingId, lock);
@@ -53,12 +72,17 @@ export function lockJudge() {
   };
 }
 
-/** 잠긴 드랍을 눌렀을 때 안내 — 남은 거리는 올림 (0m·'바로 여기'처럼 말하지 않게) */
-export function lockMessage(lock: DropLock) {
+/**
+ * 잠긴 드랍을 눌렀을 때 안내 — 남은 거리는 올림 (0m·'바로 여기'처럼 말하지 않게).
+ * 재생 기준이 같은 지역이고 내 지역을 알면 남은 거리 대신 "우1동 안이나 500m 안에서 들을 수 있어요"
+ */
+export function lockMessage(lock: DropLock, radius?: DropRadius) {
   if (!lock.locked) return '';
   if (lock.imprecise) return '위치 오차가 커서 열 수 없어요. 정확한 위치 사용을 허용했는지 확인해주세요';
   const r = lock.remainingM;
   if (r == null) return '내 위치를 찾으면 가까운 드랍을 들을 수 있어요';
+  const region = radius && playRegionOf(radius);
+  if (region) return `${shortRegionName(region.name)} 안이나 ${formatRadius(radius.playMeters)} 안에서 들을 수 있어요`;
   if (r < 10) return '조금만 더 가까이 가면 들을 수 있어요';
   const up = Math.ceil(r / 10) * 10;
   const d = up < 1000 ? `${up}m` : `${(Math.ceil(r / 100) / 10).toFixed(1)}km`;

@@ -11,7 +11,7 @@ import { errorMessage } from '@/api/errors';
 import { isPlaylistDetail, isVoteDetail, type DropDetail, type DropSummary, type Song, type UUID } from '@/api/types';
 import type { ShareCardData } from '@/components/share/StoryCard';
 import { toast } from '@/store/toast';
-import { invalidateAfterDropRemoved, useDrop, useDropAddress, useIsMyDrop } from './api';
+import { invalidateAfterDropRemoved, useDrop, useDropPlace, useIsMyDrop } from './api';
 import { useBlockUser } from './useBlockUser';
 
 export function useDropMenu(dropId: UUID | undefined, ownerId: UUID | undefined, title = '드랍', ownerName?: string, song?: Song) {
@@ -20,8 +20,9 @@ export function useDropMenu(dropId: UUID | undefined, ownerId: UUID | undefined,
   const qc = useQueryClient();
   const mine = useIsMyDrop(dropId);
   const drop = useDrop(dropId).data;
-  const address = useDropAddress(dropId, drop && 'address' in drop ? drop.address : undefined);
-  const card = drop ? withCoords(shareCard(drop, song, address), drop, dropId, qc) : null;
+  // 공유 카드의 자리 줄 — 장소 이름이 있으면 그것, 없으면 주소
+  const place = useDropPlace(dropId, drop);
+  const card = drop ? withCoords(shareCard(drop, song, place), drop, dropId, qc) : null;
 
   const remove = () => {
     if (!dropId) return;

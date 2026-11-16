@@ -8,10 +8,10 @@ import MapView, { Polygon, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { useIsFocused } from '@react-navigation/native';
-import { useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { dropApi } from '@/api/endpoints';
+import { dropApi, regionApi } from '@/api/endpoints';
 import type { DropSummary, MusicDropSummary } from '@/api/types';
 import type { DropOpenSource } from '@/navigation/types';
 import { ClusterMarker, DropMarker, MyLocationMarker } from '@/components/map/DropMarker';
@@ -20,7 +20,10 @@ import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useDropLock } from '@/hooks/useDropLock';
-import { useDropRadius } from '@/hooks/useDropRadius';
+import { markScopeTipSeen, useDropRadius, useScopeTip } from '@/hooks/useDropRadius';
+import { ScopeTip } from '@/components/map/ScopeTip';
+import type { ScopeTipText } from '@/utils/scopeTip';
+import { placeKey, placeLevel, placeName, sanitizeRegionsAt, wantsPlace } from '@/utils/mapPlace';
 import { scopeLabel } from '@/utils/dropScope';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
@@ -150,12 +153,34 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
 
   // 재생 반경 밖(내 드랍·좋아요한 드랍 제외)은 잠금 — 핀은 흐리게 곡·커버 없이, 눌러도 안 열리고, 자동 재생에서도 뺀다
   const lockOf = useDropLock();
+  const radius = useDropRadius();
   const sorted = useMemo(() => drops.map(d => ({ d, m: distanceM(here, d), lock: lockOf(d) })).sort((a, b) => a.m - b.m), [drops, here, lockOf]);
   const nearestId = sorted.find(x => !x.lock.locked)?.d.droppingId;
   // 지도에 그릴 핀 — 보이는 영역(넉넉히) 안에서 가까운 순 MAX_PINS개 (영역은 지도를 다 움직인 뒤에만 갱신)
   // 많이 축소하면(CLUSTER_LNG_DELTA) 핀 대신 격자로 묶은 수 묶음만 — 묶음은 위치(GPS)와 무관하니 드랍 목록·영역이 바뀔 때만 다시 묶는다
   const [view, setView] = useState<Region | null>(null);
   const onRegionChangeComplete = useCallback((r: Region) => setView(r), []);
+
+  // 지도 위 제목 — 화면 가운데 지점의 지역 이름을 확대 수준에 맞게(넓게 보면 시·도, 중간이면 시·군·구, 가까우면 동,
+  // 동보다 더 당기면 그 자리의 아는 장소 — 없으면 동). 장소는 그 단계에서만 묻는다(place=true).
+  // 지도를 움직이다 멈추고 0.4초 뒤에 묻는다. 가까운 지점은 같은 요청으로 묶고 한 번 받은 이름은 다시 쓴다.
+  // 못 받으면(예전 서버·오프라인) 지금처럼 내 위치의 동 이름
+  const [placeAt, setPlaceAt] = useState<{ latitude: number; longitude: number; level: ReturnType<typeof placeLevel> } | null>(null);
+  useEffect(() => {
+    if (!view) return;
+    const t = setTimeout(() => setPlaceAt({ latitude: view.latitude, longitude: view.longitude, level: placeLevel(view.latitudeDelta) }), 400);
+    return () => clearTimeout(t);
+  }, [view]);
+  const place = useQuery({
+    queryKey: ['placeAt', placeAt ? placeKey(placeAt.latitude, placeAt.longitude, placeAt.level) : 'none'],
+    enabled: !!placeAt,
+    queryFn: async () => sanitizeRegionsAt(await regionApi.at(placeAt!.latitude, placeAt!.longitude, wantsPlace(placeAt!.level))),
+    staleTime: Infinity,
+    gcTime: 30 * 60_000,
+    retry: 0,
+    placeholderData: keepPreviousData,
+  });
+  const centerName = place.data && placeAt ? placeName(place.data, placeAt.level) : null;
   const clustered = shouldCluster(view);
   const clusters = useMemo(() => (clustered && view ? clusterPoints(drops, view) : []), [clustered, drops, view]);
   // 1개짜리 묶음은 수 원 대신 보통 핀으로 — 핀 모드와 같은 DropMarker·같은 키라 확대·축소로 모드가 바뀌어도 그 핀은 다시 만들어지지 않는다
@@ -185,7 +210,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const tapDrop = ({ d, m, lock }: (typeof sorted)[number], source: DropOpenSource) => {
     if (!lock.locked) return openDrop(d, source);
     track('drop_locked_tap', { drop_id: d.droppingId, type: d.type, source, distance_m: Math.round(m), remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) });
-    toast(lockMessage(lock));
+    toast(lockMessage(lock, radius));
   };
   // 핀 누르기 — 마커가 다시 렌더되지 않게 고정 함수 하나 (누른 순간의 최신 목록·핸들러를 ref로 읽는다)
   const latest = useRef({ sorted, tapDrop });
@@ -207,7 +232,6 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   }, []);
 
   // 지도 첫 로드 (앱 실행마다 한 번) — 주변 드랍 수·열 수 있는 드랍 수·반경 (반경 관련 분포용)
-  const radius = useDropRadius();
   useEffect(() => {
     if (mapLoadTracked || !coords || !nearby.isSuccess) return;
     mapLoadTracked = true;
@@ -222,6 +246,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       play_m: radius.playMeters,
       visibility_mode: radius.mode,
       region_unit: radius.regionUnit,
+      play_mode: radius.playMode,
     });
   }, [coords, nearby.isSuccess, sorted, radius]);
 
@@ -252,6 +277,21 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     // 줌은 사용자가 맞춘 그대로 두고 가운데만 옮긴다
     mapRef.current?.animateCamera({ center: { latitude: coords.latitude - 0.0012, longitude: coords.longitude } }, { duration: 600 });
   }, [coords, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 보기·재생 범위가 바뀌었으면 지역 이름 아래에 한 번 알려 준다 — 지도가 뜨고 잠시 뒤, 이 화면이 맨 앞일 때만(시트가 열려 있으면 미룸).
+  // 띄우는 순간 본 것으로 기록하고, 화면 어디든 처음 누르거나 다른 화면으로 가면 닫는다
+  const scopeTip = useScopeTip(s => s.tip);
+  const [shownTip, setShownTip] = useState<ScopeTipText | null>(null);
+  useEffect(() => {
+    if (!scopeTip || !focused || !mapReady || !coords || shownTip) return;
+    const t = setTimeout(() => {
+      setShownTip(scopeTip.text);
+      markScopeTipSeen(scopeTip.sig);
+      track('scope_tip_shown', { visibility_mode: scopeTip.sig.mode, region_unit: scopeTip.sig.regionUnit, play_mode: scopeTip.sig.playMode, play_region_unit: scopeTip.sig.playRegionUnit });
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [scopeTip, focused, mapReady, !!coords, shownTip]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!focused) setShownTip(null); }, [focused]);
+
   // 다른 탭에 갔다가 지도로 돌아오면 다시 내 위치로 (보던 곳을 끌어 둔 채였어도)
   const wasFocused = useRef(focused);
   useEffect(() => {
@@ -260,7 +300,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   }, [focused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.page }}>
+    // 안내 말풍선은 화면 어디든 처음 누르면 닫는다 — 누른 동작은 그대로 지도·버튼으로 간다(가로채지 않음)
+    <View style={{ flex: 1, backgroundColor: colors.page }} onStartShouldSetResponderCapture={() => { if (shownTip) setShownTip(null); return false; }}>
       <MapView
         ref={mapRef}
         style={{ flex: 1 }}
@@ -306,10 +347,14 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
 
       {/* 상단 페이드 + 동 이름 */}
       <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.96)', 'rgba(255,255,255,0.85)', 'rgba(255,255,255,0)']} locations={[0, insets.top / (insets.top + 96), 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 96 }} />
-      <Press onPress={recenter} accessibilityHint="내 위치로 지도를 다시 맞춰요" trackAs="동 이름 (내 위치로)" style={{ position: 'absolute', top: insets.top + 12, left: 20, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-        <T v="title">{coords ? label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
-        <Caret />
-      </Press>
+      {/* 제목은 한 줄 — 긴 장소 이름은 끝을 줄이고 ▾는 늘 보이게 (오른쪽 여백 20 안에서) */}
+      <View pointerEvents="box-none" style={{ position: 'absolute', top: insets.top + 12, left: 20, right: 20, flexDirection: 'row' }}>
+        <Press onPress={recenter} accessibilityHint="내 위치로 지도를 다시 맞춰요" trackAs="동 이름 (내 위치로)" style={{ flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          <T v="title" numberOfLines={1} style={{ flexShrink: 1 }}>{coords ? centerName || label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
+          <Caret />
+        </Press>
+      </View>
+      {shownTip ? <ScopeTip title={shownTip.title} body={shownTip.body} top={insets.top + 50} /> : null}
 
       {/* 하단 짙은 페이드 + 가까운 드랍 */}
       {/* Figma 'fade': #040916 0.98 → 0.7(55%) → 0 */}
