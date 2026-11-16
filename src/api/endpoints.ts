@@ -68,9 +68,10 @@ export const settingsApi = {
     api.get<unknown>('/settings/drop-radius', { auth: 'none', query: at ? { latitude: at.latitude.toFixed(4), longitude: at.longitude.toFixed(4) } : undefined }),
 };
 
-// ── 행정구역 (지도 위 제목 — 화면 가운데 지점의 시·도/시·군·구/동 이름). 응답 검사는 utils/mapPlace
+// ── 행정구역 (지도 위 제목 — 화면 가운데 지점의 시·도/시·군·구/동 이름, place면 그 자리의 아는 장소도). 응답 검사는 utils/mapPlace
 export const regionApi = {
-  at: (latitude: number, longitude: number) => api.get<unknown>('/regions/at', { query: { latitude: latitude.toFixed(4), longitude: longitude.toFixed(4) } }),
+  at: (latitude: number, longitude: number, place = false) =>
+    api.get<unknown>('/regions/at', { query: { latitude: latitude.toFixed(4), longitude: longitude.toFixed(4), place: place ? 'true' : undefined } }),
 };
 
 // ── 좋아요

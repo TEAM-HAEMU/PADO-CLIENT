@@ -23,7 +23,7 @@ import { useDropLock } from '@/hooks/useDropLock';
 import { markScopeTipSeen, useDropRadius, useScopeTip } from '@/hooks/useDropRadius';
 import { ScopeTip } from '@/components/map/ScopeTip';
 import type { ScopeTipText } from '@/utils/scopeTip';
-import { placeKey, placeLevel, placeName, sanitizeRegionsAt } from '@/utils/mapPlace';
+import { placeKey, placeLevel, placeName, sanitizeRegionsAt, wantsPlace } from '@/utils/mapPlace';
 import { scopeLabel } from '@/utils/dropScope';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
@@ -161,7 +161,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const [view, setView] = useState<Region | null>(null);
   const onRegionChangeComplete = useCallback((r: Region) => setView(r), []);
 
-  // 지도 위 제목 — 화면 가운데 지점의 지역 이름을 확대 수준에 맞게(넓게 보면 시·도, 중간이면 시·군·구, 가까우면 동).
+  // 지도 위 제목 — 화면 가운데 지점의 지역 이름을 확대 수준에 맞게(넓게 보면 시·도, 중간이면 시·군·구, 가까우면 동,
+  // 동보다 더 당기면 그 자리의 아는 장소 — 없으면 동). 장소는 그 단계에서만 묻는다(place=true).
   // 지도를 움직이다 멈추고 0.4초 뒤에 묻는다. 가까운 지점은 같은 요청으로 묶고 한 번 받은 이름은 다시 쓴다.
   // 못 받으면(예전 서버·오프라인) 지금처럼 내 위치의 동 이름
   const [placeAt, setPlaceAt] = useState<{ latitude: number; longitude: number; level: ReturnType<typeof placeLevel> } | null>(null);
@@ -173,7 +174,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const place = useQuery({
     queryKey: ['placeAt', placeAt ? placeKey(placeAt.latitude, placeAt.longitude, placeAt.level) : 'none'],
     enabled: !!placeAt,
-    queryFn: async () => sanitizeRegionsAt(await regionApi.at(placeAt!.latitude, placeAt!.longitude)),
+    queryFn: async () => sanitizeRegionsAt(await regionApi.at(placeAt!.latitude, placeAt!.longitude, wantsPlace(placeAt!.level))),
     staleTime: Infinity,
     gcTime: 30 * 60_000,
     retry: 0,
@@ -346,10 +347,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
 
       {/* 상단 페이드 + 동 이름 */}
       <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.96)', 'rgba(255,255,255,0.85)', 'rgba(255,255,255,0)']} locations={[0, insets.top / (insets.top + 96), 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 96 }} />
-      <Press onPress={recenter} accessibilityHint="내 위치로 지도를 다시 맞춰요" trackAs="동 이름 (내 위치로)" style={{ position: 'absolute', top: insets.top + 12, left: 20, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-        <T v="title">{coords ? centerName || label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
-        <Caret />
-      </Press>
+      {/* 제목은 한 줄 — 긴 장소 이름은 끝을 줄이고 ▾는 늘 보이게 (오른쪽 여백 20 안에서) */}
+      <View pointerEvents="box-none" style={{ position: 'absolute', top: insets.top + 12, left: 20, right: 20, flexDirection: 'row' }}>
+        <Press onPress={recenter} accessibilityHint="내 위치로 지도를 다시 맞춰요" trackAs="동 이름 (내 위치로)" style={{ flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          <T v="title" numberOfLines={1} style={{ flexShrink: 1 }}>{coords ? centerName || label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
+          <Caret />
+        </Press>
+      </View>
       {shownTip ? <ScopeTip title={shownTip.title} body={shownTip.body} top={insets.top + 50} /> : null}
 
       {/* 하단 짙은 페이드 + 가까운 드랍 */}
