@@ -22,6 +22,7 @@ import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useDropLock } from '@/hooks/useDropLock';
 import { markScopeTipSeen, useDropRadius, useScopeTip } from '@/hooks/useDropRadius';
 import { ScopeTip } from '@/components/map/ScopeTip';
+import type { ScopeTipText } from '@/utils/scopeTip';
 import { scopeLabel } from '@/utils/dropScope';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
@@ -257,7 +258,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   // 보기·재생 범위가 바뀌었으면 지역 이름 아래에 한 번 알려 준다 — 지도가 뜨고 잠시 뒤, 이 화면이 맨 앞일 때만(시트가 열려 있으면 미룸).
   // 띄우는 순간 본 것으로 기록하고, 화면 어디든 처음 누르거나 다른 화면으로 가면 닫는다
   const scopeTip = useScopeTip(s => s.tip);
-  const [shownTip, setShownTip] = useState<string | null>(null);
+  const [shownTip, setShownTip] = useState<ScopeTipText | null>(null);
   useEffect(() => {
     if (!scopeTip || !focused || !mapReady || !coords || shownTip) return;
     const t = setTimeout(() => {
@@ -328,7 +329,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         <T v="title">{coords ? label || '현재 위치' : fix === 'locating' ? '위치 찾는 중…' : '위치를 알 수 없어요'}</T>
         <Caret />
       </Press>
-      {shownTip ? <ScopeTip text={shownTip} top={insets.top + 48} /> : null}
+      {shownTip ? <ScopeTip title={shownTip.title} body={shownTip.body} top={insets.top + 50} /> : null}
 
       {/* 하단 짙은 페이드 + 가까운 드랍 */}
       {/* Figma 'fade': #040916 0.98 → 0.7(55%) → 0 */}

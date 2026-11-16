@@ -11,7 +11,7 @@ import type { DropRadius } from '@/api/types';
 import { useLocation } from '@/services/location';
 import { kv } from '@/store/storage';
 import { DEFAULT_RADIUS, needsCoords, nextAnchor, sanitizeRadius } from '@/utils/dropScope';
-import { readSig, scopeSig, scopeTip, type ScopeSig } from '@/utils/scopeTip';
+import { readSig, scopeSig, scopeTip, type ScopeSig, type ScopeTipText } from '@/utils/scopeTip';
 import type { Coords } from '@/utils/geo';
 
 export { DEFAULT_RADIUS, sanitizeRadius } from '@/utils/dropScope';
@@ -29,7 +29,7 @@ export const cachedRadius = () => (saved ??= { value: sanitizeRadius(kv.get<unkn
 const SEEN_KEY = 'settings:scopeSeen';
 
 /** 설정이 바뀌어 지도에 한 번 띄울 안내 — 지도 화면이 띄운 뒤 markScopeTipSeen으로 지운다 */
-export const useScopeTip = create<{ tip: { text: string; sig: ScopeSig } | null }>(() => ({ tip: null }));
+export const useScopeTip = create<{ tip: { text: ScopeTipText; sig: ScopeSig } | null }>(() => ({ tip: null }));
 
 export function markScopeTipSeen(sig: ScopeSig) {
   kv.set(SEEN_KEY, sig);
