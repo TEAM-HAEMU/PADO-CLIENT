@@ -70,7 +70,7 @@ let mapLoadTracked = false;
 export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabParamList, 'Map'>) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const { coords, fix, reason, label, setPlace, start, restart, refreshPermission, requestPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission })));
+  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, requestPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission })));
   // 위치를 받기 전엔 지난번 위치 근처에 카메라를 둔다 (처음 켤 때 엉뚱한 동네가 먼저 보이지 않게)
   const startHint = useRef(lastKnown()).current; // 한 번만 읽는다 (매번 새 객체면 아래 정렬·자동 재생이 계속 다시 돈다)
   const here = coords ?? startHint ?? FALLBACK;
@@ -96,15 +96,16 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     return () => sub.remove();
   }, [refreshPermission]);
 
-  // 신호가 약하거나 위치 서비스가 꺼져서 못 잡았으면 20초마다 조용히 다시 시도 (권한 거부는 사용자가 켜야 하므로 제외)
+  // 신호가 약하거나 위치 서비스가 꺼져서 못 잡았으면 20초마다 조용히 다시 본다 (권한 거부는 사용자가 켜야 하므로 제외).
+  // 신호 약함이면 감시는 끊지 않고 위치 서비스 상태만 — 감시를 다시 켜면 GPS가 처음부터 다시 잡아야 한다. 위치 서비스를 다시 켰으면 그때 감시를 새로
   useEffect(() => {
     if (fix !== 'unavailable' || reason === 'denied') return;
-    const t = setTimeout(() => { if (AppState.currentState === 'active') setWatchKey(k => k + 1); }, 20_000);
-    return () => clearTimeout(t);
-  }, [fix, reason, watchKey]);
+    const t = setInterval(() => { if (AppState.currentState === 'active') recheck(); }, 20_000);
+    return () => clearInterval(t);
+  }, [fix, reason, recheck]);
 
   const retryLocation = async () => {
-    if (reason === 'timeout') return setWatchKey(k => k + 1);
+    if (reason === 'timeout') return recheck(true);
     if (reason === 'off') {
       // Android는 위치 설정 화면으로 바로, iOS는 앱 설정(위치 서비스는 설정 > 개인정보 보호에서 켬)
       if (Platform.OS === 'android') return Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS').catch(() => Linking.openSettings());

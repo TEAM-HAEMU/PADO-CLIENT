@@ -1,4 +1,4 @@
-/* 위치 감시 — 앱 전체에 감시 하나, 감시 중엔 단발 요청 금지, 첫 위치 시간 초과 뒤에도 감시로 회복, 권한·GPS를 끄면 좌표를 버림, 백그라운드면 멈춤 */
+/* 위치 감시 — 앱 전체에 감시 하나, iOS는 감시 중 단발 요청 금지(Android는 감시를 바로), 신호 약함엔 감시를 끊지 않음, 첫 위치 시간 초과 뒤에도 감시로 회복, 권한·GPS를 끄면 좌표를 버림, 백그라운드면 멈춤 */
 type Cb = (p: { coords: { latitude: number; longitude: number; accuracy?: number }; timestamp?: number }) => void;
 type ErrCb = (e: { code?: number; message?: string }) => void;
 jest.mock('@react-native-community/geolocation', () => ({
@@ -12,10 +12,11 @@ jest.mock('react-native-permissions', () => ({
   request: jest.fn(async () => 'granted'),
   requestMultiple: jest.fn(async () => ({})),
 }));
+jest.mock('react-native-device-info', () => ({ isLocationEnabled: jest.fn(async () => true) }));
 jest.mock('@/services/analytics', () => ({ track: jest.fn(), setAnalyticsLocation: jest.fn(), clearAnalyticsLocation: jest.fn(), setAnalyticsRegion: jest.fn() }));
 
-import { AppState, type AppStateStatus } from 'react-native';
-import { currentCoords, DROP_MAX_ACCURACY_M, FIX_TIMEOUT_MS, STALE_MS, tooImpreciseToDrop, useLocation } from '@/services/location';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
+import { currentCoords, DROP_MAX_ACCURACY_M, FIX_TIMEOUT_MS, isRecentFix, RECENT_FIX_MS, recheckAction, STALE_MS, tooImpreciseToDrop, useLocation } from '@/services/location';
 
 const mockGeo = jest.requireMock('@react-native-community/geolocation').default as {
   getCurrentPosition: jest.Mock<void, [Cb, ErrCb, object]>;
@@ -25,6 +26,7 @@ const mockGeo = jest.requireMock('@react-native-community/geolocation').default 
 
 const mockAnalytics = jest.requireMock('@/services/analytics') as { track: jest.Mock; clearAnalyticsLocation: jest.Mock; setAnalyticsRegion: jest.Mock };
 const mockPerm = jest.requireMock('react-native-permissions') as { check: jest.Mock };
+const mockDevice = jest.requireMock('react-native-device-info') as { isLocationEnabled: jest.Mock };
 /** location.ts가 처음 start() 때 단 AppState 리스너 */
 const appState = (s: AppStateStatus) => {
   const call = (AppState.addEventListener as jest.Mock).mock.calls.find(c => c[0] === 'change');
@@ -46,6 +48,7 @@ beforeEach(() => {
   mockAnalytics.track.mockClear();
   mockAnalytics.clearAnalyticsLocation.mockClear();
   mockAnalytics.setAnalyticsRegion.mockClear();
+  mockDevice.isLocationEnabled.mockReset().mockResolvedValue(true);
   useLocation.setState({ coords: null, accuracy: null, fixedAt: null, stale: false, fix: 'locating', reason: null });
 });
 afterEach(() => { releases.splice(0).forEach(r => r()); jest.useRealTimers(); });
@@ -69,7 +72,7 @@ test('빠른 첫 위치 → 정밀 감시 하나. 감시가 켜진 뒤엔 단발
   expect(mockGeo.watchPosition).toHaveBeenCalledTimes(1);
 });
 
-test('빠른 첫 위치가 답이 없어도(Android Play 위치) 감시는 시작한다', () => {
+test('iOS: 빠른 첫 위치가 답이 없어도 예비 타이머로 감시는 시작한다', () => {
   hold();
   jest.advanceTimersByTime(5000);
   expect(mockGeo.watchPosition).toHaveBeenCalledTimes(1);
@@ -316,4 +319,144 @@ test('드랍 생성은 위치 오차 100m까지 (모르면 허용)', () => {
   expect(tooImpreciseToDrop({ accuracy: 101 })).toBe(true);
   expect(tooImpreciseToDrop({ accuracy: 3000 })).toBe(true);
   expect(tooImpreciseToDrop({ accuracy: null })).toBe(false);
+});
+
+test('다시 보기(recheck) — 신호 약함이면 감시를 끊지 않고, 위치 서비스가 꺼졌거나 다시 켜졌을 때만 바꾼다', () => {
+  expect(recheckAction('timeout', true, true)).toBe('wait');
+  expect(recheckAction('timeout', null, true)).toBe('wait');
+  expect(recheckAction('timeout', true, false)).toBe('restart'); // 감시가 안 돌고 있으면 켠다
+  expect(recheckAction('timeout', false, true)).toBe('off');
+  expect(recheckAction('off', false, true)).toBe('wait');
+  expect(recheckAction('off', true, true)).toBe('restart');
+  expect(recheckAction('off', null, true)).toBe('restart'); // 확인 실패면 예전처럼 다시 시도
+  expect(recheckAction('denied', true, false)).toBe('restart');
+});
+
+test('2분 넘은 위치는 지금 위치로 믿지 않는다 (시각을 모르면 믿음)', () => {
+  const now = 1_000_000_000;
+  expect(isRecentFix(now - RECENT_FIX_MS, now)).toBe(true);
+  expect(isRecentFix(now - RECENT_FIX_MS - 1, now)).toBe(false);
+  expect(isRecentFix(undefined, now)).toBe(true);
+  expect(isRecentFix(0, now)).toBe(true);
+});
+
+test('신호 약함으로 unavailable이 돼도 다시 보기(recheck)는 감시를 끊지 않는다', async () => {
+  hold();
+  jest.advanceTimersByTime(5000);
+  expect(mockGeo.watchPosition).toHaveBeenCalledTimes(1);
+  jest.advanceTimersByTime(FIX_TIMEOUT_MS);
+  await flush();
+  expect(st()).toMatchObject({ fix: 'unavailable', reason: 'timeout' });
+  await st().recheck();
+  expect(mockGeo.clearWatch).not.toHaveBeenCalled();
+  expect(mockGeo.getCurrentPosition).toHaveBeenCalledTimes(1);
+  expect(st()).toMatchObject({ fix: 'unavailable', reason: 'timeout' });
+  // 사용자가 '다시 시도'를 누르면 감시는 그대로 두고 다시 '찾는 중' → 또 못 받으면 timeout (분석은 한 번만)
+  await st().recheck(true);
+  expect(st()).toMatchObject({ fix: 'locating', reason: null });
+  expect(mockGeo.clearWatch).not.toHaveBeenCalled();
+  jest.advanceTimersByTime(FIX_TIMEOUT_MS);
+  await flush();
+  expect(st()).toMatchObject({ fix: 'unavailable', reason: 'timeout' });
+  expect(mockAnalytics.track.mock.calls.filter(c => c[0] === 'location_unavailable')).toHaveLength(1);
+  // 계속 돌던 감시가 위치를 주면 ok
+  mockGeo.watchPosition.mock.calls[0][0](pos(35, 129));
+  expect(st()).toMatchObject({ fix: 'ok', coords: { latitude: 35, longitude: 129 } });
+});
+
+test('신호 약함 중 위치 서비스를 끄면 off(좌표 버림), 다시 켜면 감시를 새로 시작', async () => {
+  hold();
+  jest.advanceTimersByTime(5000 + FIX_TIMEOUT_MS);
+  await flush();
+  mockDevice.isLocationEnabled.mockResolvedValue(false);
+  await st().recheck();
+  expect(st()).toMatchObject({ coords: null, fix: 'unavailable', reason: 'off' });
+  expect(mockGeo.clearWatch).not.toHaveBeenCalled();
+  await st().recheck(); // 아직 꺼져 있으면 그대로
+  expect(mockGeo.getCurrentPosition).toHaveBeenCalledTimes(1);
+  mockDevice.isLocationEnabled.mockResolvedValue(true);
+  await st().recheck();
+  expect(mockGeo.clearWatch).toHaveBeenCalledTimes(1);
+  expect(mockGeo.getCurrentPosition).toHaveBeenCalledTimes(2);
+  expect(st().fix).toBe('locating');
+});
+
+test('위치를 받았거나 붙잡은 곳이 없으면 recheck는 아무것도 안 한다', async () => {
+  await st().recheck();
+  expect(mockDevice.isLocationEnabled).not.toHaveBeenCalled();
+  hold();
+  mockGeo.getCurrentPosition.mock.calls[0][0](pos(35, 129));
+  await st().recheck(true);
+  expect(mockDevice.isLocationEnabled).not.toHaveBeenCalled();
+  expect(st().fix).toBe('ok');
+});
+
+test('첫 위치까지 걸린 시간을 location_first_fix로 센다 — 믿을 만한 좌표를 들고 다시 시작하면 안 셈', () => {
+  hold();
+  jest.advanceTimersByTime(7000);
+  mockGeo.watchPosition.mock.calls[0][0]({ coords: { latitude: 35, longitude: 129, accuracy: 12.4 }, timestamp: Date.now() - 500 });
+  const first = mockAnalytics.track.mock.calls.filter(c => c[0] === 'location_first_fix');
+  expect(first).toEqual([['location_first_fix', { wait_ms: 7000, accuracy_m: 12, age_ms: 500, source: 'watch', trigger: 'start' }]]);
+  mockGeo.watchPosition.mock.calls[0][0](pos(35.001, 129));
+  appState('background');
+  appState('active');
+  mockGeo.getCurrentPosition.mock.calls[1][0](pos(35.002, 129));
+  expect(mockAnalytics.track.mock.calls.filter(c => c[0] === 'location_first_fix')).toHaveLength(1);
+});
+
+describe('Android', () => {
+  beforeEach(() => { jest.replaceProperty(Platform, 'OS', 'android'); });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  test('감시를 바로 켜고(2분 안 캐시만) 기기의 마지막 위치를 함께 요청한다 — 예비 타이머를 기다리지 않음', () => {
+    hold();
+    expect(mockGeo.watchPosition).toHaveBeenCalledTimes(1);
+    expect(mockGeo.watchPosition.mock.calls[0][2]).toMatchObject({ enableHighAccuracy: true, distanceFilter: 5, maximumAge: RECENT_FIX_MS });
+    expect(mockGeo.getCurrentPosition).toHaveBeenCalledTimes(1);
+    expect(mockGeo.getCurrentPosition.mock.calls[0][2]).not.toHaveProperty('timeout');
+    // 단발 요청이 답을 안 줘도 감시는 하나 그대로
+    jest.advanceTimersByTime(10_000);
+    expect(mockGeo.watchPosition).toHaveBeenCalledTimes(1);
+    mockGeo.watchPosition.mock.calls[0][0](pos(35, 129));
+    expect(st()).toMatchObject({ fix: 'ok', stale: false });
+    expect(mockAnalytics.track.mock.calls.find(c => c[0] === 'location_first_fix')?.[1]).toMatchObject({ wait_ms: 10_000, source: 'watch' });
+  });
+
+  test('기기의 마지막 위치가 2분 안이면 지금 위치로', () => {
+    hold();
+    mockGeo.getCurrentPosition.mock.calls[0][0]({ coords: { latitude: 35, longitude: 129, accuracy: 30 }, timestamp: Date.now() - 60_000 });
+    expect(st()).toMatchObject({ fix: 'ok', stale: false, coords: { latitude: 35, longitude: 129 } });
+    expect(currentCoords(st())).toEqual({ latitude: 35, longitude: 129 });
+    expect(mockAnalytics.track.mock.calls.find(c => c[0] === 'location_first_fix')?.[1]).toMatchObject({ source: 'quick', age_ms: 60_000 });
+  });
+
+  test('오래된 마지막 위치는 지도 카메라·동네 이름에만 (stale) — 드랍·잠금엔 안 쓰고, 새 위치가 오면 바로 믿는다', async () => {
+    hold();
+    mockGeo.getCurrentPosition.mock.calls[0][0]({ coords: { latitude: 35, longitude: 129, accuracy: 900 }, timestamp: Date.now() - 3_600_000 });
+    expect(st()).toMatchObject({ coords: { latitude: 35, longitude: 129 }, stale: true, fix: 'locating' });
+    expect(currentCoords(st())).toBeNull();
+    expect(mockAnalytics.track.mock.calls.filter(c => c[0] === 'location_first_fix')).toHaveLength(0);
+    // 시간 초과여도 좌표는 카메라용으로 남는다
+    jest.advanceTimersByTime(FIX_TIMEOUT_MS);
+    await flush();
+    expect(st()).toMatchObject({ coords: { latitude: 35, longitude: 129 }, stale: true, fix: 'unavailable', reason: 'timeout' });
+    mockGeo.watchPosition.mock.calls[0][0](pos(35.01, 129));
+    expect(st()).toMatchObject({ coords: { latitude: 35.01, longitude: 129 }, stale: false, fix: 'ok' });
+    expect(mockAnalytics.track.mock.calls.filter(c => c[0] === 'location_first_fix')).toHaveLength(1);
+  });
+
+  test('감시가 먼저 위치를 줬으면 늦게 온 마지막 위치는 버린다', () => {
+    hold();
+    mockGeo.watchPosition.mock.calls[0][0](pos(35.2, 129.2));
+    mockGeo.getCurrentPosition.mock.calls[0][0]({ coords: { latitude: 35, longitude: 129 }, timestamp: Date.now() - 3_600_000 });
+    expect(st()).toMatchObject({ coords: { latitude: 35.2, longitude: 129.2 }, stale: false });
+  });
+
+  test('restart(권한을 켠 뒤 등)는 감시를 지우고 새 감시를 바로', () => {
+    hold();
+    st().restart();
+    expect(mockGeo.clearWatch).toHaveBeenCalledWith(mockGeo.watchPosition.mock.results[0].value);
+    expect(mockGeo.watchPosition).toHaveBeenCalledTimes(2);
+    expect(mockGeo.clearWatch.mock.invocationCallOrder[0]).toBeLessThan(mockGeo.watchPosition.mock.invocationCallOrder[1]);
+  });
 });
