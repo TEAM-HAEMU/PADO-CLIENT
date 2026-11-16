@@ -88,6 +88,7 @@
 |---|---|---|---|
 | `location_permission_result` | 위치 권한 요청 결과 | `result`(`granted`·`denied`), `was`(요청 전 상태) | |
 | `location_unavailable` | 첫 위치를 못 받음 | `reason`(`denied`·`off`·`timeout`) | |
+| `location_first_fix` | 믿을 만한 좌표 없이 위치 감시를 시작해 처음 '지금 위치'(2분 안)를 받음. 회차마다 한 번 (좌표를 들고 잠깐 백그라운드에 다녀온 회차는 안 셈) | `wait_ms`(감시 시작부터 받기까지, '신호 약함'을 띄운 뒤 받은 것도 포함), `accuracy_m`(오차, 모르면 null), `age_ms`(받은 위치의 나이), `source`(`quick` 기기가 잡아 둔 위치·`watch` 감시), `trigger`(`start` 처음·`foreground` 앱으로 돌아옴·`retry` 권한·위치 서비스를 켠 뒤 다시) | |
 | `map_loaded` | 앱 실행마다 지도에 주변 드랍이 처음 뜸 | `nearby_count`, `playable_count`, `locked_count`, `nearest_m`, `nearest_playable_m`, `display_m`, `play_m`, `visibility_mode`, `region_unit`, `play_mode` | |
 | `scope_tip_shown` | 보기·재생 범위가 바뀌어 지도 지역 이름 아래 안내를 띄움 (설정이 바뀔 때마다 한 번) | `visibility_mode`, `region_unit`, `play_mode`, `play_region_unit` | |
 | `drop_locked_tap` | 재생 반경 밖 드랍을 누름 | `drop_id`, `type`, `source`, `distance_m`, `remaining_m` | 예 |

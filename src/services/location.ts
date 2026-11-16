@@ -1,5 +1,6 @@
 import Geolocation from '@react-native-community/geolocation';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
+import { isLocationEnabled } from 'react-native-device-info';
 import { check, PERMISSIONS, request, requestMultiple, RESULTS } from 'react-native-permissions';
 import { create } from 'zustand';
 import { clearAnalyticsLocation, setAnalyticsLocation, setAnalyticsRegion, track } from '@/services/analytics';
@@ -29,10 +30,16 @@ Geolocation.setRNConfiguration({ skipPermissionRequests: true, authorizationLeve
 
 /** 첫 위치를 이 시간 안에 못 받으면 '신호 약함'으로 알린다 (감시는 계속 — 나중에 받으면 바로 ok로) */
 export const FIX_TIMEOUT_MS = 15_000;
-/** 빠른 첫 위치(캐시) 대기 — Android Play 위치 단발 요청엔 타임아웃이 없어 JS에서 끊는다 */
+/** iOS 빠른 첫 위치(캐시) 대기 — 이 안에 안 오면 감시를 켠다 */
 const QUICK_MS = 3000;
+/** 기기가 잡아 둔 위치를 '지금 위치'로 믿는 최대 나이 — 더 오래된 건 지도 카메라·동네 이름에만 (stale) */
+export const RECENT_FIX_MS = 120_000;
+/** Android에서 지도 카메라·동네 이름용으로 받아 볼 기기의 마지막 위치 최대 나이 (하루) */
+const HINT_MAX_AGE_MS = 86_400_000;
 // 걸으면서 바로 따라오게 — 5m 움직이면, 최대 4초(빠르면 2초) 간격으로 (기본값은 10초·100m라 이동이 늦게 반영됐다)
 const WATCH_OPTS = { enableHighAccuracy: true, distanceFilter: 5, interval: 4000, fastestInterval: 2000 };
+// Android: 감시가 켜질 때 기기가 들고 있던 위치는 2분 안 것만 (기본값은 나이 제한이 없어 몇 시간 전 위치가 '지금 위치'로 들어올 수 있었다)
+const ANDROID_WATCH_OPTS = { ...WATCH_OPTS, maximumAge: RECENT_FIX_MS };
 /**
  * 감시가 이보다 오래 멈춰 있었으면(백그라운드 등) 들고 있던 좌표를 '지금 위치'로 믿지 않는다 — 새 위치를 받을 때까지 드랍 생성·잠금 판정에 안 씀.
  * 감시가 도는 동안엔 가만히 있어도(distanceFilter라 새 값이 안 옴) 낡은 게 아니다. 10분 — 잠깐 다른 앱에 다녀온 정도로는 잠그지 않게 느슨하게.
@@ -59,6 +66,23 @@ async function reasonOf(e: PosError | undefined): Promise<FixReason> {
 /** 기다려 봐야 소용없는 오류 — 권한 거부·위치 서비스 꺼짐 */
 const definitive = (e: PosError | undefined) => e?.code === 1 || (e?.code === 2 && Platform.OS === 'android' && /settings|provider available/i.test(e.message ?? ''));
 
+/** 위치를 못 받은 상태에서 다시 볼 때 할 일 — wait: 감시를 그대로 두고 기다림 / restart: 감시를 처음부터 / off: 위치 서비스가 꺼졌다고 알림 */
+export type RecheckAction = 'wait' | 'restart' | 'off';
+/**
+ * 신호 약함(timeout)이면 감시를 끊지 않는다 — 끊었다 다시 켜면 GPS가 위성을 처음부터 다시 잡아야 해 약한 신호에선 끝내 못 잡았다.
+ * 감시를 다시 켜는 건 위치 서비스 꺼짐(off)에서 다시 켜졌을 때·감시가 돌고 있지 않을 때만.
+ * servicesOn: 기기 위치 서비스가 켜져 있는가 (확인 실패면 null — 예전처럼 off는 다시 시도, timeout은 기다림)
+ */
+export function recheckAction(reason: FixReason | null, servicesOn: boolean | null, watching: boolean): RecheckAction {
+  if (servicesOn === false) return reason === 'off' ? 'wait' : 'off';
+  if (reason === 'timeout' && watching) return 'wait';
+  return 'restart';
+}
+/** 받은 위치가 '지금 위치'로 믿을 만큼 최근인가 (시각을 모르면 믿는다) */
+export const isRecentFix = (timestamp: number | undefined, now: number) => !(typeof timestamp === 'number' && timestamp > 0 && now - timestamp > RECENT_FIX_MS);
+/** 감시를 다시 시작한 계기 — location_first_fix 분석용 */
+export type BeginTrigger = 'start' | 'foreground' | 'retry';
+
 interface LocationState {
   /** 실제로 받은 위치만 (못 받으면 null, 권한·위치 서비스를 끄면 비움). 드랍 생성·잠금 판정엔 currentCoords()로 — stale이면 안 씀 */
   coords: Coords | null;
@@ -82,6 +106,11 @@ interface LocationState {
   start: () => () => void;
   /** 권한·GPS를 켠 뒤 등 — 감시를 처음부터 다시 (붙잡은 곳이 없거나 백그라운드면 아무것도 안 함) */
   restart: () => void;
+  /**
+   * 위치를 못 받은 상태(unavailable)에서 다시 보기 — 위치 서비스 상태만 확인하고, 신호 약함이면 감시는 그대로 둔다 (recheckAction).
+   * manual: 사용자가 '다시 시도'를 누름 — 신호 약함이면 감시는 그대로 두고 '찾는 중'으로 돌려 시간 초과를 새로 잰다
+   */
+  recheck: (manual?: boolean) => Promise<void>;
 }
 
 /** 드랍 생성·잠금 판정에 써도 되는 위치 — 낡은 좌표(stale)면 null */
@@ -113,6 +142,10 @@ let loggedReason: FixReason | null = null;
 let confirmedAt = 0;
 /** 앱이 백그라운드라 감시를 멈춰 둠 (앞으로 오면 다시 켬) */
 let paused = false;
+/** 믿을 만한 좌표 없이 시작한 회차 — 첫 위치까지 걸린 시간을 location_first_fix로 센다 (받으면 비움) */
+let firstFixWait: { since: number; trigger: BeginTrigger } | null = null;
+/** 이번 회차의 마지막 위치 오류 — 시간 초과 때 이유를 가린다 */
+let lastErr: PosError | undefined;
 let appSub: { remove: () => void } | null = null;
 
 export const useLocation = create<LocationState>((set, get) => {
@@ -129,16 +162,36 @@ export const useLocation = create<LocationState>((set, get) => {
   };
   /** 지금 위치로 믿을 수 있는 좌표가 있는가 — 이번 회차에 받았거나, 확인된 지 STALE_MS 안 */
   const fresh = () => !!get().coords && !get().stale && (sessionFixed || Date.now() - confirmedAt < STALE_MS);
-  const got = (pos: Position) => {
+  const got = (pos: Position, source: 'quick' | 'watch') => {
     const now = Date.now();
     const at = typeof pos.timestamp === 'number' && pos.timestamp > 0 ? Math.min(pos.timestamp, now) : now;
     const acc = pos.coords.accuracy;
+    const accuracy = typeof acc === 'number' && acc > 0 ? acc : null;
     const c = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
     sessionFixed = true;
     loggedReason = null;
     confirmedAt = at;
     setAnalyticsLocation(c.latitude, c.longitude);
-    set({ coords: c, accuracy: typeof acc === 'number' && acc > 0 ? acc : null, fixedAt: at, stale: false, fix: 'ok', reason: null });
+    set({ coords: c, accuracy, fixedAt: at, stale: false, fix: 'ok', reason: null });
+    kv.set(LAST_KEY, c);
+    if (firstFixWait) {
+      // 믿을 만한 좌표 없이 시작해 처음 '지금 위치'를 받기까지 — 감시를 다시 켜지 않고 기다린 시간 전부 (신호 약함을 띄운 뒤 받은 것도 포함)
+      track('location_first_fix', { wait_ms: now - firstFixWait.since, accuracy_m: accuracy == null ? null : Math.round(accuracy), age_ms: now - at, source, trigger: firstFixWait.trigger });
+      firstFixWait = null;
+    }
+  };
+  /**
+   * '지금 위치'로 믿기엔 오래된 위치(RECENT_FIX_MS 넘음) — 지도 카메라·동네 이름에만 쓰게 stale로 둔다 (드랍 생성·잠금 판정엔 안 씀).
+   * 이미 믿을 만한 좌표나 더 최근 좌표가 있으면 덮지 않는다
+   */
+  const hint = (pos: Position) => {
+    if (sessionFixed || fresh()) return;
+    const at = typeof pos.timestamp === 'number' && pos.timestamp > 0 ? Math.min(pos.timestamp, Date.now()) : 0;
+    const prev = get();
+    if (prev.coords && (prev.fixedAt ?? 0) >= at) return;
+    const acc = pos.coords.accuracy;
+    const c = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    set({ coords: c, accuracy: typeof acc === 'number' && acc > 0 ? acc : null, fixedAt: at || null, stale: true });
     kv.set(LAST_KEY, c);
   };
   /**
@@ -153,6 +206,9 @@ export const useLocation = create<LocationState>((set, get) => {
     // 기다리는 사이 새 회차가 시작됐거나 새 위치가 왔으면 버린다
     if (s !== session || get().fixedAt !== at) return;
     if (!hard && fresh()) return;
+    fail(reason, hard);
+  };
+  const fail = (reason: FixReason, hard: boolean) => {
     const was = get();
     if (hard) {
       set({ coords: null, accuracy: null, fixedAt: null, stale: false, fix: 'unavailable', reason });
@@ -168,34 +224,49 @@ export const useLocation = create<LocationState>((set, get) => {
       track('location_unavailable', { reason });
     }
   };
+  /** 첫 위치를 waitMs 안에 못 받으면 '신호 약함' (감시는 계속) */
+  const armTimeout = (s: number, waitMs: number) => {
+    timers.push(setTimeout(() => { if (s === session && !fresh()) giveUp(s, lastErr); }, waitMs));
+  };
   /**
-   * 1) 기기가 최근(2분 안)에 잡아 둔 위치를 바로 한 번 (보통 즉시 옴) → 2) 정밀 감시 하나.
-   * 감시 중엔 단발 요청(getCurrentPosition)을 절대 부르지 않는다 — iOS 라이브러리가 단발 요청 때 감시를 멈췄다가
-   * 다시 켜지 못해(빈 startObserving) 첫 위치 뒤로 이동이 전혀 안 들어왔다.
+   * 정밀 감시 하나 + 기기가 잡아 둔 위치 한 번.
+   * iOS: 1) 최근(2분 안) 위치를 단발 요청으로 바로 받고 → 2) 감시. 감시 중엔 단발 요청(getCurrentPosition)을 절대 부르지 않는다 —
+   *   iOS 라이브러리가 단발 요청 때 감시를 멈췄다가 다시 켜지 못해(빈 startObserving) 첫 위치 뒤로 이동이 전혀 안 들어왔다.
+   * Android: 감시를 바로 켜고 단발 요청을 함께 — Play 위치 단발 요청은 timeout을 무시하고 기기에 최근 위치가 없으면
+   *   저전력(PRIORITY_LOW_POWER) 요청으로 넘어가 답이 없어, 감시가 예비 타이머(4초) 뒤에야 켜졌다.
+   *   단발 요청은 기기의 마지막 위치(하루 안)를 받는 용도 — 2분 안이면 지금 위치로, 더 오래됐으면 지도 카메라·동네 이름에만(hint).
+   *   Android 라이브러리는 단발·감시 콜백이 따로라 함께 써도 감시가 멈추지 않는다.
    */
-  const begin = () => {
+  const begin = (trigger: BeginTrigger) => {
     halt();
     const s = session;
-    let lastErr: PosError | undefined;
+    lastErr = undefined;
     const { coords } = get();
+    const trusted = fresh();
+    firstFixWait = trusted ? null : { since: Date.now(), trigger };
     if (!coords) set({ fix: 'locating', reason: null });
-    else if (!fresh()) set({ stale: true, fix: 'locating', reason: null });
+    else if (!trusted) set({ stale: true, fix: 'locating', reason: null });
+    const android = Platform.OS === 'android';
     const watch = () => {
       if (s !== session || watchId !== null) return;
       watchId = Geolocation.watchPosition(p => {
         if (s !== session) return;
         watchFixed = true; // 감시가 위치를 줬으면 늦게 온 빠른 첫 위치(최대 2분 전 캐시)는 버린다 — 최신 위치를 덮지 않게
-        got(p);
+        got(p, 'watch');
       }, e => {
         if (s !== session) return;
         lastErr = e;
         if (definitive(e)) giveUp(s, e);
-      }, WATCH_OPTS);
+      }, android ? ANDROID_WATCH_OPTS : WATCH_OPTS);
     };
+    if (android) watch();
     Geolocation.getCurrentPosition(
       p => {
         if (s !== session) return;
-        if (!watchFixed) got(p);
+        if (!watchFixed) {
+          if (!android || isRecentFix(p.timestamp, Date.now())) got(p, 'quick');
+          else hint(p);
+        }
         watch();
       },
       e => {
@@ -204,12 +275,14 @@ export const useLocation = create<LocationState>((set, get) => {
         if (definitive(e)) giveUp(s, e);
         watch();
       },
-      { enableHighAccuracy: false, timeout: QUICK_MS, maximumAge: 120_000 },
+      android
+        ? { enableHighAccuracy: false, maximumAge: HINT_MAX_AGE_MS }
+        : { enableHighAccuracy: false, timeout: QUICK_MS, maximumAge: RECENT_FIX_MS },
     );
-    timers.push(setTimeout(watch, QUICK_MS + 1000));
+    if (!android) timers.push(setTimeout(watch, QUICK_MS + 1000));
     // 첫 위치를 FIX_TIMEOUT_MS 안에 못 받으면 '신호 약함'. 들고 있는 좌표가 아직 믿을 만하면 그 믿음이 끝날 때(STALE_MS)까지는 기다린다
     const trustLeft = get().coords && !get().stale ? confirmedAt + STALE_MS - Date.now() : 0;
-    timers.push(setTimeout(() => { if (s === session && !fresh()) giveUp(s, lastErr); }, Math.max(FIX_TIMEOUT_MS, trustLeft)));
+    armTimeout(s, Math.max(FIX_TIMEOUT_MS, trustLeft));
   };
   /** 백그라운드로 가면 고정밀 감시를 멈추고(배터리), 돌아오면 다시 — 붙잡은 곳이 있을 때만 */
   const onAppState = (st: AppStateStatus) => {
@@ -221,7 +294,7 @@ export const useLocation = create<LocationState>((set, get) => {
       paused = false;
       // 설정에서 권한을 바꾸고 왔을 수 있다 — 화면 쪽 리스너 순서(begin이 fix를 locating으로 바꿈)와 상관없이 여기서 다시 읽는다
       get().refreshPermission().catch(() => {});
-      if (holders > 0) begin();
+      if (holders > 0) begin('foreground');
     }
   };
 
@@ -269,7 +342,7 @@ export const useLocation = create<LocationState>((set, get) => {
         appSub = AppState.addEventListener('change', onAppState);
       }
       holders++;
-      if (holders === 1 && !paused) begin();
+      if (holders === 1 && !paused) begin('start');
       let released = false;
       return () => {
         if (released) return;
@@ -281,7 +354,22 @@ export const useLocation = create<LocationState>((set, get) => {
         }
       };
     },
-    restart: () => { if (holders > 0 && !paused) begin(); },
+    restart: () => { if (holders > 0 && !paused) begin('retry'); },
+    recheck: async (manual = false) => {
+      if (holders === 0 || paused || get().fix !== 'unavailable') return;
+      const s = session;
+      const on = await isLocationEnabled().catch(() => null);
+      // 확인하는 사이 새 회차가 시작됐거나 위치가 왔으면 그대로
+      if (s !== session || paused || get().fix !== 'unavailable') return;
+      const action = recheckAction(get().reason, on, watchId !== null);
+      if (action === 'restart') return begin('retry');
+      if (action === 'off') return fail('off', true);
+      if (manual && get().reason === 'timeout') {
+        // 감시는 그대로 — 다시 '찾는 중'으로 보이고 시간 초과를 새로 잰다
+        set({ fix: 'locating', reason: null });
+        armTimeout(s, FIX_TIMEOUT_MS);
+      }
+    },
   };
 });
 
