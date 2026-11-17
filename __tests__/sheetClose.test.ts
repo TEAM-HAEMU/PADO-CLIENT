@@ -1,6 +1,7 @@
 /*
  * 바텀시트 닫기 — 닫힘 애니메이션 뒤에 이 시트 라우트만 빼고, 닫는 동안 뷰 구조가 바뀌지 않는지
  * (Sentry REACT-NATIVE-4: 닫기 시작과 화면 제거가 한 프레임에 겹치면 Android에서 addViewAt 크래시)
+ * 워클릿(쓸어내리기·닫힘 애니메이션 끝)이 시트 안에서 만든 함수를 직접 넘기지 않는지 (넘기면 UI 런타임이 붙잡아 시트 트리가 JS 힙에 남는다)
  */
 import './setup/screenEnv';
 
@@ -13,6 +14,9 @@ const mockNav = {
 };
 // 닫힘 애니메이션 완료 콜백 — 테스트가 직접 불러 '애니메이션이 끝났다'를 흉내 낸다
 const mockTimings: ((done: boolean) => void)[] = [];
+// 워클릿이 JS로 부른 것 (scheduleOnRN) · 시트가 만든 쓸어내리기 설정
+const mockScheduled: { fn: unknown; args: unknown[] }[] = [];
+const mockPan: { cfg?: { onDeactivate: (e: { translationY: number; velocityY: number }) => void } } = {};
 
 // @react-navigation/native는 ESM이라 jest가 못 읽는다 — 시트가 쓰는 것만
 jest.mock('@react-navigation/native', () => ({
@@ -33,18 +37,19 @@ jest.mock('react-native-reanimated', () => {
     withTiming: (to: number, _cfg: unknown, cb?: (done: boolean) => void) => { if (cb) mockTimings.push(cb); return to; },
   };
 });
-jest.mock('react-native-worklets', () => ({ scheduleOnRN: (fn: (...a: unknown[]) => void, ...a: unknown[]) => fn(...a) }));
-jest.mock('react-native-gesture-handler', () => ({ GestureDetector: ({ children }: { children: unknown }) => children, usePanGesture: () => ({}) }));
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: (fn: (...a: unknown[]) => void, ...a: unknown[]) => { mockScheduled.push({ fn, args: a }); fn(...a); } }));
+jest.mock('react-native-gesture-handler', () => ({ GestureDetector: ({ children }: { children: unknown }) => children, usePanGesture: (cfg: typeof mockPan.cfg) => { mockPan.cfg = cfg; return {}; } }));
 jest.mock('@/components/ui/Dialog', () => ({ DialogHost: () => null }));
 
 import { Sheet } from '@/components/ui/Sheet';
+import { callJsCallback, jsCallbackCount } from '@/hooks/useJsCallbackId';
 const React = require('react') as typeof import('react');
 const TestRenderer = require('react-test-renderer') as typeof import('react-test-renderer');
 const { act } = TestRenderer;
 type Node = import('react-test-renderer').ReactTestInstance;
 
 let mounted: import('react-test-renderer').ReactTestRenderer | undefined;
-beforeEach(() => { jest.clearAllMocks(); mockTimings.length = 0; Object.keys(mockListeners).forEach(k => delete mockListeners[k]); });
+beforeEach(() => { jest.clearAllMocks(); mockTimings.length = 0; mockScheduled.length = 0; Object.keys(mockListeners).forEach(k => delete mockListeners[k]); });
 afterEach(() => { act(() => { mounted?.unmount(); }); mounted = undefined; });
 
 function render() {
@@ -91,4 +96,28 @@ test('닫히는 중 두 번째 닫기(배경 연타·뒤로가기)는 막기만 
   const second = beforeRemove('GO_BACK');
   expect(second).toHaveBeenCalled();
   expect(mockTimings).toHaveLength(1);
+});
+
+test('닫힘 애니메이션이 끝나면 워클릿은 함수 대신 번호로 JS를 부른다', () => {
+  render();
+  beforeRemove('GO_BACK');
+  act(() => { mockTimings.forEach(cb => cb(true)); });
+  expect(mockScheduled).toHaveLength(1);
+  expect(mockScheduled[0].fn).toBe(callJsCallback);
+  expect(typeof mockScheduled[0].args[0]).toBe('number');
+  expect(mockNav.dispatch).toHaveBeenCalledTimes(1);
+});
+
+test('아래로 쓸어 닫기도 번호로 부르고, 시트가 사라지면 번호표에서 지운다', () => {
+  const before = jsCallbackCount();
+  render();
+  expect(jsCallbackCount()).toBeGreaterThan(before);
+  act(() => { mockPan.cfg!.onDeactivate({ translationY: 200, velocityY: 0 }); });
+  expect(mockScheduled).toHaveLength(1);
+  expect(mockScheduled[0].fn).toBe(callJsCallback);
+  expect(typeof mockScheduled[0].args[0]).toBe('number');
+  expect(mockNav.goBack).toHaveBeenCalledTimes(1);
+  act(() => { mounted?.unmount(); });
+  mounted = undefined;
+  expect(jsCallbackCount()).toBe(before);
 });

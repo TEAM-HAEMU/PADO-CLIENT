@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { create } from 'zustand';
+import { callJsCallback, useJsCallbackId } from '@/hooks/useJsCallbackId';
 import { colors } from '@/theme/tokens';
 import { Icon, type IconName } from './Icon';
 import { Press, T } from './index';
@@ -105,11 +106,13 @@ export function DialogHost({ scope = 'root' }: { scope?: 'root' | 'sheet' }) {
     // Modal이 완전히 내려간 뒤 실행 (iOS에서 닫히는 모달 위로 새 화면을 띄우면 무시됨)
     if (after) setTimeout(after, Platform.OS === 'ios' ? 60 : 0);
   };
+  // 워클릿에는 finish 대신 번호만 넘긴다 (hooks/useJsCallbackId)
+  const finishId = useJsCallbackId(finish);
   const close = (after?: () => void) => {
     if (closing.current) return;
     closing.current = true;
     pending.current = after;
-    progress.value = withTiming(0, CLOSE, done => { if (done) scheduleOnRN(finish); });
+    progress.value = withTiming(0, CLOSE, done => { if (done) scheduleOnRN(callJsCallback, finishId); });
   };
   const cancel = () => {
     if (!shown?.dismissible) return;
