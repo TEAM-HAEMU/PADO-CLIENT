@@ -33,23 +33,35 @@ export async function createPlaylistAndFind(
  * 좋아요한 음악 드랍 → 곡 ID. 좋아요 목록 응답엔 곡 ID가 없어(백엔드 MusicLikeDroppingResponse) 드랍 상세로 찾는다.
  *  · 응답에 songId가 오거나(백엔드가 넣으면) 캐시(주변·내 드랍·드랍 상세)에 있으면 요청하지 않는다
  *  · 나머지는 앞에서부터 `limit`개까지만, 동시에 `concurrency`개씩 — 좋아요가 수백 개여도 한꺼번에 쏟아지지 않게
- * 결과: 찾은 곡 ID(드랍 ID → 곡 ID), 상세를 못 받은 드랍 수, 상한에 걸려 아직 안 본 드랍 수
+ *  · `gone`(지워진 드랍 등 4xx로 확인된 것)은 다시 요청하지 않고, `deferred`(네트워크·5xx로 실패했던 것)는 줄 맨 뒤로 —
+ *    계속 실패하는 드랍이 묶음 하나를 다 채워 '더 불러오기'가 같은 것만 다시 요청하며 막히지 않게
+ * 결과: 찾은 곡 ID(드랍 ID → 곡 ID), 실패 수·ID(다시 시도할 것), 없다고 확인된 ID, 상한에 걸려 아직 안 본 드랍 수
  */
 export async function resolveLikedSongIds(
   dropIds: UUID[],
   known: (dropId: UUID) => UUID | null | undefined,
   fetchSongId: (dropId: UUID) => Promise<UUID | null>,
-  { limit, concurrency }: { limit: number; concurrency: number },
-): Promise<{ songIds: Map<UUID, UUID>; failed: number; remaining: number }> {
+  { limit, concurrency, gone, deferred, isGone = () => false }: {
+    limit: number;
+    concurrency: number;
+    gone?: ReadonlySet<UUID>;
+    deferred?: ReadonlySet<UUID>;
+    /** 이 오류면 그 드랍은 없는 것으로 (다음 묶음에서 뺀다) — 예: 4xx */
+    isGone?: (e: unknown) => boolean;
+  },
+): Promise<{ songIds: Map<UUID, UUID>; failed: number; failedIds: UUID[]; goneIds: UUID[]; remaining: number }> {
   const songIds = new Map<UUID, UUID>();
-  const todo: UUID[] = [];
+  const fresh: UUID[] = [];
+  const later: UUID[] = [];
   for (const id of dropIds) {
     const s = known(id);
     if (s) songIds.set(id, s);
-    else todo.push(id);
+    else if (!gone?.has(id)) (deferred?.has(id) ? later : fresh).push(id);
   }
+  const todo = [...fresh, ...later];
   const batch = todo.slice(0, Math.max(0, limit));
-  let failed = 0;
+  const failedIds: UUID[] = [];
+  const goneIds: UUID[] = [];
   let next = 0;
   const worker = async () => {
     while (next < batch.length) {
@@ -57,11 +69,11 @@ export async function resolveLikedSongIds(
       try {
         const s = await fetchSongId(id);
         if (s) songIds.set(id, s);
-      } catch {
-        failed++;
+      } catch (e) {
+        (isGone(e) ? goneIds : failedIds).push(id);
       }
     }
   };
   await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), batch.length) }, worker));
-  return { songIds, failed, remaining: todo.length - batch.length };
+  return { songIds, failed: failedIds.length, failedIds, goneIds, remaining: todo.length - batch.length };
 }

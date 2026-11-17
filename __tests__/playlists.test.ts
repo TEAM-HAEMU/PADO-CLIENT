@@ -100,6 +100,46 @@ describe('resolveLikedSongIds', () => {
     expect([...r.songIds.keys()].sort()).toEqual(['d0', 'd2', 'd4']);
   });
 
+  // 화면처럼 묶음마다 gone·deferred를 이어 간다
+  const rounds = async (all: string[], fetchSongId: (id: string) => Promise<string | null>, isGone: (e: unknown) => boolean, n: number) => {
+    const gone = new Set<string>();
+    const deferred = new Set<string>();
+    const found = new Map<string, string>();
+    const results = [];
+    for (let i = 0; i < n; i++) {
+      const r = await resolveLikedSongIds(all, id => found.get(id), fetchSongId, { limit: 30, concurrency: 4, gone, deferred, isGone });
+      r.goneIds.forEach(id => { gone.add(id); deferred.delete(id); });
+      r.songIds.forEach((s, id) => { found.set(id, s); deferred.delete(id); });
+      r.failedIds.forEach(id => deferred.add(id));
+      results.push(r);
+    }
+    return { found, gone, deferred, results };
+  };
+  const status = (s: number) => Object.assign(new Error(`HTTP ${s}`), { status: s });
+  const is4xx = (e: unknown) => (e as { status?: number }).status! >= 400 && (e as { status?: number }).status! < 500;
+
+  test('앞쪽 35개가 4xx(지워진 드랍)여도 다음 묶음에서 빼서 뒤의 정상 드랍까지 간다', async () => {
+    const all = ids(50); // d0~d34 404, d35~d49 정상
+    const fetchSongId = jest.fn(async (id: string) => { if (Number(id.slice(1)) < 35) throw status(404); return `s-${id}`; });
+    const { found, gone, results } = await rounds(all, fetchSongId, is4xx, 3);
+    expect(gone.size).toBe(35);
+    expect(found.size).toBe(15);
+    expect(results[0].failed).toBe(0); // 없는 드랍은 '실패'로 세지 않는다
+    expect(results[2].remaining).toBe(0);
+    expect(fetchSongId).toHaveBeenCalledTimes(50); // 같은 드랍을 두 번 요청하지 않음
+  });
+
+  test('앞쪽 35개가 네트워크·5xx로 계속 실패해도 줄 뒤로 보내 뒤의 정상 드랍까지 간다', async () => {
+    const all = ids(50);
+    const fetchSongId = jest.fn(async (id: string) => { if (Number(id.slice(1)) < 35) throw status(503); return `s-${id}`; });
+    const { found, deferred, results } = await rounds(all, fetchSongId, is4xx, 2);
+    expect(results[0].failed).toBe(30);
+    // 두 번째 묶음: 아직 안 본 d30~d49가 먼저, 실패했던 것은 그 뒤
+    expect(fetchSongId.mock.calls.slice(30, 50).map(c => c[0])).toEqual(all.slice(30, 50));
+    expect(found.size).toBe(15);
+    expect(deferred.size).toBe(35); // 다시 시도 대상으로 남는다
+  });
+
   test('곡이 아닌 상세(null)는 실패가 아니라 그냥 빠진다', async () => {
     const r = await resolveLikedSongIds(['d0'], () => null, async () => null, { limit: 10, concurrency: 2 });
     expect(r).toMatchObject({ failed: 0, remaining: 0 });
