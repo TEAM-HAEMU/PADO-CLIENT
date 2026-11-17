@@ -1,3 +1,152 @@
+diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
+index 94288ef..8d458f6 100644
+--- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
++++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
+@@ -152,6 +152,9 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+     private final GestureDetector gestureDetector;
+     private boolean paused = false;
+     private boolean destroyed = false;
++    // PADO: Google MapView.onCreate를 이미 불렀는가 / 창에서 떨어지며 멈췄는가 (다시 붙을 때 이어서 시작)
++    private boolean mapCreated = false;
++    private boolean stoppedOnDetach = false;
+     private final ThemedReactContext context;
+     private final FusedLocationSource fusedLocationSource;
+ 
+@@ -205,6 +208,10 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+ 
+     @Override
+     public void onCreate(LifecycleOwner owner) {
++        // PADO: 생명주기 관찰자는 창에 다시 붙을 때마다 새로 등록되고, 그때 ON_CREATE를 다시 받는다.
++        // Google MapView.onCreate를 두 번 부르면 지도 렌더러가 하나 더 생기고 이전 것(마커 아이콘 비트맵·스레드)은 해제되지 않는다 → 한 번만
++        if (mapCreated) return;
++        mapCreated = true;
+         super.onCreate(null);
+     }
+ 
+@@ -321,75 +328,48 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+ 
+     }
+ 
++    /*
++     * PADO: 창에서 떨어졌다 다시 붙을 때(탭 전환·스택 화면 위로 다른 화면이 올라옴 — react-native-screens가 뷰를 뗀다)
++     * 원래는 상태를 저장했다가 Google MapView.onCreate(saved)를 다시 불러 지도를 새로 만들고 마커를 전부 다시 올렸다.
++     * 이전 지도는 onDestroy 없이 버려져 렌더러 스레드·마커 아이콘 비트맵(ashmem)·네이티브 메모리가 매번 그대로 남았다.
++     * → 떨어질 때는 멈추기(onPause·onStop)만 하고, 다시 붙으면 같은 지도를 이어서 시작(onStart·onResume)한다. 마커·오버레이는 그대로 둔다.
++     */
+     @Override
+     protected void onAttachedToWindow() {
+         super.onAttachedToWindow();
+ 
+-        // Reset lifecycle flags when reattaching
+-        synchronized (this) {
+-            paused = false;
+-        }
+-
++        // 관찰자를 다시 붙이면 지금 액티비티 상태까지의 이벤트(ON_CREATE·ON_START·ON_RESUME)를 받아 같은 지도를 이어서 시작한다 (onCreate는 한 번만)
+         attachLifecycleObserver();
+-        if (savedMapState != null) {
+-            super.onCreate(savedMapState);
+-            super.onStart();
+-            super.onResume();
+-            prepareAttacherView();
+-            getMapAsync((map)->{
+-                onMapReady(map);
+-                if (savedFeatures != null && !savedFeatures.isEmpty()) {
+-                    features.clear();
+-                    ArrayList<MapFeature> toRestore = savedFeatures;
+-                    savedFeatures = null;
+-                    for (int i = 0; i < toRestore.size(); i++) {
+-                        MapFeature savedFeature = toRestore.get(i);
+-                        if (savedFeature != null) {
+-                            addFeature(savedFeature, i);
+-                        }
+-                    }
+-                } else {
+-                    savedFeatures = null;
++        synchronized (this) {
++            // 액티비티를 못 찾아 관찰자를 못 붙였으면 직접 이어서 시작
++            if (stoppedOnDetach && !isLifecycleObserverAttached && !destroyed) {
++                try {
++                    super.onStart();
++                    super.onResume();
++                    paused = false;
++                } catch (Exception e) {
++                    Log.e("MapView", "Error resuming in onAttachedToWindow: " + e.getMessage());
+                 }
+-            });
++            }
++            stoppedOnDetach = false;
+         }
+     }
+ 
+-    // Override onDetachedFromWindow to detach lifecycle observer
+     @Override
+     protected void onDetachedFromWindow() {
+         synchronized (this) {
+-            // Save instance state if not already saved and map is ready
+-            if (map != null && isMapReady) {
++            if (!destroyed && mapCreated) {
++                if (!paused) {
++                    pauseSafely();
++                }
+                 try {
+-                    if (savedMapState == null) {
+-                        savedMapState = new Bundle();
+-                    }
+-                    super.onSaveInstanceState(savedMapState);
++                    super.onStop();
++                    stoppedOnDetach = true;
+                 } catch (Exception e) {
+-                    Log.e("MapView", "Error saving state in onDetachedFromWindow: " + e.getMessage());
+-                    // Continue with cleanup even if state saving fails
++                    Log.e("MapView", "Error during stop in onDetachedFromWindow: " + e.getMessage());
+                 }
+             }
+-
+-            // Pause safely if not already paused
+-            if (!paused) {
+-                pauseSafely();
+-            }
+-        }
+-
+-        // These operations don't need synchronization
+-        try {
+-            onStop();
+-        } catch (Exception e) {
+-            Log.e("MapView", "Error during stop in onDetachedFromWindow: " + e.getMessage());
+         }
+-
+-        savedFeatures = new ArrayList<>(features);
+-        features.clear();
+-        shouldRestorePadding = true;
+-        removeView(attacherGroup);
+-        attacherGroup = null;
+         super.onDetachedFromWindow();
+         detachLifecycleObserver();
+     }
+diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/ViewChangesTracker.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/ViewChangesTracker.java
+index 238fcb5..e5b1beb 100644
+--- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/ViewChangesTracker.java
++++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/ViewChangesTracker.java
+@@ -3,6 +3,7 @@ package com.rnmaps.maps;
+ import android.os.Handler;
+ import android.os.Looper;
+ 
++import java.util.ArrayList;
+ import java.util.LinkedList;
+ 
+ public class ViewChangesTracker {
+@@ -60,7 +61,9 @@ public class ViewChangesTracker {
+   private final LinkedList<MapMarker> markersToRemove = new LinkedList<>();
+ 
+   public void update() {
+-    for (MapMarker marker : markers) {
++    // PADO: 마커 아이콘을 다시 찍는 동안(updateCustomForTracking → draw/레이아웃) 다른 마커가 추적 목록에 들어오거나 빠지면
++    // 같은 목록을 돌던 반복이 ConcurrentModificationException으로 앱을 죽였다 → 이번 차례의 사본을 돈다
++    for (MapMarker marker : new ArrayList<>(markers)) {
+       if (!marker.updateCustomForTracking()) {
+         markersToRemove.add(marker);
+       }
 diff --git a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
 index d729954..ca7ed1e 100644
 --- a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
