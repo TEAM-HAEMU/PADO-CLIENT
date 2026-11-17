@@ -2,72 +2,125 @@
  * 핀 물결 레이어 — 가까운 핀 몇 개가 떨어진 자리에서 퍼지는 물결을 지도 마커 밖, 지도 위에 겹친 보통 뷰로 그린다.
  * 마커 안에서 움직이면 Google 지도가 그 마커 그림을 계속 다시 찍어야 하고(tracksViewChanges) 매 프레임 마커까지 다시 커밋돼 비싸다.
  *  · 마커 자체엔 늘 멈춘 물결(DropPin Ripple)이 있고, 이 레이어는 그 위에 움직이는 물결만 더한다
- *  · 지도가 멈춰 있을 때만 — 움직이는 동안엔 숨기고, 멈추면 핀의 화면 좌표를 다시 재서 띄운다
+ *  · 지도가 보이고 · 재생 중이고 · 지도가 멈춰 있을 때만. 움직이기 시작하면 곧바로 숨기고(hide — React 렌더 없이),
+ *    멈추고 SETTLE_MS 뒤에 핀의 화면 좌표를 다시 재서 띄운다 (멈춘 직후엔 마커 교체·말풍선이 몰려 있다)
  *  · 좌표를 잰 기준(핀·멈춘 영역)이 지금과 다르면 그리지 않는다 (옛 자리에 한 프레임이라도 뜨지 않게)
+ *  · 고리 뷰는 핀마다 한 번 만들어 두고 다시 만들지 않는다 — 위치·보이기·고리 수(고른 핀 3겹)는 모두 공유 값으로 UI 스레드에서 바꾸고,
+ *    고리들은 시계 하나를 어긋나게 나눠 쓴다. 드랍을 고르거나 지도를 움직여도 마운트·애니메이션 재시작이 없다
  */
-import React, { type RefObject, useEffect, useState } from 'react';
+import React, { type Ref, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, type SharedValue, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import type MapView from 'react-native-maps';
-import { rippleToken, type RipplePin } from '@/utils/ambientMotion';
+import { usePreviewStore } from '@/services/preview';
+import { isPlaying, RING_COUNT, ringProgress, rippleToken, type RipplePin } from '@/utils/ambientMotion';
 
 // DropPin 멈춘 물결과 같은 크기 (Figma 'Group 4' 81×29)
 const RIPPLE_W = 81;
 const RIPPLE_H = 29;
 const DURATION = 2600;
+/** 지도가 멈추고 물결을 다시 띄우기까지 */
+export const SETTLE_MS = 300;
+/** 다시 띄울 때 페이드 */
+const FADE_MS = 200;
+
+type Points = Record<string, { x: number; y: number }>;
 
 /** 떨어진 자리에서 퍼지는 물결 한 겹 — 납작한 원(타원)이 커지며 사라진다 */
-function WaveRing({ cx, cy, delay }: { cx: number; cy: number; delay: number }) {
-  const v = useSharedValue(0);
-  useEffect(() => {
-    v.value = withDelay(delay, withRepeat(withTiming(1, { duration: DURATION, easing: Easing.out(Easing.quad) }), -1, false));
-  }, [delay, v]);
-  const st = useAnimatedStyle(() => ({
-    opacity: 0.85 * (1 - v.value),
-    transform: [{ scaleX: 0.15 + 0.85 * v.value }, { scaleY: (0.15 + 0.85 * v.value) * (RIPPLE_H / RIPPLE_W) }],
-  }));
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[{ position: 'absolute', left: cx - RIPPLE_W / 2, top: cy - RIPPLE_W / 2, width: RIPPLE_W, height: RIPPLE_W, borderRadius: RIPPLE_W / 2, borderWidth: 2.4, borderColor: '#FFFFFF' }, st]}
-    />
-  );
+function WaveRing({ id, i, clock, shown, points, activeId }: { id: string; i: number; clock: SharedValue<number>; shown: SharedValue<number>; points: SharedValue<Points>; activeId: SharedValue<string | null> }) {
+  const st = useAnimatedStyle(() => {
+    const p = points.value[id];
+    const t = ringProgress(clock.value, i, activeId.value === id ? RING_COUNT.active : RING_COUNT.normal);
+    const e = t < 0 ? 0 : 1 - (1 - t) * (1 - t); // Easing.out(quad)
+    const s = 0.15 + 0.85 * e;
+    return {
+      opacity: p && t >= 0 ? shown.value * 0.85 * (1 - e) : 0,
+      transform: [{ translateX: (p ? p.x : 0) - RIPPLE_W / 2 }, { translateY: (p ? p.y : 0) - RIPPLE_W / 2 }, { scaleX: s }, { scaleY: s * (RIPPLE_H / RIPPLE_W) }],
+    };
+  });
+  return <Animated.View pointerEvents="none" style={[styles.ring, st]} />;
+}
+
+export interface PinRipplesHandle {
+  /** 지도가 움직이기 시작함 — 곧바로 숨기고 재던 좌표는 버린다 (다시 멈추면 view가 바뀌어 다시 잰다) */
+  hide: () => void;
 }
 
 interface Props {
-  mapRef: RefObject<MapView | null>;
-  /** 물결을 그릴 핀 — 비었으면 레이어 없음 */
+  ref?: Ref<PinRipplesHandle>;
+  mapRef: React.RefObject<MapView | null>;
+  /** 물결을 그릴 핀 */
   pins: readonly RipplePin[];
-  /** 지도가 마지막으로 멈춘 영역 — 바뀌면 좌표를 다시 잰다 */
+  /** 크게 그린 핀(고른·가장 가까운 핀) — 고리 3겹 */
+  activeId: string | null | undefined;
+  /** 지도가 마지막으로 멈춘 영역 — 바뀌면(새 객체) 좌표를 다시 잰다 */
   view: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } | null;
-  /** 지도가 움직이는 중 */
-  moving: boolean;
+  /** 지도 화면이 보이는가 (포커스 · 앱이 앞). 재생 중인지는 여기서 본다 — 지도 화면이 재생 상태를 구독하지 않게 */
+  visible: boolean;
 }
 
-export function PinRipples({ mapRef, pins, view, moving }: Props) {
+export function PinRipples({ ref, mapRef, pins, activeId, view, visible }: Props) {
+  const playing = usePreviewStore(isPlaying);
+  const on = visible && playing && pins.length > 0 && !!view;
   const token = rippleToken(pins, view);
-  const [measured, setMeasured] = useState<{ token: string; points: { id: string; x: number; y: number; rings: number }[] } | null>(null);
-  const off = moving || !pins.length || !view;
 
+  const clock = useSharedValue(0);
+  const shown = useSharedValue(0);
+  const points = useSharedValue<Points>({});
+  const active = useSharedValue<string | null>(activeId ?? null);
+  useEffect(() => { active.value = activeId ?? null; }, [activeId, active]);
+
+  /** 재기 회차 — 숨기거나 다시 잴 때 올려서, 늦게 끝난 재기는 버린다 */
+  const round = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const showing = useRef(false);
+  const hide = useCallback(() => {
+    round.current++;
+    clearTimeout(timer.current);
+    if (!showing.current) return;
+    showing.current = false;
+    cancelAnimation(shown);
+    shown.value = 0;
+    cancelAnimation(clock);
+  }, [shown, clock]);
+  useImperativeHandle(ref, () => ({ hide }), [hide]);
+
+  const measuredView = useRef(view);
   useEffect(() => {
-    if (off) return;
-    let alive = true;
-    const map = mapRef.current;
-    if (!map) return;
-    Promise.all(pins.map(p => map.pointForCoordinate({ latitude: p.latitude, longitude: p.longitude }).then(pt => ({ id: p.id, x: pt.x, y: pt.y, rings: p.active ? 3 : 2 }))))
-      .then(points => { if (alive) setMeasured({ token, points }); })
-      .catch(() => { if (alive) setMeasured(null); });
-    return () => { alive = false; };
-  }, [off, token]); // eslint-disable-line react-hooks/exhaustive-deps -- pins·view는 token에 다 들어 있다
+    if (!on) { hide(); return; }
+    // 지도가 다른 곳에 멈췄으면 옛 좌표로 그리지 않게 바로 숨기고, 조금 기다렸다 잰다. 핀만 바뀌었으면(같은 자리) 곧바로 잰다
+    const moved = measuredView.current !== view;
+    measuredView.current = view;
+    if (moved) hide();
+    const my = ++round.current;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      const map = mapRef.current;
+      if (!map) return;
+      Promise.all(pins.map(p => map.pointForCoordinate({ latitude: p.latitude, longitude: p.longitude }).then(pt => [p.id, { x: pt.x, y: pt.y }] as const)))
+        .then(list => {
+          if (round.current !== my) return;
+          points.value = Object.fromEntries(list);
+          if (showing.current) return;
+          showing.current = true;
+          clock.value = 0;
+          clock.value = withRepeat(withTiming(1, { duration: DURATION, easing: Easing.linear }), -1, false);
+          shown.value = withTiming(1, { duration: FADE_MS });
+        })
+        .catch(() => { if (round.current === my) hide(); });
+    }, moved ? SETTLE_MS : 0);
+    return () => clearTimeout(timer.current);
+  }, [on, token, view]); // eslint-disable-line react-hooks/exhaustive-deps -- pins는 token에 다 들어 있다 (GPS 갱신마다 새 배열)
+  useEffect(() => () => { round.current++; clearTimeout(timer.current); cancelAnimation(clock); cancelAnimation(shown); }, [clock, shown]);
 
-  if (off || measured?.token !== token) return null;
+  if (!visible || !playing || !pins.length) return null;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {measured.points.map(p => (
-        <React.Fragment key={p.id}>
-          {Array.from({ length: p.rings }, (_, i) => <WaveRing key={i} cx={p.x} cy={p.y} delay={(DURATION / p.rings) * i} />)}
-        </React.Fragment>
-      ))}
+      {pins.map(p => Array.from({ length: RING_COUNT.active }, (_, i) => <WaveRing key={`${p.id}:${i}`} id={p.id} i={i} clock={clock} shown={shown} points={points} activeId={active} />))}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  ring: { position: 'absolute', left: 0, top: 0, width: RIPPLE_W, height: RIPPLE_W, borderRadius: RIPPLE_W / 2, borderWidth: 2.4, borderColor: '#FFFFFF' },
+});

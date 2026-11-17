@@ -1,5 +1,5 @@
 /* 반복 장식 애니메이션을 돌릴 때 — 보이고 재생 중일 때만, 물결 레이어는 잰 기준이 바뀌면 다시 잰다 */
-import { ambientRunning, isPlaying, rippleToken } from '@/utils/ambientMotion';
+import { ambientRunning, isPlaying, RING_COUNT, ringProgress, rippleToken } from '@/utils/ambientMotion';
 
 describe('ambientRunning', () => {
   it('보이고 재생 중일 때만 돈다', () => {
@@ -23,16 +23,40 @@ describe('isPlaying', () => {
 
 describe('rippleToken', () => {
   const view = { latitude: 35.1, longitude: 128.9, latitudeDelta: 0.018, longitudeDelta: 0.012 };
-  const pins = [{ id: 'a', latitude: 35.1, longitude: 128.9, active: true }];
+  const pins = [{ id: 'a', latitude: 35.1, longitude: 128.9 }];
   it('같은 핀·같은 영역이면 같다', () => {
     expect(rippleToken(pins, view)).toBe(rippleToken([{ ...pins[0] }], { ...view }));
   });
-  it('지도가 다른 곳에 멈추거나 · 핀이나 가장 가까운 핀이 바뀌면 달라진다', () => {
+  it('지도가 다른 곳에 멈추거나 · 물결 핀이 바뀌거나 움직이면 달라진다', () => {
     const t = rippleToken(pins, view);
     expect(rippleToken(pins, { ...view, latitude: 35.2 })).not.toBe(t);
     expect(rippleToken(pins, { ...view, latitudeDelta: 0.03 })).not.toBe(t);
-    expect(rippleToken([{ ...pins[0], active: false }], view)).not.toBe(t);
-    expect(rippleToken([...pins, { id: 'b', latitude: 35.11, longitude: 128.91, active: false }], view)).not.toBe(t);
+    expect(rippleToken([{ ...pins[0], latitude: 35.11 }], view)).not.toBe(t);
+    expect(rippleToken([...pins, { id: 'b', latitude: 35.11, longitude: 128.91 }], view)).not.toBe(t);
     expect(rippleToken(pins, null)).not.toBe(t);
+  });
+  it('고른 핀(크게 그린 핀)이 바뀌는 것은 넣지 않는다 — 고를 때마다 다시 재지 않게', () => {
+    const withActive = [{ ...pins[0], active: true }];
+    expect(rippleToken(withActive, view)).toBe(rippleToken(pins, view));
+  });
+});
+
+describe('ringProgress', () => {
+  it('고리마다 1/고리 수씩 어긋난다', () => {
+    expect(ringProgress(0, 0, 2)).toBe(0);
+    expect(ringProgress(0, 1, 2)).toBe(0.5);
+    expect(ringProgress(0.75, 1, 2)).toBeCloseTo(0.25);
+    expect(ringProgress(0.1, 2, 3)).toBeCloseTo(0.1 + 2 / 3);
+  });
+  it('고리 수를 넘는 고리는 그리지 않는다 (보통 핀은 셋째 고리를 숨긴다)', () => {
+    expect(ringProgress(0.3, 2, RING_COUNT.normal)).toBe(-1);
+    expect(ringProgress(0.3, 2, RING_COUNT.active)).toBeGreaterThanOrEqual(0);
+  });
+  it('늘 0 이상 1 미만', () => {
+    for (const c of [0, 0.2, 0.5, 0.99]) for (let i = 0; i < 3; i++) {
+      const t = ringProgress(c, i, 3);
+      expect(t).toBeGreaterThanOrEqual(0);
+      expect(t).toBeLessThan(1);
+    }
   });
 });
