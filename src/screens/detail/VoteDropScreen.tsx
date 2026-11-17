@@ -80,7 +80,7 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
             </View>
             {comments.slice(0, 3).map(c => (
               <View key={c.id} style={{ flexDirection: 'row', gap: 10 }}>
-                <Avatar name={c.username} size={30} />
+                <Avatar uri={c.profileImageUrl} name={c.username} size={30} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <T v="caption" c="ink2">{c.username}</T>
                   <T v="captionStrong" style={{ fontFamily: fonts.regular }}>{c.content}</T>

@@ -131,7 +131,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
         {STACK.map((c, i) => <View key={c} style={{ height: 34, marginBottom: -12, borderTopLeftRadius: 12, borderTopRightRadius: 12, backgroundColor: c, zIndex: i }} />)}
         <View style={{ zIndex: 5, gap: 8, paddingLeft: 20, paddingRight: 16, paddingVertical: 18, borderRadius: 12, backgroundColor: '#FCFCFC' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Avatar name={music.username} size={24} />
+            <Avatar uri={music.profileImageUrl} name={music.username} size={24} />
             <T v="caption" numberOfLines={1} style={{ fontFamily: fonts.medium, color: '#000000', flexShrink: 1 }}>{music.username}</T>
             <T v="tiny" style={{ color: '#BBBBBB' }}>{formatRelative(music.createdAt)}</T>
           </View>
