@@ -1,6 +1,6 @@
 /**
  * 미니 디스크 — 지금 재생 중인 곡을 작은 원(앨범 아트)으로 탭 화면 오른쪽에 띄운다.
- *  - 재생 중엔 천천히 돌고, 테두리에 진행률
+ *  - 재생 중엔 천천히 돌고, 테두리에 진행률 (일시정지·앱 백그라운드면 그 자리에서 멈춘다)
  *  - 탭: 일시정지/재생 · 길게 누르기: 화면이 등록한 동작(지도에선 다음 주변 곡)
  *  - 탭 화면(지도·플리·프로필)에서만 — 상세 화면들은 자체 재생 컨트롤이 있다
  *  - 곡을 누르면 미리듣기 주소를 찾고 버퍼링하는 몇 초 동안에도 곧바로 그 곡 커버로 떠서 테두리가 '불러오는 중'으로 돈다
@@ -9,12 +9,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 import { Spin } from '@/components/anim';
 import { Art, Press } from '@/components/ui';
 import { ArtPlayGlyph } from '@/components/player/glyphs';
+import { useScreenVisible } from '@/hooks/useScreenVisible';
 import { navigationRef } from '@/navigation/ref';
 import { usePreviewStore } from '@/services/preview';
 import { colors, glow } from '@/theme/tokens';
@@ -47,12 +48,24 @@ function ProgressRing() {
   );
 }
 
-/** '불러오는 중' — 테두리 위를 짧은 호가 빙글빙글 */
+/**
+ * '불러오는 중' — 테두리 위를 짧은 호가 빙글빙글.
+ * 앱이 백그라운드면 멈추고, 오래(LOADING_SPIN_MS) 걸리면 그 자리에서 멈춘다 — 응답 없는 재생이 0.9초 주기 회전을 끝없이 그리지 않게
+ */
+const LOADING_SPIN_MS = 15_000;
 function LoadingRing() {
   const r = RING / 2 - 2;
   const c = 2 * Math.PI * r;
   const spin = useSharedValue(0);
-  useEffect(() => { spin.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.linear }), -1, false); }, [spin]);
+  const visible = useScreenVisible();
+  const [tooLong, setTooLong] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setTooLong(true), LOADING_SPIN_MS); return () => clearTimeout(t); }, []);
+  useEffect(() => {
+    if (!visible || tooLong) { cancelAnimation(spin); return; }
+    spin.value = spin.value % 1;
+    spin.value = withRepeat(withTiming(spin.value + 1, { duration: 900, easing: Easing.linear }), -1, false);
+    return () => cancelAnimation(spin);
+  }, [spin, visible, tooLong]);
   const st = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: RING, height: RING }, st]}>

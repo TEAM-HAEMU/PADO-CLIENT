@@ -85,7 +85,7 @@ export default function OnboardingScreen({ navigation }: RootScreen<'Onboarding'
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       {/* 파도는 장을 넘겨도 제자리 — 그림 자리와 같은 높이(디자인 348/874) */}
-      <Wave style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
+      <Wave always style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
       <AuthHeader page={page} onBack={page > 0 ? () => go(page - 1) : undefined} onNext={() => go(page + 1)} style={{ marginTop: insets.top + 12 }} />
       <ScrollView
         ref={pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} bounces

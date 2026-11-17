@@ -47,7 +47,7 @@ export default function EmailLoginScreen({ navigation, route }: RootScreen<'Emai
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <Wave style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
+      <Wave always style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
       <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.goBack} style={{ marginTop: insets.top + 12 }} />
       <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
         <AuthTitle title="다시 만나서 반가워요." desc="이메일로 로그인하고 내 주변의 바다를 탐색해요." />

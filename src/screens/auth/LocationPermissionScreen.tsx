@@ -38,7 +38,7 @@ export default function LocationPermissionScreen({ navigation }: RootScreen<'Loc
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <Wave style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }} />
+      <Wave always style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }} />
       <AuthTitle
         title={'지금 있는 곳의 음악을\n들으려면 위치가 필요해요'}
         desc={`${scope}에 남겨진 음악을 찾고,\n지금 선 자리에 곡을 남길 때만 위치를 사용해요.`}

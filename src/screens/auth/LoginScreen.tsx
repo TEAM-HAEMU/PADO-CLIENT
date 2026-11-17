@@ -49,7 +49,7 @@ export default function LoginScreen({ navigation }: RootScreen<'Login'>) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <Wave style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
+      <Wave always style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
       {/* 소개를 거쳐 왔으면 마지막 장으로 돌아갈 수 있다 (이미 본 사람은 로그인부터라 뒤로 없음) */}
       <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.canGoBack() ? navigation.goBack : undefined} style={{ marginTop: insets.top + 12 }} />
       <AuthTitle title={'바닷속에 숨겨진\n보물을 찾으러 갈까요?'} style={{ marginTop: 39 }} />

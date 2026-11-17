@@ -45,7 +45,7 @@ export default function PushPermissionScreen({ navigation, route }: RootScreen<'
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <Wave style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }} />
+      <Wave always style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }} />
       <AuthTitle
         title={'내 드랍에 생긴 소식을\n알림으로 알려 드릴게요'}
         desc={'댓글이나 좋아요가 달리면 바로 알 수 있어요.\n광고 알림은 보내지 않아요.'}
