@@ -194,6 +194,8 @@ export interface MusicDropDetail {
   songId: UUID;
   userId: UUID;
   username: string;
+  /** 작성자 프로필 사진 — 없거나 탈퇴 처리된 작성자면 null. 비었거나 못 불러오면 이니셜로 보인다 */
+  profileImageUrl?: string | null;
   content: string;
   expiryDate: string;
   createdAt: string;
@@ -214,6 +216,10 @@ export interface VoteOption {
 export interface VoteDropDetail {
   droppingId: UUID;
   userId: UUID;
+  /** 작성자 이름 (서버 응답엔 있음 — 화면엔 아직 안 씀) */
+  username?: string;
+  /** 작성자 프로필 사진 — 없거나 탈퇴 처리된 작성자면 null. 비었거나 못 불러오면 이니셜로 보인다 */
+  profileImageUrl?: string | null;
   topic: string;
   options: VoteOption[];
   content: string;
@@ -239,6 +245,10 @@ export interface PlaylistDropSong {
 export interface PlaylistDropDetail {
   droppingId: UUID;
   userId: UUID;
+  /** 작성자 이름 (서버 응답엔 있음 — 화면엔 아직 안 씀) */
+  username?: string;
+  /** 작성자 프로필 사진 — 없거나 탈퇴 처리된 작성자면 null. 비었거나 못 불러오면 이니셜로 보인다 */
+  profileImageUrl?: string | null;
   playlistName: string;
   songs: PlaylistDropSong[];
   content: string;
@@ -291,6 +301,8 @@ export interface Comment {
   content: string;
   droppingId: UUID;
   username: string;
+  /** 작성자 프로필 사진 — 백엔드가 주면 댓글 옆 동그라미에 보임(없거나 못 불러오면 이니셜) */
+  profileImageUrl?: string | null;
   /** 작성자 ID — 백엔드가 주면 댓글 메뉴에 '차단하기'가 보임 (현재 CommentResponse엔 없음) */
   userId?: UUID;
   /** 작성 시각 — 백엔드가 주면 댓글 옆에 'n분 전'으로 표시 (현재 CommentResponse엔 없음) */

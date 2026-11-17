@@ -155,8 +155,21 @@ export function Art({ uri, size, radius = 12, round, style, dim }: { uri?: strin
   );
 }
 
+/** 프로필 동그라미 — 사진 주소가 비었거나 사진을 못 불러오면 이름 첫 글자로 */
 export function Avatar({ uri, name, size = 36 }: { uri?: string | null; name?: string; size?: number }) {
-  if (uri) return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.card2 }} />;
+  const src = uri?.trim() || null;
+  const [failed, setFailed] = React.useState<string | null>(null);
+  if (src && failed !== src) {
+    return (
+      <Image
+        source={{ uri: src }}
+        onError={() => setFailed(src)}
+        // 원본(최대 5MB)을 작은 동그라미에 그리므로 Android는 화면 크기로 줄여 디코딩 (iOS는 기본으로 줄임)
+        resizeMethod="resize"
+        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.card2 }}
+      />
+    );
+  }
   const initial = (name ?? '?').trim().charAt(0) || '?';
   return (
     <LinearGradient colors={['#C8E8FF', '#F0FCFF']} style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }}>

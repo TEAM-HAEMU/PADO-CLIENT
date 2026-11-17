@@ -96,7 +96,7 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
           const mine = !!me && c.username === me.username;
           return (
             <Press onLongPress={() => menu(c)} trackAs="댓글" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-              <Avatar name={c.username} size={34} />
+              <Avatar uri={c.profileImageUrl} name={c.username} size={34} />
               <View style={{ flex: 1, gap: 3 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <T v="caption" style={{ fontFamily: fonts.medium, color: '#000000' }}>{c.username}</T>
