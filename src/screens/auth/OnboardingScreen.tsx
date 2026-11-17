@@ -66,10 +66,12 @@ export default function OnboardingScreen({ navigation }: RootScreen<'Onboarding'
     setPage(i);
   };
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    pos.value = e.nativeEvent.contentOffset.x / width;
-    const lo = Math.max(0, Math.floor(pos.value)), hi = Math.min(PAGES.length - 1, Math.ceil(pos.value));
+    // shared value를 JS 스레드에서 다시 읽지 않게 지역 변수로
+    const p = e.nativeEvent.contentOffset.x / width;
+    pos.value = p;
+    const lo = Math.max(0, Math.floor(p)), hi = Math.min(PAGES.length - 1, Math.ceil(p));
     if (lo !== span[0] || hi !== span[1]) setSpan([lo, hi]);
-    const i = Math.round(pos.value);
+    const i = Math.round(p);
     if (i !== page && i >= 0 && i < PAGES.length) setPage(i);
   };
   // 마지막 장 뒤의 빈 장까지 넘기면 로그인으로 — 튕김(bounce)에 기대지 않아 Android·iOS 모두 보통 넘기듯 밀면 된다.
