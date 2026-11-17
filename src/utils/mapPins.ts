@@ -26,16 +26,47 @@ export function inRegion(p: Coords, r: MapRegion, pad = 0.5) {
   return Math.abs(p.latitude - r.latitude) <= r.latitudeDelta * (0.5 + pad) && Math.abs(p.longitude - r.longitude) <= r.longitudeDelta * (0.5 + pad);
 }
 
+/** 이미 그린 핀을 남겨 두는 범위(pad) — 고르는 범위(0.5)보다 넓게. 조금 끌거나 확대했다 되돌려도 마커를 지웠다 다시 만들지 않게 */
+export const KEEP_PAD = 1.5;
+
 /**
  * 그릴 핀 — 거리순 목록에서 보이는 영역(넉넉히) 안의 것만, 앞에서부터(= 가까운 순) limit개.
  * 영역을 아직 모르면(지도가 처음 자리 잡기 전) 상한만 적용. rank는 거리순 목록에서의 순번(가까운 핀 몇 개만 파동을 그리는 데 쓴다).
+ * kept(이미 그린 핀인가)를 주면 상한이 남을 때 이미 그린 핀 중 KEEP_PAD 안의 것도 남긴다 — 고르는 범위를 막 벗어난 핀이
+ * 지워졌다가 지도를 되돌리면 다시 만들어지지 않게. 결과는 거리순(rank 오름차순).
  */
-export function pickPins<T extends { d: Coords }>(sorted: readonly T[], region: MapRegion | null, limit = MAX_PINS): { item: T; rank: number }[] {
+export function pickPins<T extends { d: Coords }>(sorted: readonly T[], region: MapRegion | null, limit = MAX_PINS, kept?: (item: T) => boolean): { item: T; rank: number }[] {
   const out: { item: T; rank: number }[] = [];
+  const taken = new Set<number>();
   for (let i = 0; i < sorted.length && out.length < limit; i++) {
-    if (!region || inRegion(sorted[i].d, region)) out.push({ item: sorted[i], rank: i });
+    if (!region || inRegion(sorted[i].d, region)) { out.push({ item: sorted[i], rank: i }); taken.add(i); }
   }
-  return out;
+  if (!region || !kept || out.length >= limit) return out;
+  let added = false;
+  for (let i = 0; i < sorted.length && out.length < limit; i++) {
+    if (!taken.has(i) && kept(sorted[i]) && inRegion(sorted[i].d, region, KEEP_PAD)) { out.push({ item: sorted[i], rank: i }); added = true; }
+  }
+  return added ? out.sort((a, b) => a.rank - b.rank) : out;
+}
+
+/** outer를 사방으로 pad만큼 넓힌 범위가 inner 화면을 다 덮는가 */
+export function covers(outer: MapRegion, inner: MapRegion, pad = 0.5) {
+  return (
+    Math.abs(inner.latitude - outer.latitude) + inner.latitudeDelta / 2 <= outer.latitudeDelta * (0.5 + pad) &&
+    Math.abs(inner.longitude - outer.longitude) + inner.longitudeDelta / 2 <= outer.longitudeDelta * (0.5 + pad)
+  );
+}
+
+/**
+ * 지도를 움직이는 중에 그릴 핀·묶음을 다시 골라야 하는가 — drawn은 지금 그려 둔 핀·묶음을 고른 영역.
+ * 핀↔묶음이 바뀌거나, 지금 화면이 고른 범위(pad 0.5 — 화면의 2배) 밖으로 나가 빈 곳이 보이기 시작하면 다시.
+ * 화면이 고른 범위 안이면(확대·조금 끌기) 그대로 둔다 — 묶음 칸 크기만 달라진 것도 기다린다.
+ * 다시 고를 때마다 마커를 만들고 지우는 값이 커서(특히 Android 마커 스냅샷) 빈 곳이 보일 때만 하고, 멈추면 어차피 다시 고른다.
+ */
+export function needsRepick(drawn: MapRegion | null, next: MapRegion) {
+  if (!drawn) return true;
+  if (shouldCluster(next) !== shouldCluster(drawn)) return true;
+  return !covers(drawn, next);
 }
 
 /**
@@ -183,21 +214,28 @@ export function geocodeDue(last: GeocodeMark | null, here: Coords, now: number) 
 /**
  * 같은 주소는 한 번만, 동시에 몇 개씩만 받는 프리패처 — 마커 수백 개가 한꺼번에 Image.prefetch를 걸지 않게.
  * 실패하면 기억에서 지워 다음에 다시 시도한다. 기억은 limit개를 넘으면 비운다(앱을 오래 켜 둬도 계속 쌓이지 않게).
+ * urgent면 줄 맨 앞에 — 이미 줄 서 있던 주소도 앞으로 (지도에 막 그린 핀의 아트가 미리 받기 줄 뒤에서 기다리지 않게).
  */
 export function createPrefetcher(load: (url: string) => Promise<unknown>, concurrency = 6, limit = 1000) {
   const seen = new Map<string, Promise<boolean>>();
   const ready = new Set<string>();
-  const queue: (() => void)[] = [];
+  const queue: { url: string; run: () => void }[] = [];
   let active = 0;
   const pump = () => {
-    while (active < concurrency && queue.length) queue.shift()!();
+    while (active < concurrency && queue.length) queue.shift()!.run();
   };
-  const prefetch = (url: string): Promise<boolean> => {
+  const prefetch = (url: string, urgent = false): Promise<boolean> => {
     const hit = seen.get(url);
-    if (hit) return hit;
+    if (hit) {
+      if (urgent) {
+        const i = queue.findIndex(q => q.url === url);
+        if (i > 0) queue.unshift(...queue.splice(i, 1));
+      }
+      return hit;
+    }
     if (seen.size >= limit) { seen.clear(); ready.clear(); }
     const p = new Promise<boolean>(resolve => {
-      queue.push(() => {
+      const run = () => {
         active++;
         Promise.resolve()
           .then(() => load(url))
@@ -209,7 +247,9 @@ export function createPrefetcher(load: (url: string) => Promise<unknown>, concur
             resolve(ok);
             pump();
           });
-      });
+      };
+      if (urgent) queue.unshift({ url, run });
+      else queue.push({ url, run });
     });
     seen.set(url, p);
     pump();
