@@ -20,8 +20,10 @@ interface Prefs {
    */
   notify: PushSettings;
   locationPrompted: boolean;
-  /** 막 가입했다 — 알림 권한 안내(온보딩 한 장)를 아직 안 보여 줌. 보여 주면 끈다 */
+  /** 막 가입했다 — 알림 권한 안내(온보딩 한 장)를 아직 안 보여 줌. 마치면 끈다 */
   pushPromptPending: boolean;
+  /** 이 기기에서 알림 권한 안내를 본 적 있음 (가입 직후·기존 사용자 공통 — 한 번만) */
+  pushPromptSeen: boolean;
   /** 처음 실행 소개 3장(온보딩)을 봤는지 — 본 뒤엔 로그인 화면부터 */
   onboardingSeen: boolean;
   /**
@@ -40,6 +42,7 @@ interface Prefs {
   applyNotify: (next: Partial<PushSettings>) => void;
   setLocationPrompted: () => void;
   setPushPromptPending: (v: boolean) => void;
+  setPushPromptSeen: () => void;
   setOnboardingSeen: () => void;
 }
 
@@ -51,8 +54,8 @@ export const setOnDetailedAnalyticsEnabled = (fn: () => void) => { onDetailedEna
 
 export const usePrefs = create<Prefs>((set, get) => {
   const persist = () => {
-    const { service, rememberService, autoplayNearby, notify, locationPrompted, pushPromptPending, onboardingSeen, analyticsMode } = get();
-    kv.set('prefs', { service, rememberService, autoplayNearby, notify, locationPrompted, pushPromptPending, onboardingSeen, analyticsMode });
+    const { service, rememberService, autoplayNearby, notify, locationPrompted, pushPromptPending, pushPromptSeen, onboardingSeen, analyticsMode } = get();
+    kv.set('prefs', { service, rememberService, autoplayNearby, notify, locationPrompted, pushPromptPending, pushPromptSeen, onboardingSeen, analyticsMode });
   };
   const changed = (key: string, value: string | boolean | null) => {
     track('setting_changed', { key, value });
@@ -66,6 +69,7 @@ export const usePrefs = create<Prefs>((set, get) => {
     notify: { like: true, comment: true, nearby: false, notice: true, ...saved.notify },
     locationPrompted: saved.locationPrompted ?? false,
     pushPromptPending: saved.pushPromptPending ?? false,
+    pushPromptSeen: saved.pushPromptSeen ?? false,
     onboardingSeen: saved.onboardingSeen ?? false,
     analyticsMode: migrateAnalyticsMode(saved),
     setService: (service, remember = true) => { set({ service: remember ? service : get().service, rememberService: remember }); persist(); changed('service', service); },
@@ -95,6 +99,7 @@ export const usePrefs = create<Prefs>((set, get) => {
     },
     setLocationPrompted: () => { set({ locationPrompted: true }); persist(); },
     setPushPromptPending: v => { if (get().pushPromptPending !== v) { set({ pushPromptPending: v }); persist(); } },
+    setPushPromptSeen: () => { if (!get().pushPromptSeen) { set({ pushPromptSeen: true }); persist(); } },
     setOnboardingSeen: () => { if (!get().onboardingSeen) { set({ onboardingSeen: true }); persist(); } },
   };
 });

@@ -1,13 +1,17 @@
-/** 1.5 알림 권한 안내 — 가입 직후 한 번. 위치 권한 화면과 같은 모양(흰 바탕 · 가운데 제목 · 파문 · 아래 파도) */
+/**
+ * 1.5 알림 권한 안내 — 위치 권한 화면과 같은 모양(흰 바탕 · 가운데 제목 · 파문 · 아래 파도).
+ *  - PushPermission: 가입 직후 한 번 (온보딩, 마치면 지도로)
+ *  - PushPrompt: 이미 가입한 사람이 새 버전에서 지도에 들어온 직후 한 번 (마치면 닫힘)
+ * 건너뛰기 버튼은 두지 않는다 — 시스템 권한 창 앞 안내에 '나중에'를 두면 Apple 심사 5.1.1(iv)에 걸림. 거절은 시스템 창에서
+ */
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ripples } from '@/components/anim';
 import { AuthTitle } from '@/components/auth/AuthChrome';
-import { Icon, Press, PrimaryButton, T } from '@/components/ui';
+import { Icon, PrimaryButton } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
 import type { RootScreen } from '@/navigation/types';
-import { track } from '@/services/analytics';
 import { openNotificationSettings, usePush } from '@/services/push';
 import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
@@ -15,10 +19,13 @@ import { colors, glow } from '@/theme/tokens';
 
 const LATER_HINT = '설정 › 알림에서 언제든 켤 수 있어요.';
 
-export default function PushPermissionScreen({ navigation }: RootScreen<'PushPermission'>) {
+export default function PushPermissionScreen({ navigation, route }: RootScreen<'PushPermission' | 'PushPrompt'>) {
+  const existing = route.name === 'PushPrompt';
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
   const finish = () => {
+    usePrefs.getState().setPushPromptSeen();
+    if (existing) return navigation.goBack();
     usePrefs.getState().setPushPromptPending(false);
     navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
   };
@@ -28,17 +35,12 @@ export default function PushPermissionScreen({ navigation }: RootScreen<'PushPer
     setBusy(true);
     try {
       const before = await usePush.getState().refreshPermission();
-      const after = before === 'denied' ? before : await usePush.getState().requestPermission('onboarding');
+      const after = before === 'denied' ? before : await usePush.getState().requestPermission(existing ? 'prompt' : 'onboarding');
       if (before === 'denied') openNotificationSettings();
       else if (after !== 'granted') toast(LATER_HINT);
     } catch {} finally {
       finish();
     }
-  };
-  const later = () => {
-    track('push_permission_result', { result: 'later', was: usePush.getState().permission, source: 'onboarding' });
-    toast(LATER_HINT);
-    finish();
   };
 
   return (
@@ -55,11 +57,8 @@ export default function PushPermissionScreen({ navigation }: RootScreen<'PushPer
           <Icon name="bell" size={28} color={colors.primary} />
         </View>
       </View>
-      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 12, gap: 4 }}>
+      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 24 }}>
         <PrimaryButton label="계속" style={{ alignSelf: 'stretch' }} onPress={allow} loading={busy} />
-        <Press onPress={later} disabled={busy} trackAs="알림 나중에" hitSlop={6} style={{ alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 }}>
-          <T v="captionStrong" c="ink2">나중에</T>
-        </Press>
       </View>
     </View>
   );

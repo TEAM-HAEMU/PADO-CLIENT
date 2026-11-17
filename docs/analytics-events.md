@@ -122,7 +122,7 @@
 | 이벤트 | 언제 | 속성 |
 |---|---|---|
 | `notification_opened` | 알림 항목 누름 | `event`(알림 종류), `unread`, `has_drop` |
-| `push_permission_result` | 알림(OS) 권한 요청 결과, 가입 직후 안내에서 '나중에' | `result`(`granted`·`denied`·`unknown`·`later`), `was`(요청 전 상태), `source`(`onboarding` 가입 직후 안내·`settings` 설정 › 알림) |
+| `push_permission_result` | 알림(OS) 권한 요청 결과 | `result`(`granted`·`denied`·`unknown`), `was`(요청 전 상태), `source`(`onboarding` 가입 직후 안내·`prompt` 기존 사용자 새 버전 안내·`settings` 설정 › 알림) |
 | `push_opened` | 푸시 알림을 눌러 앱을 엶 (꺼져 있을 때·백그라운드·앞에 있을 때 모두) | `type`(`comment`·`like`·`nearby`·`notice`, 모르는 값은 그대로), `has_drop`(드랍을 열었는지 — 아니면 알림 화면) |
 | `playlist_created` / `playlist_deleted` / `playlist_songs_added` / `playlist_song_removed` | 플리 | `playlist_id`, `count`, `source` 등 |
 | `report_submitted` | 신고 | `target_type`, `reason`, `has_detail`, `block` |

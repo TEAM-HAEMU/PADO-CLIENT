@@ -32,6 +32,7 @@ import { useMiniDiscActions } from '@/components/music/MiniDisc';
 import { usePreviewStore } from '@/services/preview';
 import { useTermsUpdateCheck } from '@/hooks/useTermsUpdateCheck';
 import { useAppUpdatePrompt } from '@/hooks/useAppUpdatePrompt';
+import { useExistingPushPrompt } from '@/hooks/useExistingPushPrompt';
 import { distanceM, FALLBACK, formatDistance, lastKnown, useLocation } from '@/services/location';
 import { googleMapStyle } from '@/theme/mapStyle';
 import { colors, fonts, glow } from '@/theme/tokens';
@@ -294,6 +295,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   }, [scopeTip, focused, mapReady, !!coords, shownTip]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!focused) setShownTip(null); }, [focused]);
   // 선택 업데이트 안내 시트 — 범위 말풍선이 떠 있는 동안은 기다린다 (시트가 떠 있으면 말풍선이 기다림)
+  // 기존 사용자 알림 권한 안내가 업데이트 시트보다 먼저(더 짧은 대기) — 안내가 열리면 지도가 맨 앞이 아니라 업데이트 시트 타이머는 취소됨
+  useExistingPushPrompt(!!shownTip);
   useAppUpdatePrompt(!!shownTip);
 
   // 다른 탭에 갔다가 지도로 돌아오면 다시 내 위치로 (보던 곳을 끌어 둔 채였어도)

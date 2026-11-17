@@ -149,6 +149,7 @@ export function RootNavigator() {
             <Stack.Screen name="PlaylistPicker" component={PlaylistPickerScreen} />
             <Stack.Screen name="TermsUpdate" component={TermsUpdateScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="AppUpdate" component={AppUpdateSheet} />
+            <Stack.Screen name="PushPrompt" component={PushPermissionScreen} options={{ presentation: 'fullScreenModal', animation: FADE, gestureEnabled: false }} />
             <Stack.Screen name="ConfirmWithdraw" component={ConfirmWithdrawScreen} options={{ animation: FADE }} />
           </Stack.Group>
         </>

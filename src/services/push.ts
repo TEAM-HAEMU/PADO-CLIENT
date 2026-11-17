@@ -42,8 +42,10 @@ export type PushPermission = 'unknown' | 'granted' | 'denied';
 
 interface PushState {
   permission: PushPermission;
+  /** OS 권한을 한 번이라도 확인했는가 (확인 전 'unknown'은 '안 물어봄'이 아니라 '모름') */
+  checked: boolean;
   refreshPermission: () => Promise<PushPermission>;
-  /** 시스템 권한 창. 이미 막혀 있으면 창이 안 뜨고 denied. source: 분석용 (onboarding · settings) */
+  /** 시스템 권한 창. 이미 막혀 있으면 창이 안 뜨고 denied. source: 분석용 (onboarding 가입 직후 · prompt 기존 사용자 안내 · settings) */
   requestPermission: (source: string) => Promise<PushPermission>;
 }
 
@@ -52,9 +54,10 @@ const toPermission = (status: string): PushPermission =>
 
 export const usePush = create<PushState>((set, get) => ({
   permission: 'unknown',
+  checked: false,
   refreshPermission: async () => {
     const p = toPermission((await checkNotifications()).status);
-    if (p !== get().permission) set({ permission: p });
+    if (p !== get().permission || !get().checked) set({ permission: p, checked: true });
     return p;
   },
   requestPermission: async source => {
@@ -67,7 +70,7 @@ export const usePush = create<PushState>((set, get) => ({
       p = await get().refreshPermission().catch(() => was);
     }
     track('push_permission_result', { result: p, was, source });
-    set({ permission: p });
+    set({ permission: p, checked: true });
     if (p === 'granted') syncPushToken();
     return p;
   },
