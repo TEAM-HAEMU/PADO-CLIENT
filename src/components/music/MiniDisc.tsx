@@ -50,22 +50,19 @@ function ProgressRing() {
 
 /**
  * '불러오는 중' — 테두리 위를 짧은 호가 빙글빙글.
- * 앱이 백그라운드면 멈추고, 오래(LOADING_SPIN_MS) 걸리면 그 자리에서 멈춘다 — 응답 없는 재생이 0.9초 주기 회전을 끝없이 그리지 않게
+ * 불러오는 동안 계속 돈다. 앱이 백그라운드거나 화면이 가려지면 멈췄다가 돌아오면 이어서 돈다.
  */
-const LOADING_SPIN_MS = 15_000;
 function LoadingRing() {
   const r = RING / 2 - 2;
   const c = 2 * Math.PI * r;
   const spin = useSharedValue(0);
   const visible = useScreenVisible();
-  const [tooLong, setTooLong] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setTooLong(true), LOADING_SPIN_MS); return () => clearTimeout(t); }, []);
   useEffect(() => {
-    if (!visible || tooLong) { cancelAnimation(spin); return; }
+    if (!visible) { cancelAnimation(spin); return; }
     spin.value = spin.value % 1;
     spin.value = withRepeat(withTiming(spin.value + 1, { duration: 900, easing: Easing.linear }), -1, false);
     return () => cancelAnimation(spin);
-  }, [spin, visible, tooLong]);
+  }, [spin, visible]);
   const st = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: RING, height: RING }, st]}>
