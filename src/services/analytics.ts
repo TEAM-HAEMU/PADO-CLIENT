@@ -50,6 +50,8 @@ export function migrateAnalyticsMode(p: SavedAnalyticsPrefs): AnalyticsMode {
 let mode: AnalyticsMode = migrateAnalyticsMode(kv.get<SavedAnalyticsPrefs>('prefs', {}));
 /** SDK 시작 전에 생긴 이벤트 — 시작하면 순서대로 보낸다 */
 const early: [string, Record<string, unknown> | undefined][] = [];
+/** SDK 시작 전에 들어온 사용자 식별 (자동 로그인은 분석 시작을 기다리지 않는다) — 시작하면 적용 */
+let pendingUser: { id: string; props: UserProps } | null = null;
 
 export const analyticsEnabled = () => !!env.amplitudeApiKey && (!env.useMock || env.amplitudeInMock);
 export const analyticsMode = () => mode;
@@ -100,6 +102,9 @@ async function start() {
   envIdent.set('app_env', appEnv());
   amplitude.identify(envIdent);
   for (const [name, props] of early.splice(0)) if (mode !== 'off') amplitude.track(name, props);
+  const user = pendingUser;
+  pendingUser = null;
+  if (user) identifyUser(user.id, user.props);
 }
 
 async function setReplay(on: boolean) {
@@ -122,6 +127,7 @@ export async function setAnalyticsMode(next: AnalyticsMode) {
   const prev = mode;
   mode = next;
   if (next === 'off') { usageQueue.clear(); early.length = 0; }
+  if (next !== 'detailed') pendingUser = null;
   if (!analyticsEnabled()) return;
   if (next === 'off') {
     if (started) { await setReplay(false); amplitude.setOptOut(true); }
@@ -237,8 +243,14 @@ export function userIdFromToken(token: string | null | undefined): string | null
   }
 }
 
-export function identifyUser(id: string, props: { username?: string; gender?: boolean | null; birth?: string | null }) {
-  if (!started || !detailed()) return;
+type UserProps = { username?: string; gender?: boolean | null; birth?: string | null };
+export function identifyUser(id: string, props: UserProps) {
+  if (!detailed()) return;
+  if (!started) {
+    // 아직 시작 전(앱 시작 중) — 시작하면 적용한다
+    if (analyticsEnabled()) pendingUser = { id, props };
+    return;
+  }
   // Amplitude는 user_id 5자 이상만 받는다
   amplitude.setUserId(id.length >= 5 ? id : `pado-${id}`);
   const ident = new amplitude.Identify();
@@ -258,6 +270,7 @@ export function setUserProps(props: Record<string, string | number | boolean>) {
 
 /** 로그아웃 — 상세 분석이면 사용자 ID를 끊는다 (기본 모드는 처음부터 사용자 ID가 없음) */
 export function resetUser() {
+  pendingUser = null;
   if (!started || !detailed()) return;
   amplitude.reset();
 }
