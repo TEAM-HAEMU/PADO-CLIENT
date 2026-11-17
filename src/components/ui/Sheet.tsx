@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { colors } from '@/theme/tokens';
+import { callJsCallback, useJsCallbackId } from '@/hooks/useJsCallbackId';
 import { DialogHost } from './Dialog';
 
 const OPEN = { duration: 280, easing: Easing.out(Easing.cubic) };
@@ -29,6 +30,10 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
   const close = onClose ?? (() => nav.goBack());
+  // 워클릿에는 함수 대신 번호만 넘긴다 (hooks/useJsCallbackId — 함수를 넘기면 UI 런타임이 붙잡아 이 시트 트리 전체가 JS 힙에 남는다)
+  const closeId = useJsCallbackId(close);
+  const finishRef = useRef<() => void>(() => {});
+  const finishId = useJsCallbackId(() => finishRef.current());
   const progress = useSharedValue(0);
   const [height, setHeight] = useState(800);
   const route = useRoute();
@@ -71,8 +76,9 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
         nav.dispatch(action);
       }
     };
-    progress.value = withTiming(0, CLOSE, done => { if (done) scheduleOnRN(finish); });
-  }), [nav, progress, route.key]);
+    finishRef.current = finish;
+    progress.value = withTiming(0, CLOSE, done => { if (done) scheduleOnRN(callJsCallback, finishId); });
+  }), [nav, progress, route.key, finishId]);
 
   const backdrop = useAnimatedStyle(() => ({ opacity: progress.value }));
   // 쓸어내리기 — 위로 끌거나 옆으로 밀면 무시 (안쪽 가로 스크롤·버튼 탭은 그대로)
@@ -85,7 +91,7 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
     onUpdate: e => { 'worklet'; drag.value = Math.max(0, e.translationY); },
     onDeactivate: e => {
       'worklet';
-      if (e.translationY > 110 || e.velocityY > 900) scheduleOnRN(close);
+      if (e.translationY > 110 || e.velocityY > 900) scheduleOnRN(callJsCallback, closeId);
       else drag.value = withTiming(0, OPEN);
     },
   });
