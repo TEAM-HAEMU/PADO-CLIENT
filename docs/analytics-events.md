@@ -91,14 +91,16 @@
 | `location_first_fix` | 믿을 만한 좌표 없이 위치 감시를 시작해 처음 '지금 위치'(2분 안)를 받음. 회차마다 한 번 (좌표를 들고 잠깐 백그라운드에 다녀온 회차는 안 셈) | `wait_ms`(감시 시작부터 받기까지, '신호 약함'을 띄운 뒤 받은 것도 포함), `accuracy_m`(오차, 모르면 null), `age_ms`(받은 위치의 나이), `source`(`quick` 기기가 잡아 둔 위치·`watch` 감시), `trigger`(`start` 처음·`foreground` 앱으로 돌아옴·`retry` 권한·위치 서비스를 켠 뒤 다시) | |
 | `map_loaded` | 앱 실행마다 지도에 주변 드랍이 처음 뜸 | `nearby_count`, `playable_count`, `locked_count`, `nearest_m`, `nearest_playable_m`, `display_m`, `play_m`, `visibility_mode`, `region_unit`, `play_mode` | |
 | `scope_tip_shown` | 보기·재생 범위가 바뀌어 지도 지역 이름 아래 안내를 띄움 (설정이 바뀔 때마다 한 번) | `visibility_mode`, `region_unit`, `play_mode`, `play_region_unit` | |
-| `drop_locked_tap` | 재생 반경 밖 드랍을 누름 | `drop_id`, `type`, `source`, `distance_m`, `remaining_m` | 예 |
+| `drop_locked_tap` | 재생 반경 밖 드랍을 누름. `source`: `map_pin`(핀 — 누를 때마다) · `map_list`(하단 목록 — 그 드랍을 골라 말풍선을 띄울 때 한 번, 이미 고른 곡을 또 눌러도 다시 세지 않음) | `drop_id`, `type`, `source`, `distance_m`, `remaining_m` | 예 |
 | `map_cluster_tap` | 많이 축소한 지도에서 드랍 묶음을 눌러 확대 | `count`(묶음의 드랍 수) | |
+| `map_list_tap` | 하단 목록에서 드랍을 골라 지도가 그 핀으로 옮겨 가고 말풍선이 뜸 (이미 고른 곡을 다시 누른 것은 `map_bubble_open` `via=list`로만 셈). 잠긴 드랍이면 같은 순간 `drop_locked_tap`(`source=map_list`)도 나므로 두 이벤트를 더하지 않는다 | `drop_id`, `type`, `locked` | |
+| `map_bubble_open` | 말풍선이 떠 있는 드랍의 자세히 화면을 엶 — 말풍선을 누름(`bubble`) · 말풍선이 떠 있는 핀을 다시 누름(`pin`) · 목록에서 같은 곡을 한 번 더 누름(`list`). 잠긴 드랍은 열리지 않아 안 난다 | `drop_id`, `via`(`bubble`·`pin`·`list`) | |
 
 ### 드랍 · 듣기
 
 | 이벤트 | 언제 | 속성 | 서버 |
 |---|---|---|---|
-| `drop_opened` | 드랍 상세(음악 미리보기·투표·플리)를 받아 보여 줌, 화면마다 한 번 | `drop_id`, `type`, `source`(`map_pin`·`map_list`·`notification`·`profile`·`playlists`·`link`), `distance_m` | 예 |
+| `drop_opened` | 드랍 상세(음악 미리보기·투표·플리)를 받아 보여 줌, 화면마다 한 번 | `drop_id`, `type`, `source`(`map_pin`·`map_list`·`map_bubble`(지도 말풍선)·`notification`·`profile`·`playlists`·`link`), `distance_m` | 예 |
 | `preview_started` | 새 곡 미리듣기 시작 | `song_id`, `title`, `artist`, `drop_id`(드랍에서 들으면), `autoplay` | 예 |
 | `preview_paused` / `preview_resumed` | 일시정지·이어 듣기 | `song_id`, `position` | |
 | `preview_completed` | 30초 끝까지 | `song_id` | |

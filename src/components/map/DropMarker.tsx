@@ -45,7 +45,7 @@ interface DropMarkerProps {
   type: DropType;
   /** 재생 반경 밖 — 흐린 자물쇠 핀 (art·count 무시) */
   locked: boolean;
-  /** 가장 가까운 열린 드랍 (크게 + 시안 테두리) */
+  /** 가장 가까운 열린 드랍, 또는 하단 목록에서 고른 드랍 (크게 + 시안 테두리 — 잠긴 드랍은 회청색) */
   active: boolean;
   /** 물결 애니메이션 — 켜져 있는 동안은 계속 추적 */
   animated: boolean;
@@ -94,7 +94,7 @@ export const DropMarker = memo(function DropMarkerItem({ id, latitude, longitude
       onPress={press}
     >
       {locked ? (
-        <DropPin type={type} locked animated={false} title={title} subtitle={subtitle} />
+        <DropPin type={type} locked active={active} animated={false} title={title} subtitle={subtitle} />
       ) : (
         <DropPin type={type} art={image} active={active} animated={animated} onImageLoad={onImageLoad} title={title} subtitle={subtitle} count={count} />
       )}

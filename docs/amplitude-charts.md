@@ -92,6 +92,9 @@ Retention Analysis
    - Event: `drop_opened`, Group by `distance_m` (bucket 0–100 / 100–300 / 300–500 / 500+), 두 번째 Group by `source`
 5. 반경 값별 비교
    - 1번 차트에 Group by `play_m`을 더하면 재생 반경 값이 바뀐 앞뒤를 나눠 볼 수 있다
+6. 목록 말풍선에서 자세히로
+   - Funnel: `map_list_tap` (where `locked = false`) → `map_bubble_open`, 두 번째 단계 Group by `via`
+   - 이름 `하단 목록으로 고른 드랍을 자세히 연 비율`
 
 ## 7. 대시보드
 
