@@ -1,7 +1,7 @@
 /* 지도 핀 고르기 · 축소 시 묶음 · 드랍 목록 키 · 역지오코딩 간격 · 아트 프리패처 */
 import {
-  CLUSTER_LNG_DELTA, CLUSTER_MIN_ZOOM_DELTA, clusterCell, clusterLabel, clusterPoints, clusterSize, clusterZoomRegion, createPrefetcher,
-  GEOCODE_EVERY_MS, geocodeDue, idSetKey, inRegion, MAX_CLUSTERS, MAX_PINS, pickPins, shouldCluster, singlePins,
+  CLUSTER_LNG_DELTA, CLUSTER_MIN_ZOOM_DELTA, clusterCell, clusterLabel, clusterPoints, clusterSize, clusterZoomRegion, covers, createPrefetcher,
+  GEOCODE_EVERY_MS, geocodeDue, idSetKey, inRegion, KEEP_PAD, MAX_CLUSTERS, MAX_PINS, needsRepick, pickPins, shouldCluster, singlePins,
 } from '@/utils/mapPins';
 
 const here = { latitude: 35.1575, longitude: 129.0604 };
@@ -56,6 +56,85 @@ describe('pickPins', () => {
 
   test('목록이 상한보다 적으면 영역 안 전부', () => {
     expect(pickPins(sorted.slice(0, 5), region).map(p => p.rank)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  describe('이미 그린 핀 남기기 (kept)', () => {
+    // 2.5km 북쪽으로 옮긴 영역 — 고르는 범위(pad 0.5, 위아래 2km)는 500m~4.5km, 남겨 두는 범위(KEEP_PAD)는 0~5km 남짓
+    const moved = { ...region, latitude: north(2500).latitude };
+    const keptIds = new Set(['d10', 'd20', 'd30']); // 100·200·300m — 고르는 범위 밖, 남겨 두는 범위 안
+    const kept = (x: { id: string }) => keptIds.has(x.id);
+
+    test('상한이 남으면 고르는 범위 밖이어도 KEEP_PAD 안의 이미 그린 핀은 남기고, 거리순을 지킨다', () => {
+      // 0~2,990m 300개 중 고르는 범위 안은 250개 → 상한 300에 50개가 남는다
+      const out = pickPins(sorted.slice(0, 300), moved, 300, kept);
+      const ids = out.map(p => p.item.id);
+      expect(ids).toEqual(expect.arrayContaining(['d10', 'd20', 'd30']));
+      expect(out.map(p => p.rank)).toEqual([...out.map(p => p.rank)].sort((a, b) => a - b));
+      expect(out).toHaveLength(253);
+      // kept 없이는 빠진다
+      expect(pickPins(sorted.slice(0, 300), moved, 300).some(p => keptIds.has(p.item.id))).toBe(false);
+    });
+
+    test('상한을 고르는 범위 안 핀으로 다 채우면 남기지 않는다 — 보이는 곳 핀이 먼저', () => {
+      const out = pickPins(sorted, moved, 20, kept);
+      expect(out).toHaveLength(20);
+      expect(out.every(p => inRegion(p.item.d, moved))).toBe(true);
+    });
+
+    test('KEEP_PAD 밖이면 이미 그렸어도 지운다', () => {
+      const far = { ...region, latitude: north(20_000).latitude };
+      const all = (x: { id: string }) => x.id === 'd0';
+      expect(inRegion(sorted[0].d, far, KEEP_PAD)).toBe(false);
+      expect(pickPins(sorted, far, MAX_PINS, all).some(p => p.item.id === 'd0')).toBe(false);
+    });
+
+    test('영역을 모르면 kept와 상관없이 상한까지 가까운 순', () => {
+      expect(pickPins(sorted, null, 3, kept).map(p => p.rank)).toEqual([0, 1, 2]);
+    });
+  });
+});
+
+describe('covers · needsRepick (움직이는 중 다시 고르기)', () => {
+  const zoomOut = (k: number) => ({ ...region, latitudeDelta: region.latitudeDelta * k, longitudeDelta: region.longitudeDelta * k });
+
+  test('고른 범위(pad 0.5 = 화면 2배)가 화면을 덮는가', () => {
+    expect(covers(region, region)).toBe(true);
+    expect(covers(region, zoomOut(2))).toBe(true);
+    expect(covers(region, zoomOut(2.1))).toBe(false);
+    // 화면 반 폭(위도 0.009)까지 끌면 아직 덮고, 그보다 더 끌면 빈 곳이 보인다
+    expect(covers(region, { ...region, latitude: region.latitude + 0.0089 })).toBe(true);
+    expect(covers(region, { ...region, latitude: region.latitude + 0.0095 })).toBe(false);
+    expect(covers(region, zoomOut(1.5), 0)).toBe(false);
+  });
+
+  test('처음(그린 영역 없음)이면 고른다', () => {
+    expect(needsRepick(null, region)).toBe(true);
+  });
+
+  test('확대하거나 조금 끌면 그대로 — 빈 곳이 보이기 전엔 마커를 다시 만들지 않는다', () => {
+    expect(needsRepick(region, zoomOut(0.5))).toBe(false);
+    expect(needsRepick(region, zoomOut(1.8))).toBe(false);
+    expect(needsRepick(region, { ...region, longitude: region.longitude + 0.003 })).toBe(false);
+  });
+
+  test('화면이 고른 범위를 벗어날 만큼 축소·이동하면 다시', () => {
+    expect(needsRepick(region, zoomOut(2.5))).toBe(true);
+    expect(needsRepick(region, { ...region, longitude: region.longitude + 0.01 })).toBe(true);
+  });
+
+  test('핀↔묶음이 바뀌면 덮고 있어도 다시', () => {
+    const atEdge = { ...region, longitudeDelta: CLUSTER_LNG_DELTA, latitudeDelta: CLUSTER_LNG_DELTA * 1.5 };
+    const past = { ...atEdge, longitudeDelta: CLUSTER_LNG_DELTA * 1.2, latitudeDelta: CLUSTER_LNG_DELTA * 1.8 };
+    expect(covers(atEdge, past)).toBe(true);
+    expect(needsRepick(atEdge, past)).toBe(true);
+    expect(needsRepick(past, atEdge)).toBe(true);
+  });
+
+  test('묶음 모드에서 칸 크기만 바뀐 확대는 기다린다 (멈추면 다시 묶는다)', () => {
+    const wide = { ...region, longitudeDelta: 0.4, latitudeDelta: 0.6 };
+    const closer = { ...wide, longitudeDelta: 0.15, latitudeDelta: 0.225 };
+    expect(clusterCell(closer.longitudeDelta)).not.toBe(clusterCell(wide.longitudeDelta));
+    expect(needsRepick(wide, closer)).toBe(false);
   });
 });
 
@@ -333,6 +412,29 @@ describe('createPrefetcher', () => {
     expect(await p.prefetch('u')).toBe(false);
     expect(await p.prefetch('u')).toBe(true);
     expect(load).toHaveBeenCalledTimes(3);
+  });
+
+  test('urgent는 줄 맨 앞에 — 이미 줄 서 있던 주소도 앞으로 당긴다', async () => {
+    const order: string[] = [];
+    const pending: (() => void)[] = [];
+    const load = jest.fn((u: string) => new Promise<boolean>(resolve => { order.push(u); pending.push(() => resolve(true)); }));
+    const p = createPrefetcher(load, 1);
+    const all = [p.prefetch('a'), p.prefetch('b'), p.prefetch('c'), p.prefetch('d')];
+    await flush();
+    expect(order).toEqual(['a']); // a는 이미 받는 중
+    // 줄: b c d → d를 당기면 d b c → 새 urgent e는 맨 앞 e d b c
+    all.push(p.prefetch('d', true), p.prefetch('e', true));
+    while (pending.length) { pending.shift()!(); await flush(); }
+    await Promise.all(all);
+    expect(order).toEqual(['a', 'e', 'd', 'b', 'c']);
+    expect(load).toHaveBeenCalledTimes(5);
+  });
+
+  test('urgent로 다시 불러도 같은 주소는 한 번만 받는다', async () => {
+    const load = jest.fn(() => Promise.resolve(true));
+    const p = createPrefetcher(load, 1);
+    await Promise.all([p.prefetch('u'), p.prefetch('u', true), p.prefetch('u', true)]);
+    expect(load).toHaveBeenCalledTimes(1);
   });
 
   test('기억은 상한을 넘으면 비운다', async () => {

@@ -28,7 +28,8 @@ const TAIL = 7;
 /** 핀 머리(선택된 핀은 active 크기) 위로 띄우는 틈 */
 const GAP = 4;
 /** 마커 좌표(핀 끝)에서 말풍선 꼬리 끝까지의 높이 */
-const LIFT = PIN_SIZE.active.tipY + GAP;
+// 핀 꼭대기(아트 윗변)부터 말풍선까지 GAP — 핀 위 배지 여백(top)은 빼고 잰다
+const LIFT = PIN_SIZE.active.tipY - PIN_SIZE.active.top + GAP;
 /** 높이를 재기 전 어림값 (한마디 한 줄 + 둘째 줄) */
 const GUESS_H = 96;
 
