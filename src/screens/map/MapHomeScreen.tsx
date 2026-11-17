@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dropApi, regionApi } from '@/api/endpoints';
 import type { DropSummary, MusicDropSummary } from '@/api/types';
 import type { DropOpenSource } from '@/navigation/types';
-import { ClusterMarker, DropMarker, MyLocationMarker } from '@/components/map/DropMarker';
+import { ClusterMarker, DropMarker, MyLocationMarker, prefetchMarkerArt } from '@/components/map/DropMarker';
 import { Art, Icon, Press, T } from '@/components/ui';
 import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
@@ -39,7 +39,7 @@ import { colors, fonts, glow } from '@/theme/tokens';
 import type { TabParamList } from '@/navigation/types';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { formatAddress } from '@/utils/address';
-import { clusterPoints, clusterZoomRegion, geocodeDue, idSetKey, pickPins, shouldCluster, singlePins, type GeocodeMark } from '@/utils/mapPins';
+import { clusterPoints, clusterZoomRegion, geocodeDue, idSetKey, needsRepick, pickPins, shouldCluster, singlePins, type GeocodeMark } from '@/utils/mapPins';
 
 const useGoogle = !!env.googleMapsKey || Platform.OS === 'android';
 
@@ -60,6 +60,12 @@ const tintArea = (c: { latitude: number; longitude: number }) => [
   { latitude: c.latitude - 2, longitude: c.longitude - 2 },
 ];
 export const dropSub = (d: DropSummary) => (d.type === 'MUSIC' ? d.artist : d.type === 'VOTE' ? `투표 · ${d.options.length}곡` : `플레이리스트 · ${d.songIds.length}곡`);
+
+// 지도를 움직이는 중에 그릴 핀·묶음을 다시 고르는 최소 간격(앞의 교체를 그려 넣은 뒤부터) — 매 프레임 고르면 마커를 만들고 지우느라 움직임이 끊긴다
+const REPICK_MS = 200;
+
+// 주변 목록이 오면 마커 아트를 미리 받아 두는 가까운 열린 드랍 수 (64px 판본 — 150장이면 수백 KB)
+const PREFETCH_ART = 150;
 
 // 파동은 가까운 핀 몇 개만, 지도가 보일 때만 (Google 지도는 애니메이션 동안 마커 비트맵을 매 프레임 다시 그림)
 const ANIMATED_PINS = 4;
@@ -159,10 +165,30 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const radius = useDropRadius();
   const sorted = useMemo(() => drops.map(d => ({ d, m: distanceM(here, d), lock: lockOf(d) })).sort((a, b) => a.m - b.m), [drops, here, lockOf]);
   const nearestId = sorted.find(x => !x.lock.locked)?.d.droppingId;
-  // 지도에 그릴 핀 — 보이는 영역(넉넉히) 안에서 가까운 순 MAX_PINS개 (영역은 지도를 다 움직인 뒤에만 갱신)
+  // 주변 목록이 오면 가까운 열린 드랍 PREFETCH_ART개의 마커 아트를 미리 받는다 — 축소해서 핀이 처음 그려질 때 빈 핀으로 뜨지 않게.
+  // 나머지(먼 드랍)는 그 핀을 그릴 때 DropMarker가 줄 맨 앞으로 받는다 (셀룰러 데이터를 아끼려고 전부 받지 않음. 같은 주소는 한 번만).
+  // 목록이 바뀔 때만 — 걸으며 거리순만 바뀐 것으로는 다시 돌지 않는다 (그때의 거리순을 쓴다)
+  useEffect(() => {
+    prefetchMarkerArt(sorted.filter(x => !x.lock.locked).slice(0, PREFETCH_ART).map(x => dropArt(x.d)));
+  }, [drops]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 지도에 그릴 핀 — 보이는 영역(넉넉히) 안에서 가까운 순 MAX_PINS개
   // 많이 축소하면(CLUSTER_LNG_DELTA) 핀 대신 격자로 묶은 수 묶음만 — 묶음은 위치(GPS)와 무관하니 드랍 목록·영역이 바뀔 때만 다시 묶는다
+  // view: 지도가 멈춘 영역 (지역 이름·카메라 이동 기준). drawView: 핀·묶음을 고른 영역 — 움직이는 중에도 화면이 그려 둔 범위(화면 2배)를
+  // 벗어나 빈 곳이 보이기 시작하거나 핀↔묶음이 바뀌면 바꿔서(REPICK_MS 간격), 크게 축소해도 멈출 때까지 기다리지 않고 핀·묶음이 따라 나온다
   const [view, setView] = useState<Region | null>(null);
-  const onRegionChangeComplete = useCallback((r: Region) => setView(r), []);
+  const [drawView, setDrawView] = useState<Region | null>(null);
+  const drawn = useRef<{ region: Region | null; at: number }>({ region: null, at: 0 });
+  const onRegionChange = useCallback((r: Region) => {
+    const now = Date.now();
+    if (now - drawn.current.at < REPICK_MS || !needsRepick(drawn.current.region, r)) return;
+    drawn.current = { region: r, at: now };
+    setDrawView(r);
+  }, []);
+  const onRegionChangeComplete = useCallback((r: Region) => {
+    drawn.current = { region: r, at: Date.now() };
+    setView(r);
+    setDrawView(r);
+  }, []);
 
   // 지도 위 제목 — 화면 가운데 지점의 지역 이름을 확대 수준에 맞게(넓게 보면 시·도, 중간이면 시·군·구, 가까우면 동,
   // 동보다 더 당기면 그 자리의 아는 장소 — 없으면 동). 장소는 그 단계에서만 묻는다(place=true).
@@ -184,10 +210,19 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     placeholderData: keepPreviousData,
   });
   const centerName = place.data && placeAt ? placeName(place.data, placeAt.level) : null;
-  const clustered = shouldCluster(view);
-  const clusters = useMemo(() => (clustered && view ? clusterPoints(drops, view) : []), [clustered, drops, view]);
+  const clustered = shouldCluster(drawView);
+  const clusters = useMemo(() => (clustered && drawView ? clusterPoints(drops, drawView) : []), [clustered, drops, drawView]);
   // 1개짜리 묶음은 수 원 대신 보통 핀으로 — 핀 모드와 같은 DropMarker·같은 키라 확대·축소로 모드가 바뀌어도 그 핀은 다시 만들어지지 않는다
-  const pins = useMemo(() => (clustered ? singlePins(sorted, clusters) : pickPins(sorted, view)), [clustered, clusters, sorted, view]);
+  // 이미 그린 핀은 상한 안에서 조금 더 넓게(KEEP_PAD) 남겨 둔다 — 살짝 끌었다 되돌릴 때 마커를 지웠다 다시 만들지 않게
+  const drawnPins = useRef<ReadonlySet<string>>(new Set());
+  // 주의: useMemo 안에서 ref(drawnPins)를 읽는다 — 직전 그린 핀을 deps 없이 참고하려는 의도. React Compiler를 켜면 이 자리를 다시 볼 것
+  const pins = useMemo(
+    () => (clustered ? singlePins(sorted, clusters) : pickPins(sorted, drawView, undefined, x => drawnPins.current.has(x.d.droppingId))),
+    [clustered, clusters, sorted, drawView],
+  );
+  useEffect(() => { drawnPins.current = new Set(pins.map(p => p.item.d.droppingId)); }, [pins]);
+  // 다음 고르기 간격은 마커를 실제로 그려 넣은 뒤부터 센다 — 느린 기기에서 마커 교체가 밀려 있을 때 연달아 또 바꾸지 않게
+  useEffect(() => { drawn.current.at = Date.now(); }, [drawView]);
   const groups = useMemo(() => clusters.filter(c => c.count > 1), [clusters]);
 
   // 하단 목록에서 고른 드랍 — 지도가 그 핀으로 옮겨 가고 핀 위에 말풍선 (지도 빈 곳·다른 핀을 누르거나 화면을 떠나면 닫힘)
@@ -374,6 +409,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         pitchEnabled={false}
         onPanDrag={() => { follow.current = false; }}
         onMapReady={() => setMapReady(true)}
+        onRegionChange={onRegionChange}
         onRegionChangeComplete={onRegionChangeComplete}
         onPress={onMapPress}
         // Android Google 지도는 마커를 누르면 그 마커를 가운데로 옮긴다 — 묶음을 누를 땐 animateToRegion과 겹쳐 지도가 한 번 튀므로 묶음 모드에서만 끈다 (지도 단위 설정이라 마커별로는 못 정한다)
