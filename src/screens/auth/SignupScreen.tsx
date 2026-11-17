@@ -2,14 +2,14 @@
  * 1.3 계정 만들기 (Figma B 1.4 계정 만들기) — 이메일 가입(/auth/register) · 소셜 가입 완료(/oauth2/signup) 공용.
  * 약관 목록은 GET /terms 응답으로 구성 (SERVICE·PRIVACY·LOCATION 필수, MARKETING 선택).
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import type { AgreementType, Agreements, Term } from '@/api/types';
-import { Field, formatBirth, GenderSelect, ListenAppSelect, validBirth } from '@/components/ui/Field';
+import { Field, formatBirth, GenderSelect, ListenAppSelect } from '@/components/ui/Field';
 import { AUTH_PAGES, AuthButton, AuthHeader, AuthTitle, CheckBox } from '@/components/auth/AuthChrome';
 import { Icon, Press, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
@@ -21,6 +21,7 @@ import { getProviderCredential } from '@/services/socialAuth';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
+import { firstSignupError, type SignupErrors, type SignupField, validateSignup, validEmail } from '@/utils/signupForm';
 
 const FALLBACK_TERMS: Term[] = [
   { type: 'SERVICE', title: '서비스 이용약관', version: '', required: true },
@@ -47,20 +48,28 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
   // 전체 듣기 앱 — 기기에 이미 고른 앱이 있으면 그대로 보여줌. 가입 성공 후 저장
   const [listenApp, setListenApp] = useState<ServiceId | null>(() => usePrefs.getState().service);
   const [agreed, setAgreed] = useState<Partial<Record<AgreementType, boolean>>>({});
-  const [errors, setErrors] = useState<Record<string, string | null>>({});
+  const [errors, setErrors] = useState<SignupErrors>({});
   const [busy, setBusy] = useState(false);
 
   const allOn = terms.every(t => agreed[t.type]);
   const requiredOk = terms.filter(t => t.required).every(t => agreed[t.type]);
 
+  // 버튼은 바닥 고정 대신 내용 끝에 — 키보드 위로 따라 올라와 입력칸을 가리지 않게. 키보드가 뜨면 입력 중인 칸에 맞춰 스크롤
+  const scroll = useFocusedInputScroll();
+  // 입력칸 위치 (폼 묶음 안 y + 폼 묶음의 y) — 검사에 걸리면 버튼에서 멀리 위에 있는 그 칸으로 올려 보여 준다
+  const formY = useRef(0);
+  const fieldY = useRef<Partial<Record<SignupField, number>>>({});
+  const at = (field: SignupField) => (ev: { nativeEvent: { layout: { y: number } } }) => { fieldY.current[field] = ev.nativeEvent.layout.y; };
+
   const validate = () => {
-    const e: Record<string, string | null> = {};
-    if (!social || !providerEmail) e.email = /^\S+@\S+\.\S+$/.test(email.trim()) ? null : '이메일 형식을 확인해주세요.';
-    if (!social) e.password = password.length >= 8 && password.length <= 20 ? null : '비밀번호는 8~20자예요.';
-    e.username = username.trim().length >= 1 && username.trim().length <= 15 ? null : '닉네임은 1~15자예요.';
-    e.birth = validBirth(birth);
+    const e = validateSignup({ email, password, username, birth, social: !!social, providerEmail });
     setErrors(e);
-    return Object.values(e).every(v => !v);
+    const first = firstSignupError(e);
+    if (!first) return true;
+    // 오류 문구는 입력칸 아래에 붙는데, 버튼은 맨 아래라 안 보인다 — 그 칸까지 올리고 토스트로도 알린다
+    scroll.ref.current?.scrollTo({ y: Math.max(0, formY.current + (fieldY.current[first.field] ?? 0) - 24), animated: true });
+    toast(first.message, 'error');
+    return false;
   };
 
   /** 가입이 끝나면 고른 듣는 앱을 기본 재생 앱으로 (안 고르면 처음 전체 듣기 때 묻는 기존 흐름 그대로) */
@@ -114,9 +123,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
 
   // 이메일 가입은 디자인 문구('환영합니다!'), 소셜 가입은 마무리 단계라 '거의 다 됐어요'
   const title = useMemo(() => (social ? '거의 다 됐어요' : '환영합니다!'), [social]);
-  const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
-  // 버튼은 바닥 고정 대신 내용 끝에 — 키보드 위로 따라 올라와 입력칸을 가리지 않게. 키보드가 뜨면 입력 중인 칸에 맞춰 스크롤
-  const scroll = useFocusedInputScroll();
+  const emailOk = validEmail(email);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -125,15 +132,17 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
         {/* 파도는 입력칸 뒤에 깔린 채 함께 스크롤 (디자인 474/1140) */}
         <Wave style={{ position: 'absolute', left: 0, right: 0, top: 377 }} />
         <AuthTitle title={title} desc={social ? '몇 가지만 확인하면 바로 시작할 수 있어요.' : '몇 가지만 알려주면 바로 시작할 수 있어요.'} />
-        <View style={{ paddingHorizontal: 24, paddingTop: 24, gap: 16 }}>
+        <View style={{ paddingHorizontal: 24, paddingTop: 24, gap: 16 }} onLayout={ev => { formY.current = ev.nativeEvent.layout.y; }}>
+          <View onLayout={at('email')}>
           <Field
             label="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" disabled={!!providerEmail} onFocus={scroll.onFocus}
             help={providerEmail ? '소셜 계정의 이메일로 가입돼요' : undefined} error={errors.email}
             right={emailOk && !errors.email ? <Icon name="check" size={16} color={colors.primaryDeep} strokeWidth={2.2} /> : undefined}
           />
-          {!social && <Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="비밀번호를 입력하세요" help="8~20자" error={errors.password} onFocus={scroll.onFocus} />}
-          <Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} placeholder="지도에 표시될 이름" help="지도에 표시될 이름이에요 (최대 15자)" error={errors.username} onFocus={scroll.onFocus} right={<T v="caption" c="lineStrong">{username.length}/15</T>} />
-          <Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={errors.birth} onFocus={scroll.onFocus} />
+          </View>
+          {!social && <View onLayout={at('password')}><Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="비밀번호를 입력하세요" help="8~20자" error={errors.password} onFocus={scroll.onFocus} /></View>}
+          <View onLayout={at('username')}><Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} placeholder="지도에 표시될 이름" help="지도에 표시될 이름이에요 (최대 15자)" error={errors.username} onFocus={scroll.onFocus} right={<T v="caption" c="lineStrong">{username.length}/15</T>} /></View>
+          <View onLayout={at('birth')}><Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={errors.birth} onFocus={scroll.onFocus} /></View>
           <GenderSelect optional value={gender} onChange={setGender} />
           <ListenAppSelect value={listenApp} onChange={setListenApp} />
 
