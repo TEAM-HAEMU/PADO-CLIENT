@@ -15,6 +15,7 @@ import { dropApi, regionApi } from '@/api/endpoints';
 import type { DropSummary, MusicDropSummary } from '@/api/types';
 import type { DropOpenSource } from '@/navigation/types';
 import { ClusterMarker, DropMarker, MyLocationMarker, prefetchMarkerArt } from '@/components/map/DropMarker';
+import { PinRipples } from '@/components/map/PinRipples';
 import { Art, Icon, Press, T } from '@/components/ui';
 import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
@@ -39,6 +40,7 @@ import { colors, fonts, glow } from '@/theme/tokens';
 import type { TabParamList } from '@/navigation/types';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { formatAddress } from '@/utils/address';
+import { isPlaying, type RipplePin } from '@/utils/ambientMotion';
 import { clusterPoints, clusterZoomRegion, geocodeDue, idSetKey, needsRepick, pickPins, shouldCluster, singlePins, type GeocodeMark } from '@/utils/mapPins';
 
 const useGoogle = !!env.googleMapsKey || Platform.OS === 'android';
@@ -67,7 +69,7 @@ const REPICK_MS = 200;
 // 주변 목록이 오면 마커 아트를 미리 받아 두는 가까운 열린 드랍 수 (64px 판본 — 150장이면 수백 KB)
 const PREFETCH_ART = 150;
 
-// 파동은 가까운 핀 몇 개만, 지도가 보일 때만 (Google 지도는 애니메이션 동안 마커 비트맵을 매 프레임 다시 그림)
+// 물결은 가까운 핀 몇 개만 — 지도가 보이고 · 재생 중이고 · 지도가 멈춰 있을 때만 (마커 밖 PinRipples 레이어가 그린다)
 const ANIMATED_PINS = 4;
 
 // 하단 도크(높이 50, Dock.tsx) 위로 띄우는 간격
@@ -91,7 +93,9 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const focused = useIsFocused();
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   useEffect(() => { const sub = AppState.addEventListener('change', st => setAppActive(st === 'active')); return () => sub.remove(); }, []);
-  const animatePins = focused && appActive;
+  // 재생을 멈추면 물결도 멈춘다 (마커 안의 멈춘 물결만)
+  const playing = usePreviewStore(isPlaying);
+  const animatePins = focused && appActive && playing;
   useTermsUpdateCheck();
 
   // 지도가 떠 있는 동안 위치 감시를 붙잡는다 (앱 전체에 하나). watchKey가 바뀌면(다시 시도) 처음부터 다시
@@ -178,13 +182,19 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const [view, setView] = useState<Region | null>(null);
   const [drawView, setDrawView] = useState<Region | null>(null);
   const drawn = useRef<{ region: Region | null; at: number }>({ region: null, at: 0 });
+  // 지도가 움직이는 중 — 핀 물결 레이어는 화면 좌표가 고정이라 움직이는 동안 숨긴다 (움직이기 시작할 때 한 번만 상태를 바꾼다)
+  const [moving, setMoving] = useState(false);
+  const movingRef = useRef(false);
   const onRegionChange = useCallback((r: Region) => {
+    if (!movingRef.current) { movingRef.current = true; setMoving(true); }
     const now = Date.now();
     if (now - drawn.current.at < REPICK_MS || !needsRepick(drawn.current.region, r)) return;
     drawn.current = { region: r, at: now };
     setDrawView(r);
   }, []);
   const onRegionChangeComplete = useCallback((r: Region) => {
+    movingRef.current = false;
+    setMoving(false);
     drawn.current = { region: r, at: Date.now() };
     setView(r);
     setDrawView(r);
@@ -231,6 +241,12 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   useEffect(() => { if (!focused) setSelectedId(null); }, [focused]);
   // 고른 핀은 그릴 핀 목록(보이는 영역·개수 제한) 밖이어도 늘 그린다
   const shownPins = useMemo(() => (!selected || pins.some(p => p.item === selected) ? pins : [...pins, { item: selected, rank: Infinity }]), [pins, selected]);
+  // 움직이는 물결을 그릴 핀 — 가까운 열린 핀 ANIMATED_PINS개
+  const activeId = selectedId ?? nearestId;
+  const ripplePins = useMemo<RipplePin[]>(
+    () => (animatePins ? shownPins.filter(p => p.rank < ANIMATED_PINS && !p.item.lock.locked).map(({ item: { d } }) => ({ id: d.droppingId, latitude: d.latitude, longitude: d.longitude, active: d.droppingId === activeId })) : []),
+    [animatePins, shownPins, activeId],
+  );
 
   // 주변 곡 자동 재생 — 가까운 음악 드랍부터 차례로 (지도 화면일 때, 앱을 내려도 계속)
   const musicDrops = useMemo(() => sorted.filter(x => !x.lock.locked).map(x => x.d).filter((d): d is MusicDropSummary => d.type === 'MUSIC'), [sorted]);
@@ -419,7 +435,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         {!useGoogle ? <Polygon coordinates={tintArea(here)} fillColor="rgba(120,200,232,0.22)" strokeWidth={0} strokeColor="transparent" tappable={false} /> : null}
         {coords ? <MyLocationMarker latitude={coords.latitude} longitude={coords.longitude} /> : null}
         {groups.map(c => <ClusterMarker key={c.key} id={c.key} latitude={c.latitude} longitude={c.longitude} count={c.count} onPress={onClusterPress} />)}
-        {shownPins.map(({ item: { d, m, lock }, rank }) => (
+        {shownPins.map(({ item: { d, m, lock } }) => (
           // 잠금이 풀리거나 잠기면 핀 모양이 통째로 바뀌므로 새 마커로
           <DropMarker
             key={`${d.droppingId}:${lock.locked ? 'l' : 'o'}`}
@@ -428,8 +444,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
             longitude={d.longitude}
             type={d.type}
             locked={lock.locked}
-            active={selectedId ? d.droppingId === selectedId : d.droppingId === nearestId}
-            animated={animatePins && rank < ANIMATED_PINS && !lock.locked}
+            active={d.droppingId === activeId}
             art={lock.locked ? null : dropArt(d)}
             title={lock.locked ? '잠긴 드랍' : dropTitle(d)}
             subtitle={lock.locked ? formatDistance(m) : `${d.type === 'MUSIC' ? d.artist : dropSub(d)} · ${formatDistance(m)}`}
@@ -439,6 +454,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         ))}
         {selected ? <SelectedDropBubble key={selected.d.droppingId} drop={selected.d} lock={selected.lock} radius={radius} onPress={onBubblePress} /> : null}
       </MapView>
+      {mapReady ? <PinRipples mapRef={mapRef} pins={ripplePins} view={view} moving={moving} /> : null}
 
       {/* 상단 페이드 + 동 이름 */}
       <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.96)', 'rgba(255,255,255,0.85)', 'rgba(255,255,255,0)']} locations={[0, insets.top / (insets.top + 96), 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + 96 }} />
