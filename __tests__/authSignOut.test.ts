@@ -35,7 +35,7 @@ test('푸시 토큰 삭제는 토큰이 있을 때 시작하고, 끝나길 기�
   const before = jest.fn(() => { tokenAtStart = useAuth.getState().accessToken; return d.promise; });
   setBeforeSignOut(before);
   const done = useAuth.getState().signOut();
-  expect(before).toHaveBeenCalledWith({ callServer: true });
+  expect(before).toHaveBeenCalledWith({ callServer: true, accessToken: 'a1' });
   expect(tokenAtStart).toBe('a1');
   expect(useAuth.getState().status).toBe('guest');
   await done; // 푸시 삭제가 아직 안 끝나도 로그아웃은 끝난다

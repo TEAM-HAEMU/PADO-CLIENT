@@ -134,18 +134,18 @@ async function registerToken(token: string) {
 
 /**
  * 이 기기 토큰을 서버에서 지우고 기기에서도 폐기한다 (로그아웃·탈퇴 직전).
- * 서버 삭제 요청은 이 함수를 부르는 즉시 지금 로그인 토큰으로 보낸다 — 호출 측은 기다리지 않고 로그아웃 상태로 바꿔도 된다.
+ * 서버 삭제 요청엔 accessToken(없으면 부른 순간의 로그인 토큰)을 명시해 붙인다 — 호출 측은 기다리지 않고 로그아웃 상태로 바꿔도 된다.
  * callServer: 아직 로그인 토큰이 살아 있을 때만 서버에 지우라고 한다 (세션 만료면 못 부름 — 기기 토큰 폐기로 더는 닿지 않게)
  * 돌려주는 Promise는 서버 삭제가 끝나면(최대 UNREGISTER_WAIT_MS) 끝난다
  */
-export function unregisterPushToken(callServer = true): Promise<void> {
+export function unregisterPushToken(callServer = true, accessToken: string | null = useAuth.getState().accessToken): Promise<void> {
   const token = kv.get<string | null>(TOKEN_KEY, null);
   kv.remove(TOKEN_KEY);
   retryNeeded = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const server = callServer && token
+  const server = callServer && token && accessToken
     ? Promise.race([
-      pushApi.deleteToken(token).catch(() => {}),
+      pushApi.deleteToken(token, accessToken).catch(() => {}),
       new Promise<void>(r => { timer = setTimeout(r, UNREGISTER_WAIT_MS); }),
     ]).finally(() => clearTimeout(timer))
     : Promise.resolve();
@@ -159,7 +159,7 @@ export function unregisterPushToken(callServer = true): Promise<void> {
 }
 
 // 로그아웃 직전 — 아직 로그인 토큰이 있을 때 서버 토큰을 지운다 (auth 스토어가 기다림, 순환 import 방지로 등록 방식)
-setBeforeSignOut(({ callServer }) => unregisterPushToken(callServer));
+setBeforeSignOut(({ callServer, accessToken }) => unregisterPushToken(callServer, accessToken));
 
 // ── 알림 누름 → 화면
 

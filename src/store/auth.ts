@@ -29,10 +29,10 @@ interface AuthState {
 
 /**
  * 로그아웃 직전에 할 일 — 아직 로그인 토큰이 있을 때 (services/push가 등록: 이 기기 푸시 토큰 지우기).
- * 서버 요청은 호출되는 즉시(동기적으로) 보내야 한다 — 로그아웃은 끝나길 기다리지 않고 바로 토큰을 비운다.
+ * 로그아웃은 끝나길 기다리지 않고 바로 토큰을 비우므로, 서버 요청엔 넘겨받은 accessToken(로그아웃 순간의 토큰)을 쓴다.
  * callServer: 사용자가 직접 로그아웃(세션이 살아 있음). 세션 만료·탈퇴 뒤엔 false
  */
-type BeforeSignOut = (opts: { callServer: boolean }) => Promise<void>;
+type BeforeSignOut = (opts: { callServer: boolean; accessToken: string | null }) => Promise<void>;
 let beforeSignOut: BeforeSignOut | undefined;
 export const setBeforeSignOut = (fn: BeforeSignOut) => { beforeSignOut = fn; };
 
@@ -73,9 +73,9 @@ export const useAuth = create<AuthState>((set, get) => ({
     }).catch(() => {});
   },
   signOut: async ({ callServer = true } = {}) => {
-    const { refreshToken } = get();
-    // 푸시 토큰 삭제는 로그인 토큰이 필요하다 — 토큰을 비우기 전에 요청을 보내 두고, 끝나길(최대 몇 초) 기다리지 않고 화면부터 바꾼다
-    const pushCleanup = (async () => { await beforeSignOut?.({ callServer }); })().catch(() => {});
+    const { accessToken, refreshToken } = get();
+    // 푸시 토큰 삭제는 로그인 토큰이 필요하다 — 지금 토큰을 넘겨 두고, 끝나길(최대 몇 초) 기다리지 않고 화면부터 바꾼다
+    const pushCleanup = (async () => { await beforeSignOut?.({ callServer, accessToken }); })().catch(() => {});
     track('logout', { by: callServer ? 'user' : 'session_end' });
     resetUser();
     set({ accessToken: null, refreshToken: null, status: 'guest' });

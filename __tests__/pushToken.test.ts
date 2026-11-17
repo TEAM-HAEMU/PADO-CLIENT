@@ -9,7 +9,7 @@ jest.mock('react-native-permissions', () => ({
 }));
 jest.mock('react-native-device-info', () => ({ getVersion: () => '1.0.0' }));
 jest.mock('@/api/endpoints', () => ({ pushApi: { registerToken: jest.fn(async () => undefined), deleteToken: jest.fn(async () => undefined) } }));
-jest.mock('@/store/auth', () => ({ useAuth: jest.requireActual('zustand').create(() => ({ status: 'authed' })), setBeforeSignOut: jest.fn() }));
+jest.mock('@/store/auth', () => ({ useAuth: jest.requireActual('zustand').create(() => ({ status: 'authed', accessToken: 'a1' })), setBeforeSignOut: jest.fn() }));
 jest.mock('@/hooks/queryClient', () => ({ queryClient: { invalidateQueries: jest.fn() } }));
 jest.mock('@/services/pushSettings', () => ({ loadPushSettings: jest.fn(async () => undefined) }));
 jest.mock('@/services/analytics', () => ({ track: jest.fn() }));
@@ -26,7 +26,7 @@ function deferred() { let resolve!: () => void; const promise = new Promise<void
 
 beforeEach(async () => {
   jest.clearAllMocks();
-  useAuth.setState({ status: 'authed' });
+  useAuth.setState({ status: 'authed', accessToken: 'a1' });
   await unregisterPushToken(false); // 다시 시도 표시·저장 토큰 초기화
   await flush();
   jest.clearAllMocks();
@@ -62,18 +62,23 @@ test('로그아웃 상태거나 로그아웃으로 토큰을 지웠으면 다시
   useAuth.setState({ status: 'guest' });
   retryPushTokenIfNeeded(Date.now() + 31_000);
   await flush();
-  useAuth.setState({ status: 'authed' });
+  useAuth.setState({ status: 'authed', accessToken: 'a1' });
   await unregisterPushToken(false);
   retryPushTokenIfNeeded(Date.now() + 31_000);
   await flush();
   expect(pushApi.registerToken).toHaveBeenCalledTimes(1);
 });
 
-test('삭제 요청은 부르는 즉시 보낸다 (호출 측이 기다리지 않고 로그인 토큰을 비워도 됨)', () => {
+test('삭제 요청엔 부른 순간의 로그인 토큰을 명시해 붙인다 (그 뒤 로그인 토큰이 비워져도)', async () => {
   kv.set('push:token', 'fcm-old');
-  unregisterPushToken();
-  expect(pushApi.deleteToken).toHaveBeenCalledWith('fcm-old');
+  const p = unregisterPushToken();
+  useAuth.setState({ status: 'guest', accessToken: null });
+  await p;
+  expect(pushApi.deleteToken).toHaveBeenCalledWith('fcm-old', 'a1');
   expect(kv.get('push:token', null)).toBeNull();
+  kv.set('push:token', 'fcm-2');
+  await unregisterPushToken(true, 'a-given');
+  expect(pushApi.deleteToken).toHaveBeenLastCalledWith('fcm-2', 'a-given');
 });
 
 test('삭제(기기 토큰 폐기까지)가 끝나기 전에 등록하면 끝난 뒤에 새 토큰을 받는다', async () => {

@@ -12,6 +12,11 @@ interface RequestOptions {
   body?: unknown;
   form?: FormData;
   auth?: AuthMode;
+  /**
+   * 이 로그인 토큰으로 보낸다 (저장소의 현재 토큰 대신). 로그아웃 직전에 잡아 둔 토큰으로 정리 요청을 보낼 때 —
+   * 그 사이 토큰이 비워져도 그대로 붙고, 401이어도 재발급·로그아웃 처리를 하지 않는다 (이미 끝난 세션)
+   */
+  accessToken?: string;
 }
 
 /** 토큰 저장소는 store/auth가 주입 (순환 import 방지) */
@@ -100,14 +105,14 @@ export async function request<T = void>(method: string, path: string, opts: Requ
     let body: ReqBody | undefined;
     if (opts.form) body = opts.form;
     else if (opts.body !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(opts.body); }
-    const { accessToken } = bridge.get();
+    const accessToken = opts.accessToken ?? bridge.get().accessToken;
     if (withToken && auth !== 'none' && accessToken) headers.Authorization = `Bearer ${accessToken}`;
     return transport(method, buildUrl(path, opts.query), headers, body);
   };
 
   let res = await send();
   let expired = false;
-  if (res.status === 401 && auth !== 'none' && bridge.get().accessToken) {
+  if (res.status === 401 && auth !== 'none' && !opts.accessToken && bridge.get().accessToken) {
     const code = (parse(res.text) as { code?: string } | undefined)?.code;
     // U2 만료 / U3 무효 → 재발급 후 1회 재시도 (U13·U17은 가입 토큰 오류라 재발급 대상 아님)
     if (code !== 'U13' && code !== 'U17') {
