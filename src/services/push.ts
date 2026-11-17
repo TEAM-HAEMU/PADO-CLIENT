@@ -30,8 +30,10 @@ export const CHANNEL_ID = 'pado_default';
 const PLATFORM = Platform.OS === 'ios' ? 'IOS' : 'ANDROID';
 /** 마지막으로 서버에 등록한 토큰 — 로그아웃 때 이 값으로 지운다 */
 const TOKEN_KEY = 'push:token';
-/** 로그아웃 직전 토큰 삭제를 기다리는 최대 시간 — 망이 느려도 로그아웃은 바로 끝나게 */
+/** 로그아웃 직전 토큰 삭제를 기다리는 최대 시간 — 망이 느려도 탈퇴·다음 로그인이 오래 묶이지 않게 */
 const UNREGISTER_WAIT_MS = 3000;
+/** 등록이 실패했을 때 앱으로 돌아올 때마다 다시 시도하되, 이 간격보다 자주는 안 한다 */
+const RETRY_GAP_MS = 30_000;
 
 // 패키지가 타입을 내보내지 않아 함수 시그니처에서 꺼낸다
 type Messaging = ReturnType<typeof getMessaging>;
@@ -89,10 +91,18 @@ function messaging(): Messaging | null {
 export const pushActive = () => usePush.getState().permission === 'granted' && !!kv.get<string | null>(TOKEN_KEY, null);
 
 let syncing: Promise<void> | null = null;
+/** 진행 중인 토큰 삭제(서버 + 기기) — 끝나기 전에 등록하면 곧 폐기될 토큰을 올리게 되므로 등록이 기다린다 */
+let unregistering: Promise<void> | null = null;
+/** 마지막 등록이 실패했다 — 앱으로 돌아올 때 다시 시도 */
+let retryNeeded = false;
+let lastSyncAt = 0;
+
 /** 로그인 + 권한 허용이면 토큰을 서버에 등록 (같은 토큰이어도 매번 — 다른 계정에 있던 토큰을 지금 계정으로 옮김) */
 export function syncPushToken(): Promise<void> {
   if (!syncing) {
+    lastSyncAt = Date.now();
     syncing = (async () => {
+      if (unregistering) await unregistering;
       if (useAuth.getState().status !== 'authed') return;
       if ((await usePush.getState().refreshPermission()) !== 'granted') return;
       const m = messaging();
@@ -100,10 +110,17 @@ export function syncPushToken(): Promise<void> {
       const token = await getToken(m);
       await registerToken(token);
     })()
-      .catch(tokenError)
+      .then(() => { retryNeeded = false; })
+      .catch(e => { retryNeeded = true; tokenError(e); })
       .finally(() => { syncing = null; });
   }
   return syncing;
+}
+
+/** 등록이 실패한 채면 다시 시도 (앱이 앞으로 올 때) — 실패 직후 연달아 부르지 않게 간격을 둔다 */
+export function retryPushTokenIfNeeded(now = Date.now()) {
+  if (!retryNeeded || useAuth.getState().status !== 'authed' || now - lastSyncAt < RETRY_GAP_MS) return;
+  syncPushToken();
 }
 
 /** API 오류는 클라이언트가 이미 남겼다 — 토큰 발급(Firebase) 오류만 진단에 */
@@ -117,19 +134,28 @@ async function registerToken(token: string) {
 
 /**
  * 이 기기 토큰을 서버에서 지우고 기기에서도 폐기한다 (로그아웃·탈퇴 직전).
+ * 서버 삭제 요청은 이 함수를 부르는 즉시 지금 로그인 토큰으로 보낸다 — 호출 측은 기다리지 않고 로그아웃 상태로 바꿔도 된다.
  * callServer: 아직 로그인 토큰이 살아 있을 때만 서버에 지우라고 한다 (세션 만료면 못 부름 — 기기 토큰 폐기로 더는 닿지 않게)
+ * 돌려주는 Promise는 서버 삭제가 끝나면(최대 UNREGISTER_WAIT_MS) 끝난다
  */
-export async function unregisterPushToken(callServer = true) {
+export function unregisterPushToken(callServer = true): Promise<void> {
   const token = kv.get<string | null>(TOKEN_KEY, null);
   kv.remove(TOKEN_KEY);
-  if (callServer && token) {
-    await Promise.race([
+  retryNeeded = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const server = callServer && token
+    ? Promise.race([
       pushApi.deleteToken(token).catch(() => {}),
-      new Promise<void>(r => setTimeout(r, UNREGISTER_WAIT_MS)),
-    ]);
-  }
-  const m = messaging();
-  if (m) deleteToken(m).catch(() => {});
+      new Promise<void>(r => { timer = setTimeout(r, UNREGISTER_WAIT_MS); }),
+    ]).finally(() => clearTimeout(timer))
+    : Promise.resolve();
+  const all = server.then(async () => {
+    const m = messaging();
+    if (m) await deleteToken(m).catch(() => {});
+  });
+  unregistering = all;
+  all.finally(() => { if (unregistering === all) unregistering = null; }).catch(() => {});
+  return server;
 }
 
 // 로그아웃 직전 — 아직 로그인 토큰이 있을 때 서버 토큰을 지운다 (auth 스토어가 기다림, 순환 import 방지로 등록 방식)
@@ -210,11 +236,15 @@ export function startPush() {
   AppState.addEventListener('change', st => {
     if (st !== 'active') return;
     const before = usePush.getState().permission;
-    usePush.getState().refreshPermission().then(p => { if (p === 'granted' && before !== 'granted') syncPushToken(); }).catch(() => {});
+    usePush.getState().refreshPermission().then(p => {
+      if (p === 'granted' && before !== 'granted') syncPushToken();
+      // 등록이 실패했던 채라면 (망이 끊겼었다 등) 다음 앱 시작·재로그인까지 기다리지 않고 다시
+      else retryPushTokenIfNeeded();
+    }).catch(() => {});
   });
 
   if (!m) return;
-  onTokenRefresh(m, token => { registerToken(token).catch(tokenError); });
+  onTokenRefresh(m, token => { registerToken(token).catch(e => { retryNeeded = true; tokenError(e); }); });
   onNotificationOpenedApp(m, msg => opened(msg.data));
   onMessage(m, msg => {
     // 인앱 알림 목록도 새로
