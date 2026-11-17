@@ -3,7 +3,7 @@
  *  - 한 곡이 끝나면 그때 위치 기준으로 가장 가까운 안 들은 드랍으로 (걸어가면 새로 가까워진 곡이 먼저). 다 들었으면 처음부터 다시
  *  - 다음 곡 미리듣기 주소를 미리 찾아 플레이어에 '이어 틀 곡'으로 넘겨 둔다 → 곡이 끝나면 플레이어가 끊김 없이 바로 이어 튼다
  *    (백그라운드에서 소리가 한 번 끊기면 iOS가 앱을 재워 다음 곡으로 못 넘어가기 때문)
- *  - 다른 곡(핀 미리보기·목록 미리듣기 등)이 재생 중이면 끼어들지 않고, 비면 이어서 시작
+ *  - 다른 곡(핀 미리보기·목록 미리듣기 등)이 재생 중이거나 그 곡의 미리듣기 주소를 찾는 중이면 끼어들지 않고, 비면 이어서 시작
  *  - 지도 화면을 벗어나면 다음 곡으로 넘어가지 않음(지금 곡은 끝까지). 앱을 내려도(백그라운드) 계속 이어짐 (위치는 앱을 내리기 전 기준)
  *  - 미리듣기가 없는 곡은 건너뛰고, iTunes 조회가 막히거나 재생 오류가 나면 잠시 쉬었다가 다음 곡 (연속 실패가 쌓이면 대기를 늘리다 멈춤)
  *  - 틀 수 있는 곡이 없으면 멈추고, 주변 곡 목록이 바뀔 때 다시 본다 (규칙: utils/autoplayPlan.ts)
@@ -40,6 +40,8 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
   const paused = usePreviewStore(s => s.paused);
   const endedKey = usePreviewStore(s => s.endedKey);
   const lastError = usePreviewStore(s => s.lastError);
+  // 사용자가 누른 곡(핀·목록·플리 등)의 미리듣기 주소를 찾는 중 — 그 사이 자동 재생이 끼어들면 누른 곡의 요청을 가로챈다
+  const pendingKey = usePreviewStore(s => s.pending?.key ?? null);
   // 곡 집합 (순서 무관) — 가까운 순서만 바뀐 GPS 갱신으로는 결정을 다시 하지 않는다
   const songs = useMemo(() => songSetKey(drops), [drops]);
   const run = enabled && active && !held && drops.length > 0;
@@ -70,10 +72,14 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
     bump();
   }, [lastError]);
 
-  // 재생 중인 곡이 없을 때만 지금 차례 곡을 시작
+  // 재생 중인 곡도, 불러오는 중인 곡도 없을 때만 지금 차례 곡을 시작
   useEffect(() => {
     if (!run || starting.current) return;
-    if (usePreviewStore.getState().key) return; // 누군가 재생 중(자동 재생 곡 포함) — 끝나거나 멈출 때까지 기다림
+    const now = usePreviewStore.getState();
+    if (now.key) return; // 누군가 재생 중(자동 재생 곡 포함) — 끝나거나 멈출 때까지 기다림
+    // 다른 곳에서 누른 곡의 주소를 찾는 중 — 여기서 시작하면 그 요청을 무효로 만들어(재생 요청 토큰) 누른 곡 대신 자동 재생 곡이 나온다.
+    // 그 곡이 재생되면 key가, 못 찾으면 pending이 바뀌어 이 효과가 다시 돈다
+    if (now.pending) return;
     const d = decideAutoplay(drops, plan.current, Date.now());
     plan.current = d.plan;
     if (d.type === 'idle') return; // 틀 곡이 없다 — 곡 집합이 바뀔 때 다시 본다
@@ -92,7 +98,7 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
         if (r === 'ok') track('nearby_autoplay_play', { drop_id: drop.droppingId, song_id: drop.songId, nearby_count: drops.length });
         bump();
       });
-  }, [run, songs, key, turn]); // eslint-disable-line react-hooks/exhaustive-deps -- drops는 순서만 바뀌는 GPS 갱신마다 새 배열. 결정할 때 그 렌더의 최신 drops를 읽으면 충분
+  }, [run, songs, key, pendingKey, turn]); // eslint-disable-line react-hooks/exhaustive-deps -- drops는 순서만 바뀌는 GPS 갱신마다 새 배열. 결정할 때 그 렌더의 최신 drops를 읽으면 충분
 
   // 자동 재생 곡이 흐르는 동안 다음 곡(지금 위치 기준)을 골라 미리듣기 주소를 찾아 '이어 틀 곡'으로 넘겨 둔다.
   // 앱을 켜 둔 채 걷다가 위치가 바뀌어 더 가까운 곡이 생기면 다시 고른다
@@ -164,6 +170,10 @@ export function useNearbyAutoplay(drops: MusicDropSummary[], active: boolean) {
         // 미리듣기 주소를 찾는 중인 곡을 넘김 — 찾은 뒤에 재생되지 않게 요청도 거둔다
         plan.current = markHeard(plan.current, starting.current);
         stopPreviewFor(starting.current);
+      } else if (st.pending) {
+        // 다른 곳에서 누른 곡을 불러오는 중 — 그 요청을 거두고 자동 재생 차례로 (그 곡을 들은 곡으로 치지는 않는다)
+        stopPreviewFor(st.pending.key);
+        plan.current = wake(plan.current);
       } else {
         // 쉬는 중·실패로 멈춘 중이면 대기만 풀고 곧바로 다음 차례로 (실패한 곡은 이미 빠져 있다 — 아직 안 들은 곡을 들은 곡으로 넘기지 않음)
         plan.current = wake(plan.current);

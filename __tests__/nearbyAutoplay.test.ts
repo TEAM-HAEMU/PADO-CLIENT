@@ -13,7 +13,7 @@ jest.mock('@/store/prefs', () => ({ usePrefs: (sel: (s: { autoplayNearby: boolea
 import type { MusicDropSummary } from '@/api/types';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { AppState } from 'react-native';
-import { usePreviewStore } from '@/services/preview';
+import { startPreview, usePreviewStore } from '@/services/preview';
 import { MAX_FAIL_STREAK } from '@/utils/autoplayPlan';
 const React = require('react') as typeof import('react');
 const TestRenderer = require('react-test-renderer') as typeof import('react-test-renderer');
@@ -193,4 +193,50 @@ test('재생 오류 토스트 — 사용자가 튼 곡은 알리고, 자동 재�
   act(() => { video().props.onError(); });
   expect(mockToast).toHaveBeenCalledTimes(1);
   act(() => { host!.unmount(); });
+});
+
+/** ms 뒤에 결과를 주는 가짜 조회 (가짜 타이머) */
+const later = (ms: number, r: Found) => new Promise<Found>(res => setTimeout(() => res(r), ms));
+
+test('사용자가 누른 곡의 주소를 찾는 사이 자동 재생이 끼어들지 않는다 (누른 곡이 나온다)', async () => {
+  // n: 미리듣기 없음(800ms 쉬었다 다음) · a: 자동 재생 다음 차례 · u: 사용자가 지도에서 누른 곡 (조회 2초)
+  mockFind = jest.fn((id: string) => (id === 'n' ? Promise.resolve({ previewUrl: null }) : id === 'u' ? later(2000, { previewUrl: 'https://x/u.m4a' }) : Promise.resolve({ previewUrl: `https://x/${id}.m4a` })));
+  mount([drop('n'), drop('a')]);
+  await flush(100, 50); // n 조회 → 없음 → 800ms 쉬는 중
+  let picked: Promise<string> | undefined;
+  act(() => { picked = startPreview({ id: 'u', title: 'u', artist: 'x' }); });
+  expect(st().pending?.key).toBe('u');
+  await flush(3000); // 쉬는 시간이 끝나도 u를 찾는 중이면 기다린다
+  await act(async () => { await picked; });
+  expect(await picked).toBe('ok');
+  expect(st().key).toBe('u');
+  expect(calls('a')).toBe(0);
+  // 사용자 곡이 끝나면 자동 재생이 이어진다
+  act(() => { st()._ended(); });
+  await flush(1000);
+  expect(st().key).toBe('a');
+});
+
+test('누른 곡이 미리듣기가 없다고 끝나면 자동 재생이 이어서 시작한다', async () => {
+  mockFind = jest.fn((id: string) => (id === 'u' ? later(1000, { previewUrl: null }) : Promise.resolve({ previewUrl: `https://x/${id}.m4a` })));
+  act(() => { void startPreview({ id: 'u', title: 'u', artist: 'x' }); });
+  mount([drop('a')]);
+  await flush(500);
+  expect(st().key).toBeNull(); // 아직 u를 찾는 중 — 기다림
+  expect(calls('a')).toBe(0);
+  await flush(1500);
+  expect(st().pending).toBeNull();
+  expect(st().key).toBe('a');
+});
+
+test('누른 곡을 불러오는 중에 다음 곡(길게 누르기)을 누르면 그 요청을 거두고 자동 재생 차례로', async () => {
+  mockFind = jest.fn((id: string) => (id === 'u' ? later(5000, { previewUrl: 'https://x/u.m4a' }) : Promise.resolve({ previewUrl: `https://x/${id}.m4a` })));
+  act(() => { void startPreview({ id: 'u', title: 'u', artist: 'x' }); });
+  mount([drop('a')]);
+  await flush(500);
+  act(() => { result.current.next(); });
+  await flush(500);
+  expect(st().key).toBe('a');
+  await flush(6000); // 늦게 끝난 u 조회가 a를 덮어쓰지 않는다
+  expect(st().key).toBe('a');
 });

@@ -224,7 +224,10 @@ export function usePreview(song: PreviewSong | null | undefined, opts: { lazy?: 
       let u = url;
       if (!u) {
         setLooking(true);
-        const r = await findPreview(song, { priority: true }).finally(() => setLooking(false));
+        // 조회가 예외로 끝나도 '불러오는 중'(pending)이 남지 않게 확인 불가로 — 남으면 주변 곡 자동 재생도 그 곡을 기다리며 멈춘다
+        const r = await findPreview(song, { priority: true })
+          .catch(() => ({ previewUrl: null, unavailable: true, adult: false }))
+          .finally(() => setLooking(false));
         if (!current(token)) return; // 기다리는 사이 화면을 떠났거나 다른 곡을 누름
         if (r.unavailable) { settle(token); return toast('지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.', 'error'); }
         setUrl(r.previewUrl, r.adult);

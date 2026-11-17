@@ -1,6 +1,6 @@
 /** 5.1 프로필 — 내 드랍 지도 · 드랍 기록 · 좋아요 (오른쪽 위 종 아이콘 → 알림) */
-import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, ScrollView, View, Image, useWindowDimensions } from 'react-native';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, ScrollView, View, useWindowDimensions } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
 import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useQueryClient, useQueries } from '@tanstack/react-query';
@@ -13,12 +13,13 @@ import { Art, Avatar, Empty, Press, T, PrimaryButton } from '@/components/ui';
 import { MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
 import { listStatus } from '@/components/ui/ScreenState';
-import { MarkerArt } from '@/components/map/DropPin';
+import { MarkerArt, markerArtTiles } from '@/components/map/DropPin';
+import { isMarkerImageReady, prefetchMarkerImage, useTracking } from '@/components/map/DropMarker';
 import { env } from '@/config';
 import { invalidateAfterDropRemoved, qk, useMe, useMyDrops, useMyLikeCount, useMyLikes, useMyPlaylists, useUnreadCount } from '@/hooks/api';
 import { likeApi } from '@/api/endpoints';
 import { dropPlace } from '@/utils/address';
-import { artUrl } from '@/utils/artUrl';
+import { newestFirst } from '@/utils/dropOrder';
 import { dropArt, dropSub, dropTitle } from '@/screens/map/MapHomeScreen';
 import { toast } from '@/store/toast';
 import { googleMapStyle } from '@/theme/mapStyle';
@@ -28,6 +29,11 @@ const useGoogle = !!env.googleMapsKey || Platform.OS === 'android';
 /** '내 드랍 지도' 칸 높이 · 핀 전체 키 (아트 55 + 막대 19) */
 const DROP_MAP_H = 120;
 const PIN_H = 74;
+/** 미니 지도에 그릴 핀 수 상한 (최신순 — utils/dropOrder.ts). 120pt 칸이라 이보다 많으면 겹쳐 보이지도 않고 마커 스냅샷만 늘어난다 */
+const MAP_PIN_LIMIT = 30;
+/** 핀 앨범 아트 칸 (테두리 3을 뺀 안쪽) */
+const PIN_ART = 49;
+const PIN_ANCHOR = { x: 0.5, y: 1 };
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -43,31 +49,15 @@ export default function ProfileScreen() {
   const myDropsQ = useMyDrops();
   const myDrops = myDropsQ.data;
   const drops = useMemo(() => myDrops ?? EMPTY, [myDrops]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 플리 드랍 핀은 플리 상세와 같은 4칸 커버 — 요약엔 첫 곡 아트뿐이라 드랍 상세의 곡 아트를 쓴다
-  const playlistDrops = drops.filter(d => d.type === 'PLAYLIST');
+  // 미니 지도 핀 — 최신 MAP_PIN_LIMIT개만 (만든 시각이 응답에 없으면 목록 순서 그대로 위에서부터)
+  const mapDrops = useMemo(() => newestFirst(drops).slice(0, MAP_PIN_LIMIT), [drops]);
+  // 플리 드랍 핀은 플리 상세와 같은 4칸 커버 — 요약엔 첫 곡 아트뿐이라 드랍 상세의 곡 아트를 쓴다 (지도에 그리는 핀만)
+  const playlistDrops = mapDrops.filter(d => d.type === 'PLAYLIST');
   const plDetails = useQueries({ queries: playlistDrops.map(d => ({ queryKey: qk.drop(d.droppingId), queryFn: () => dropApi.get(d.droppingId), staleTime: 5 * 60_000, enabled: focused && tab === 'drops' })) });
   const covers: Record<string, (string | null)[]> = {};
   playlistDrops.forEach((d, i) => { const det = plDetails[i]?.data; if (det && isPlaylistDetail(det)) covers[d.droppingId] = det.songs.map(x => x.albumImagePath); });
-  const pinArts = (d: DropSummary) => covers[d.droppingId] ?? [dropArt(d)];
-  // 앨범 아트가 로드될 시간을 준 뒤 마커 스냅샷 고정 (Google 지도는 추적을 끄면 그 순간 모습으로 굳는다)
-  // 목록을 다시 받을 때마다(같은 내용이어도) 다시 그리면 겹친 핀이 번쩍이며 순서가 바뀌므로, 핀 구성·그림이 바뀔 때만
-  const [tracks, setTracks] = useState(true);
-  const [artEpoch, setArtEpoch] = useState(0);
-  const pinKey = drops.map(d => `${d.droppingId}=${pinArts(d).slice(0, 4).join('|')}`).join(',');
-  useEffect(() => {
-    if (tab !== 'drops') return; // 지도는 드랍 기록 탭에만 있다
-    let alive = true;
-    setTracks(true);
-    let t: ReturnType<typeof setTimeout> = setTimeout(() => setTracks(false), 5000);
-    // Android 마커 이미지는 미리 받아둔 뒤 다시 만들어야 보인다
-    const urls = drops.flatMap(d => (covers[d.droppingId] ? covers[d.droppingId].slice(0, 4) : [artUrl(dropArt(d), 49)])).filter((u): u is string => !!u);
-    Promise.all(urls.map(u => Image.prefetch(u).catch(() => false))).then(() => {
-      if (!alive) return;
-      if (Platform.OS === 'android') setArtEpoch(e => e + 1);
-      setTracks(true); clearTimeout(t); t = setTimeout(() => setTracks(false), 2500);
-    });
-    return () => { alive = false; clearTimeout(t); };
-  }, [pinKey, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 핀 그림 (원시값 — 핀마다 memo라 상세가 하나 도착하면 그 핀만 다시 그린다)
+  const pinArtKey = (d: DropSummary) => (covers[d.droppingId] ?? [dropArt(d)]).slice(0, 4).map(u => u ?? '').join('\n');
   const likesQ = useMyLikes();
   const likes = likesQ.data ?? [];
   const myLikeCount = useMyLikeCount().data;
@@ -86,9 +76,11 @@ export default function ProfileScreen() {
   // 핀은 좌표(바닥 점)에서 위로 74pt 솟아 있어, 좌표 범위에 딱 맞추면 가장 북쪽 핀이 지도 칸 위로 잘려 나간다
   // → 칸 높이에서 핀 키만큼 위를 비워 두고 남는 높이에 좌표 범위를 넣는다 (옆도 핀 반 폭만큼)
   const mapW = width - 40;
-  const region = useMemo(() => {
-    if (!drops.length) return null;
-    const lats = drops.map(d => d.latitude), lngs = drops.map(d => d.longitude);
+  // 드랍이 생기거나 지워지면 범위도 따라간다 — 지도는 움직일 수 없어 범위를 그대로 지정(region)한다.
+  // 같은 범위면 같은 객체 (목록을 다시 받을 때마다 지도에 범위를 다시 넣지 않게)
+  const regionKey = useMemo(() => {
+    if (!mapDrops.length) return null;
+    const lats = mapDrops.map(d => d.latitude), lngs = mapDrops.map(d => d.longitude);
     const minLat = Math.min(...lats), latSpan = Math.max(...lats) - minLat;
     const lngSpan = Math.max(...lngs) - Math.min(...lngs);
     const room = DROP_MAP_H - PIN_H - 8; // 좌표들이 들어갈 세로 픽셀
@@ -97,8 +89,13 @@ export default function ProfileScreen() {
     // 남는 세로 여백은 위아래 반씩 — 가장 남쪽 좌표가 아래에서 bottomPx 위에 오게
     const bottomPx = (DROP_MAP_H - PIN_H - (latSpan / latitudeDelta) * DROP_MAP_H) / 2;
     const latitude = minLat - (bottomPx / DROP_MAP_H) * latitudeDelta + latitudeDelta / 2;
-    return { latitude, longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2, latitudeDelta, longitudeDelta };
-  }, [drops, mapW]);
+    return [latitude, (Math.min(...lngs) + Math.max(...lngs)) / 2, latitudeDelta, longitudeDelta].join(',');
+  }, [mapDrops, mapW]);
+  const region = useMemo(() => {
+    if (!regionKey) return null;
+    const [latitude, longitude, latitudeDelta, longitudeDelta] = regionKey.split(',').map(Number);
+    return { latitude, longitude, latitudeDelta, longitudeDelta };
+  }, [regionKey]);
 
   const openDrop = (d: DropSummary) => nav.navigate(d.type === 'VOTE' ? 'VoteDrop' : d.type === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: d.droppingId, source: 'profile' });
   const removeDrop = (d: DropSummary) => dialog.alert('드랍을 삭제할까요?', `'${dropTitle(d)}' 드랍이 지도에서 사라지고 되돌릴 수 없어요.`, [
@@ -149,18 +146,9 @@ export default function ProfileScreen() {
           <View style={{ marginTop: 30 }}>
             {region ? (
               <View style={{ height: DROP_MAP_H, marginHorizontal: 20, marginBottom: 20, borderRadius: 16, overflow: 'hidden' }}>
-                <MapView style={{ flex: 1 }} provider={useGoogle ? PROVIDER_GOOGLE : PROVIDER_DEFAULT} customMapStyle={useGoogle ? googleMapStyle : undefined} userInterfaceStyle="light" initialRegion={region} scrollEnabled={false} zoomEnabled={false} rotateEnabled={false} pitchEnabled={false}>
-                  {drops.map((d, i) => (
-                    <Marker key={`${d.droppingId}:${artEpoch}`} coordinate={d} tracksViewChanges={tracks} anchor={{ x: 0.5, y: 1 }} zIndex={drops.length - i}>
-                      {/* Figma 'stay music' 핀 — #FAFAFA 3px 테두리 앨범 아트 55 + 가는 막대 + 바닥 점 */}
-                      <View style={{ alignItems: 'center', width: 55 }}>
-                        <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: '#FAFAFA', backgroundColor: '#FFFFFF', overflow: 'hidden' }}><MarkerArt images={pinArts(d)} size={49} radius={9} /></View>
-                        <View style={{ width: 8, height: 19, alignItems: 'center' }}>
-                          <View style={{ width: 1, height: 16, borderBottomLeftRadius: 1, borderBottomRightRadius: 1, backgroundColor: 'rgba(250,250,250,0.7)' }} />
-                          <View style={{ position: 'absolute', top: 12, width: 8, height: 7, borderRadius: 4, backgroundColor: 'rgba(250,250,250,0.7)' }} />
-                        </View>
-                      </View>
-                    </Marker>
+                <MapView style={{ flex: 1 }} provider={useGoogle ? PROVIDER_GOOGLE : PROVIDER_DEFAULT} customMapStyle={useGoogle ? googleMapStyle : undefined} userInterfaceStyle="light" initialRegion={region} region={region} scrollEnabled={false} zoomEnabled={false} rotateEnabled={false} pitchEnabled={false}>
+                  {mapDrops.map((d, i) => (
+                    <ProfilePinMarker key={d.droppingId} latitude={d.latitude} longitude={d.longitude} art={pinArtKey(d)} zIndex={mapDrops.length - i} />
                   ))}
                 </MapView>
                 <View style={{ position: 'absolute', left: 10, top: 10, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8, paddingRight: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: '#FFFFFF' }}>
@@ -237,3 +225,48 @@ function LikeBadge({ n }: { n: number | undefined }) {
     </View>
   );
 }
+
+/**
+ * '내 드랍 지도' 핀 — Figma 'stay music' 핀: #FAFAFA 3px 테두리 앨범 아트 55 + 가는 막대 + 바닥 점.
+ * 지도 홈 DropMarker처럼 핀마다 memo + 스냅샷 추적 — 처음·자기 그림이 로드될 때·그림이 바뀔 때(플리 상세 도착 → 4칸 커버)만 잠깐 켠다.
+ * 핀 하나의 그림이 바뀌어도 다른 핀은 다시 찍지도(추적), 다시 만들지도(Android) 않는다.
+ * art: 그림 주소를 줄바꿈으로 이은 값 (memo 비교용 원시값)
+ */
+const ProfilePinMarker = memo(function ProfilePinMarkerItem({ latitude, longitude, art, zIndex }: { latitude: number; longitude: number; art: string; zIndex: number }) {
+  const images = useMemo(() => art.split('\n').map(u => u || null), [art]);
+  const urls = useMemo(() => markerArtTiles(images, PIN_ART).urls, [images]);
+  const [initialTrackMs] = useState(() => (urls.every(isMarkerImageReady) ? 2000 : 5000));
+  const [tracking, trackFor] = useTracking(initialTrackMs);
+  // Android는 마커 안 이미지가 로드 이벤트를 주지 않아 빈 채로 굳는다 → 미리 받아둔 뒤 이 마커만 한 번 다시 만든다
+  const [epoch, setEpoch] = useState(() => (urls.every(isMarkerImageReady) ? 1 : 0));
+  useEffect(() => {
+    if (urls.every(isMarkerImageReady)) return;
+    let alive = true;
+    Promise.all(urls.map(u => prefetchMarkerImage(u, true))).then(() => {
+      if (!alive) return;
+      if (Platform.OS === 'android') setEpoch(e => e + 1);
+      trackFor(2500);
+    });
+    return () => { alive = false; };
+  }, [urls, trackFor]);
+  // 그림이 바뀌면 새 모습을 한 번 다시 찍는다
+  const prevArt = useRef(art);
+  useEffect(() => {
+    if (prevArt.current === art) return;
+    prevArt.current = art;
+    trackFor(1500);
+  }, [art, trackFor]);
+  const onImageLoad = useCallback(() => trackFor(1200), [trackFor]);
+  const coordinate = useMemo(() => ({ latitude, longitude }), [latitude, longitude]);
+  return (
+    <Marker key={epoch} coordinate={coordinate} tracksViewChanges={tracking} anchor={PIN_ANCHOR} zIndex={zIndex}>
+      <View style={{ alignItems: 'center', width: 55 }}>
+        <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: '#FAFAFA', backgroundColor: '#FFFFFF', overflow: 'hidden' }}><MarkerArt images={images} size={PIN_ART} radius={9} onLoad={onImageLoad} /></View>
+        <View style={{ width: 8, height: 19, alignItems: 'center' }}>
+          <View style={{ width: 1, height: 16, borderBottomLeftRadius: 1, borderBottomRightRadius: 1, backgroundColor: 'rgba(250,250,250,0.7)' }} />
+          <View style={{ position: 'absolute', top: 12, width: 8, height: 7, borderRadius: 4, backgroundColor: 'rgba(250,250,250,0.7)' }} />
+        </View>
+      </View>
+    </Marker>
+  );
+});

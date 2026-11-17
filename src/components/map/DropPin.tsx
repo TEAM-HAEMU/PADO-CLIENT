@@ -127,10 +127,16 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
  * Android 마커는 뷰를 비트맵으로 찍어 쓰는데, 일반 Image는 화면에 붙지 않은 마커 안에서 끝내 그려지지 않아 빈 칸으로 굳는다
  * → Android는 자기 캔버스에 직접 그리는 SVG 이미지로 그린다 (모서리는 clipPath)
  */
-export function MarkerArt({ images, size, radius, onLoad }: { images: (string | null | undefined)[]; size: number; radius: number; onLoad?: () => void }) {
+/** MarkerArt가 그릴 칸 — 4장 이상이면 2×2, 아니면 첫 장 하나. url은 실제로 받는 주소(칸 크기에 맞춘 판본) */
+export function markerArtTiles(images: readonly (string | null | undefined)[], size: number) {
   const list = images.filter((u): u is string => !!u);
   const tiles = list.length >= 4 ? list.slice(0, 4) : list.slice(0, 1);
   const h = tiles.length === 4 ? size / 2 : size;
+  return { tiles, h, urls: tiles.map(u => artUrl(u, h)!) };
+}
+
+export function MarkerArt({ images, size, radius, onLoad }: { images: (string | null | undefined)[]; size: number; radius: number; onLoad?: () => void }) {
+  const { tiles, h } = markerArtTiles(images, size);
   const at = (i: number) => (tiles.length === 4 ? { x: (i % 2) * h, y: Math.floor(i / 2) * h } : { x: 0, y: 0 });
   if (Platform.OS === 'android') {
     return (
