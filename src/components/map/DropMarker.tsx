@@ -2,7 +2,7 @@
  * 지도 마커 — 드랍 핀 하나 · 많이 축소했을 때의 묶음 · 내 위치.
  * props는 원시값만 받고 memo로 감싼다 → GPS가 갱신돼 지도 화면이 다시 렌더돼도 바뀐 핀만 다시 그린다.
  * 마커 스냅샷 추적(tracksViewChanges)은 마커마다 — 처음 그릴 때, 자기 앨범 아트가 로드될 때, 모양이 바뀔 때만 잠깐 켠다
- * (Google 지도는 추적을 끄면 그 순간 모습으로 굳고, 켜 두면 계속 다시 찍어 비싸다).
+ * (Google 지도는 추적을 끄면 그 순간 모습으로 굳고, 켜 두면 계속 다시 찍어 비싸다). 핀 물결 애니메이션은 마커 밖 PinRipples가 그려서, 지도가 멈춰 있으면 추적은 꺼져 있다.
  */
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Platform, Text, View } from 'react-native';
@@ -68,8 +68,6 @@ interface DropMarkerProps {
   locked: boolean;
   /** 가장 가까운 열린 드랍, 또는 하단 목록에서 고른 드랍 (크게 + 시안 테두리 — 잠긴 드랍은 회청색) */
   active: boolean;
-  /** 물결 애니메이션 — 켜져 있는 동안은 계속 추적 */
-  animated: boolean;
   art?: string | null;
   title: string;
   subtitle: string;
@@ -77,7 +75,7 @@ interface DropMarkerProps {
   onPress: (id: string) => void;
 }
 
-export const DropMarker = memo(function DropMarkerItem({ id, latitude, longitude, type, locked, active, animated, art: image, title, subtitle, count, onPress }: DropMarkerProps) {
+export const DropMarker = memo(function DropMarkerItem({ id, latitude, longitude, type, locked, active, art: image, title, subtitle, count, onPress }: DropMarkerProps) {
   const url = locked ? null : markerArtUrl(image);
   // 처음 스냅샷 추적 시간 — 잠긴 핀은 이미지가 없어 첫 모습만, 아트를 미리 받아 둔 핀은 기기에 있는 그림을 그릴 동안만 잡으면 된다
   // (Android는 추적 중인 마커마다 40ms마다 비트맵을 다시 만든다 — 축소해서 핀 수십 개가 한꺼번에 생길 때 지도가 끊기지 않게 짧게)
@@ -112,14 +110,14 @@ export const DropMarker = memo(function DropMarkerItem({ id, latitude, longitude
       key={epoch}
       coordinate={coordinate}
       anchor={active ? ANCHOR.active : ANCHOR.normal}
-      tracksViewChanges={tracking || animated}
+      tracksViewChanges={tracking}
       zIndex={active ? 3 : 2}
       onPress={press}
     >
       {locked ? (
-        <DropPin type={type} locked active={active} animated={false} title={title} subtitle={subtitle} />
+        <DropPin type={type} locked active={active} title={title} subtitle={subtitle} />
       ) : (
-        <DropPin type={type} art={image} active={active} animated={animated} onImageLoad={onImageLoad} title={title} subtitle={subtitle} count={count} />
+        <DropPin type={type} art={image} active={active} onImageLoad={onImageLoad} title={title} subtitle={subtitle} count={count} />
       )}
     </Marker>
   );

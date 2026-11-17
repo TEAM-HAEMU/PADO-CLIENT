@@ -98,7 +98,7 @@ export default function PasswordResetScreen({ navigation, route }: RootScreen<'P
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <Wave style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
+      <Wave always style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
       <AuthHeader onBack={back} style={{ marginTop: insets.top + 12 }} />
       <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: insets.bottom + 16 }} keyboardShouldPersistTaps="handled">
         <AuthTitle title={title} desc={body(email)} />

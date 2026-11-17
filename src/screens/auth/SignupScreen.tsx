@@ -130,7 +130,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
       <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.goBack} style={{ marginTop: insets.top + 12 }} />
       <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: insets.bottom + 16 }} keyboardShouldPersistTaps="handled">
         {/* 파도는 입력칸 뒤에 깔린 채 함께 스크롤 (디자인 474/1140) */}
-        <Wave style={{ position: 'absolute', left: 0, right: 0, top: 377 }} />
+        <Wave always style={{ position: 'absolute', left: 0, right: 0, top: 377 }} />
         <AuthTitle title={title} desc={social ? '몇 가지만 확인하면 바로 시작할 수 있어요.' : '몇 가지만 알려주면 바로 시작할 수 있어요.'} />
         <View style={{ paddingHorizontal: 24, paddingTop: 24, gap: 16 }} onLayout={ev => { formY.current = ev.nativeEvent.layout.y; }}>
           <View onLayout={at('email')}>

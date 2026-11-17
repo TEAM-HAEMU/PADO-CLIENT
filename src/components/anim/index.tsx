@@ -8,6 +8,7 @@ import React, { useEffect, useMemo } from 'react';
 import { View, type ViewStyle } from 'react-native';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
+import { useScreenVisible } from '@/hooks/useScreenVisible';
 import { colors } from '@/theme/tokens';
 
 const W = 402;
@@ -58,16 +59,18 @@ export function ParticleWave({ style, width = W, animate = true }: { style?: Vie
   );
 }
 
-/** 8초에 한 바퀴 도는 디스크 (paused면 정지) */
+/** 8초에 한 바퀴 도는 디스크 (paused면 정지 · 화면이 가려지거나 앱이 백그라운드여도 그 자리에서 정지) */
 export function Spin({ children, paused, duration = 8000 }: { children: React.ReactNode; paused?: boolean; duration?: number }) {
   const r = useSharedValue(0);
+  const visible = useScreenVisible();
+  const stopped = paused || !visible;
   useEffect(() => {
     // 일시정지면 그 자리에서 멈춘다 (이전엔 계속 돌았음)
-    if (paused) { cancelAnimation(r); return; }
+    if (stopped) { cancelAnimation(r); return; }
     r.value = r.value % 360;
     r.value = withRepeat(withTiming(r.value + 360, { duration, easing: Easing.linear }), -1, false);
     return () => cancelAnimation(r);
-  }, [paused, duration, r]);
+  }, [stopped, duration, r]);
   const st = useAnimatedStyle(() => ({ transform: [{ rotate: `${r.value}deg` }] }));
   return <Animated.View style={st}>{children}</Animated.View>;
 }

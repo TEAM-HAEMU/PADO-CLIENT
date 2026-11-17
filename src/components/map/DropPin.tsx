@@ -1,10 +1,10 @@
 /**
  * 드랍 핀 — Figma 새 디자인 '2.1 지도 홈' stay music: 흰 테두리 둥근 사각 앨범 아트가 줄기 위에 떠 있고, 떨어진 자리에 물결.
+ * 물결은 마커 안에선 늘 멈춘 그림 — 움직이는 물결은 지도 위 별도 레이어(PinRipples)가 그린다 (마커 그림을 계속 다시 찍지 않게)
  * 마커 좌표는 물결 중심(점)에 맞춘다 → Marker anchor={{x: tipX/w, y: tipY/h}}
  */
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Image, Platform, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 import Svg, { ClipPath, Defs, Ellipse, Image as SvgImage, Rect } from 'react-native-svg';
 import { T, Icon } from '@/components/ui';
 import { colors, glow } from '@/theme/tokens';
@@ -23,30 +23,6 @@ function Ripple({ cx, cy }: { cx: number; cy: number }) {
 }
 
 const RIPPLE_W = 81;
-const RIPPLE_H = 29;
-
-/** 떨어진 자리에서 퍼지는 물결 — 납작한 원(타원)이 커지며 사라진다 */
-function WaveRing({ cx, cy, delay, duration }: { cx: number; cy: number; delay: number; duration: number }) {
-  const v = useSharedValue(0);
-  useEffect(() => {
-    v.value = withDelay(delay, withRepeat(withTiming(1, { duration, easing: Easing.out(Easing.quad) }), -1, false));
-  }, [delay, duration, v]);
-  const st = useAnimatedStyle(() => ({
-    opacity: 0.85 * (1 - v.value),
-    transform: [{ scaleX: 0.15 + 0.85 * v.value }, { scaleY: (0.15 + 0.85 * v.value) * (RIPPLE_H / RIPPLE_W) }],
-  }));
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[{ position: 'absolute', left: cx - RIPPLE_W / 2, top: cy - RIPPLE_W / 2, width: RIPPLE_W, height: RIPPLE_W, borderRadius: RIPPLE_W / 2, borderWidth: 2.4, borderColor: '#FFFFFF' }, st]}
-    />
-  );
-}
-
-function AnimatedRipple({ cx, cy, rings }: { cx: number; cy: number; rings: number }) {
-  const duration = 2600;
-  return <>{Array.from({ length: rings }, (_, i) => <WaveRing key={i} cx={cx} cy={cy} delay={(duration / rings) * i} duration={duration} />)}</>;
-}
 
 interface PinProps {
   type: DropType;
@@ -55,8 +31,6 @@ interface PinProps {
   title?: string;
   subtitle?: string;
   count?: number;
-  /** 물결 애니메이션 (Google 지도에선 Marker tracksViewChanges가 켜져 있어야 보인다) */
-  animated?: boolean;
   onImageLoad?: () => void;
   /** 재생 반경 밖 — 곡·커버 없이 흐리게 (art·count는 무시). active(말풍선으로 고름)면 조금 크게 · 덜 흐리게 · 회청색 테두리 */
   locked?: boolean;
@@ -74,7 +48,7 @@ export const PIN_SIZE = { normal: box(55), active: box(63) };
  * Figma 'stay music': 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 앨범 아트 + 아래로 반투명 줄기와 점.
  * Android 마커 비트맵은 overflow:hidden 클리핑을 못 그려서 앨범 아트는 Image 자체에 borderRadius를 준다
  */
-export function DropPin({ type, art, active, title, subtitle, count, animated, onImageLoad, locked }: PinProps) {
+export function DropPin({ type, art, active, title, subtitle, count, onImageLoad, locked }: PinProps) {
   const A = active ? 63 : 55;
   const B = 3;
   const inner = A - B * 2;
@@ -83,9 +57,8 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
   const left = (b.w - A) / 2;
   return (
     <View style={{ width: b.w, height: b.h, opacity: locked ? (active ? 0.9 : 0.55) : 1 }} accessible={!!title} accessibilityLabel={title ? `${title}${subtitle ? ` · ${subtitle}` : ''}` : undefined}>
-      {animated ? <AnimatedRipple cx={b.tipX} cy={b.tipY} rings={active ? 3 : 2} /> : null}
       <Svg width={b.w} height={b.h} style={{ position: 'absolute' }}>
-        {animated ? null : <Ripple cx={b.tipX} cy={b.tipY} />}
+        <Ripple cx={b.tipX} cy={b.tipY} />
       </Svg>
       {/* 줄기 + 떨어진 점 */}
       <View style={{ position: 'absolute', left: b.tipX - 0.5, top: b.top + A, width: 1, height: 16, borderBottomLeftRadius: 1, borderBottomRightRadius: 1, backgroundColor: 'rgba(250,250,250,0.7)' }} />

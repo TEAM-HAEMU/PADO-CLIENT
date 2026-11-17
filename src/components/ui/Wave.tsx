@@ -3,12 +3,14 @@
  *  · 각 겹을 [원본][좌우 반전][원본]으로 이어 붙여 두 폭만큼 흘려보내면 이음새 없이 8초마다 반복
  *  · 뒤 겹은 4초, 앞 겹은 2.7초 주기로 위아래 일렁임 (8초 안에 딱 맞아떨어지는 주기)
  *  · surge: 재생 중에만 쓰는 'E · 재생 중 출렁임' — 1.6초 주기로 더 크게 출렁임
+ *  · 화면이 보이고 미리듣기가 재생 중일 때만 흐른다 — 멈추면 그 자리 그림(정지 프레임)으로 두었다가 다시 재생하면 이어서.
+ *    가만히 둔 화면이 초당 60프레임을 계속 그리지 않게 (소개·로그인처럼 재생과 무관한 화면은 always)
  */
 import React, { useEffect, useRef } from 'react';
 import { View, type ViewStyle } from 'react-native';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { scheduleOnUI } from 'react-native-worklets';
-import { useScreenVisible } from '@/hooks/useScreenVisible';
+import { useAmbientMotion } from '@/hooks/useAmbientMotion';
 import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg';
 
 const BACK = { w: 486.247, d: 'M102.178 10.5432C89.9941 49.2173 44.3925 73.2827 13.4876 83.7805C5.65364 86.4416 0 93.5872 0 101.861V198.858C0 208.8 8.05887 216.858 18 216.858H468.247C478.188 216.858 486.247 208.8 486.247 198.858V106.865C486.247 96.5089 477.405 88.4959 467.25 86.4622C425.116 78.0238 396.76 34.6159 386.136 9.37629C385.477 7.81203 384.674 6.30037 383.511 5.06449C375.182 -3.78534 366.565 0.718931 362.051 5.34185C361.017 6.40054 360.28 7.73207 359.67 9.08011C324.813 86.072 253.416 93.9217 220.525 88.0216C219.638 87.8625 218.762 87.7608 217.863 87.7032C171.478 84.7314 137.688 34.9557 125.713 8.66848C125.209 7.5616 124.642 6.49275 123.852 5.56785C119.272 0.204355 113.759 0.00614267 109.408 1.38969C105.474 2.64088 103.419 6.60545 102.178 10.5432Z' };
@@ -73,16 +75,18 @@ interface Props {
   surge?: boolean;
   /** 멈춘 그림만 (스크린샷·접근성 '동작 줄이기') */
   still?: boolean;
+  /** 재생 중이 아니어도 보일 때 계속 흐름 (소개·로그인 등 재생과 무관한 화면) */
+  always?: boolean;
 }
 
-export function Wave({ style, opacity = 0.4, scale = 1, surge = false, still = false }: Props) {
+export function Wave({ style, opacity = 0.4, scale = 1, surge = false, still = false, always = false }: Props) {
   const reduced = useReducedMotion();
   const on = !still && !reduced;
-  // 가려진 화면(native-stack 아래 화면·다른 탭)·백그라운드에서는 멈춘다 — 시트처럼 비쳐 보이는 덮개 아래에선 계속
-  const visible = useScreenVisible();
-  const flow = useLoop(8000, on, false, visible);
-  const bobBack = useLoop(surge ? 800 : 2000, on, true, visible);
-  const bobFront = useLoop(surge ? 800 : 1333, on, true, visible);
+  // 가려진 화면(native-stack 아래 화면·다른 탭)·백그라운드·재생 안 함이면 멈춘다 — 시트처럼 비쳐 보이는 덮개 아래에선 계속
+  const running = useAmbientMotion(always);
+  const flow = useLoop(8000, on, false, running);
+  const bobBack = useLoop(surge ? 800 : 2000, on, true, running);
+  const bobFront = useLoop(surge ? 800 : 1333, on, true, running);
 
   const back = useAnimatedStyle(() => ({ transform: [{ translateX: -flow.value * BACK.w * 2 }, { translateY: (surge ? -18 : -7) + bobBack.value * (surge ? 18 : 10) }] }));
   const front = useAnimatedStyle(() => ({ transform: [{ translateX: -flow.value * FRONT.w * 2 }, { translateY: 2 - bobFront.value * (surge ? 18 : 11) }, { scaleY: 1 + bobFront.value * (surge ? 0.1 : 0.07) }] }));

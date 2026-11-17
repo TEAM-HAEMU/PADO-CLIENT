@@ -113,5 +113,11 @@
     "sp-react-native-in-app-updates": {
       "react-native-device-info": "$react-native-device-info"
     }
+  },
+  "reanimated": {
+    "staticFeatureFlags": {
+      "ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS": true,
+      "IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS": true
+    }
   }
 }
