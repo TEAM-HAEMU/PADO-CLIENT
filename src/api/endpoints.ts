@@ -7,6 +7,10 @@ import type {
   PlaylistDetail, PlaylistSummary, RegisterBody, ReportReason, ReportTarget, SocialLoginBody, SocialLoginResponse, SocialProvider,
   SocialSignupBody, Song, Term, TokenPair, UpdateProfileBody, UserAgreement, UUID,
 } from './types';
+import { env } from '@/config';
+
+/** 목 모드에서 목 서버(mock/server)에 아직 없는 경로 — 앱 버전·최근 앨범 이미지 (mock/appInfo) */
+const appMock = () => require('./mock/appInfo') as typeof import('./mock/appInfo');
 
 /** 경로 조각 인코딩 — 딥링크 등 외부에서 온 ID로 다른 경로를 호출하지 못하게 */
 const e = encodeURIComponent;
@@ -59,6 +63,9 @@ export const dropApi = {
   remove: (id: UUID) => api.delete(`/droppings/${e(id)}`),
   vote: (id: UUID, songId: UUID) => api.post(`/droppings/${e(id)}/vote`, { songId }),
   unvote: (id: UUID) => api.delete(`/droppings/${e(id)}/vote`),
+  /** 최근 드랍 앨범 이미지 (최신순 최대 9개, 서버 1시간 캐시) — 드랍 종류 화면 예시 그림. 응답 검사는 utils/albumSlots */
+  recentAlbumImages: () =>
+    env.useMock ? appMock().recentAlbumImages() : api.get<{ albumImageUrls?: unknown }>('/droppings/recent-album-images', { auth: 'none' }).then(r => r?.albumImageUrls),
 };
 
 // ── 운영 설정 (로그인 불필요)
@@ -66,6 +73,8 @@ export const settingsApi = {
   /** 좌표를 주면 같은 지역 모드일 때 그 좌표의 지역(region)도 온다. 응답 모양 검사는 hooks/useDropRadius */
   dropRadius: (at?: { latitude: number; longitude: number } | null) =>
     api.get<unknown>('/settings/drop-radius', { auth: 'none', query: at ? { latitude: at.latitude.toFixed(4), longitude: at.longitude.toFixed(4) } : undefined }),
+  /** 플랫폼별 최소·최신 앱 버전 (기준이 없으면 "0"). 비교는 앱이 한다 — utils/appVersion */
+  appVersion: () => (env.useMock ? appMock().appVersion() : api.get<unknown>('/settings/app-version', { auth: 'none' })),
 };
 
 // ── 행정구역 (지도 위 제목 — 화면 가운데 지점의 시·도/시·군·구/동 이름, place면 그 자리의 아는 장소도). 응답 검사는 utils/mapPlace

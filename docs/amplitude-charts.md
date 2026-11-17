@@ -93,6 +93,17 @@ Retention Analysis
 5. 반경 값별 비교
    - 1번 차트에 Group by `play_m`을 더하면 재생 반경 값이 바뀐 앞뒤를 나눠 볼 수 있다
 
+## 6-1. 앱 업데이트 안내
+
+어드민에서 최소·최신 버전을 올린 뒤 안내가 얼마나 뜨고 눌리는지 본다.
+
+1. 안내 → 업데이트 누름
+   - Funnel: `app_update_prompt_shown` → `app_update_clicked`, Group by `kind`
+   - 이름 `업데이트 안내 → 업데이트 누름`
+2. 선택 안내를 미룬 비율
+   - Event Segmentation, A: `app_update_prompt_shown` where `kind = optional`, B: `app_update_dismissed`
+   - Formula `UNIQUES(B) / UNIQUES(A)`
+
 ## 7. 대시보드
 
 Dashboards → New → `PADO 이용 분석`에 위 차트를 모두 넣고, 공유 링크(Share → Copy link)를 어드민의 `AMPLITUDE_DASHBOARD_URL`에 넣는다.
