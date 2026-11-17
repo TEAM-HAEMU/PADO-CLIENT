@@ -26,12 +26,12 @@ export function rippleToken(pins: readonly RipplePin[], view: { latitude: number
   return `${at}|${pins.map(p => `${p.id}:${p.latitude},${p.longitude}`).join(';')}`;
 }
 
-/** 핀 하나에 미리 만들어 두는 물결 고리 수 — 크게 그린 핀(고른·가장 가까운 핀)만 다 쓰고, 나머지는 RING_COUNT.normal개 */
+/** 핀 하나의 물결 고리 수 — 크게 그린 핀(고른·가장 가까운 핀)은 3겹, 나머지는 2겹 */
 export const RING_COUNT = { active: 3, normal: 2 } as const;
 
 /**
  * 고리 i의 지금 진행(0→1, 1이면 다 퍼져 사라짐). 시계 하나(clock 0→1 반복)를 고리마다 1/rings씩 어긋나게 쓴다
- * → 고리 수가 바뀌어도(고른 핀이 바뀜) 고리를 새로 만들거나 애니메이션을 다시 걸지 않는다. i가 고리 수 이상이면 -1(그리지 않음)
+ * → 고리를 새로 붙이거나 고리 수가 바뀌어도(고른 핀이 바뀜) 애니메이션을 다시 걸지 않는다. i가 고리 수 이상이면 -1(그리지 않음)
  */
 export function ringProgress(clock: number, i: number, rings: number) {
   'worklet';
