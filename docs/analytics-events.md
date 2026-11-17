@@ -128,6 +128,16 @@
 | `report_submitted` | 신고 | `target_type`, `reason`, `has_detail`, `block` |
 | `user_blocked` / `user_unblocked` | 차단 | `source` |
 
+### 앱 업데이트
+
+`GET /settings/app-version` 기준과 앱 버전을 비교해 띄우는 안내 (`src/services/appUpdate.ts`). 필수 = 지금 버전 < `minVersion`(앱을 쓸 수 없게 막는 화면), 선택 = < `latestVersion`(지도 위 시트).
+
+| 이벤트 | 언제 | 속성 |
+|---|---|---|
+| `app_update_prompt_shown` | 필수 업데이트 화면 또는 선택 업데이트 시트가 뜸 (선택은 실행마다 최대 한 번) | `kind`(`required`·`optional`), `latest_version`, `current_version` |
+| `app_update_clicked` | '업데이트'를 누름 (iOS App Store, Android Play 인앱 업데이트 → 안 되면 Play 스토어) | `kind`, `latest_version` |
+| `app_update_dismissed` | 선택 시트를 '나중에'·배경 탭·쓸어내리기·뒤로가기로 닫음 — 이 `latest_version`은 다시 띄우지 않음 | `latest_version` |
+
 ## 이벤트를 더할 때
 
 - 정밀 위치·주소·닉네임처럼 사람이나 자리를 알 수 있는 값은 `detailedOnly({...})`로 감싼다

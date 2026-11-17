@@ -26,6 +26,9 @@ import { startPush } from '@/services/push';
 import { startPushRegionSync } from '@/services/pushRegion';
 import { AppErrorFallback } from '@/components/AppErrorFallback';
 import { colors } from '@/theme/tokens';
+import { startAppUpdateCheck, useAppUpdate } from '@/services/appUpdate';
+import { startRecentAlbumArtPrefetch } from '@/hooks/useRecentAlbumArt';
+import UpdateRequiredScreen from '@/screens/update/UpdateRequiredScreen';
 
 const theme = { ...DefaultTheme, dark: false, colors: { ...DefaultTheme.colors, background: colors.page, card: colors.card, text: colors.ink, border: colors.line, primary: colors.primary } };
 
@@ -41,6 +44,10 @@ initMonitoring();
 
 function App() {
   const bootstrap = useAuth(s => s.bootstrap);
+  // 앱 버전 확인(시작 때·돌아올 때 1시간 간격)과 드랍 종류 화면 예시 그림용 최근 앨범 이미지 미리 받기
+  useEffect(() => { startAppUpdateCheck(); startRecentAlbumArtPrefetch(queryClient); }, []);
+  // 필수 업데이트면 내비게이션 대신 업데이트 화면 한 장만 (시트·모달까지 모두 내려서 앱을 쓸 수 없게)
+  const updateRequired = useAppUpdate(s => s.decision?.kind === 'required');
   useEffect(() => {
     // 분석 모드(기본 익명·상세·끔)를 먼저 적용해 자동 로그인(bootstrap)의 사용자 식별(상세일 때만)이 기록되게 한다
     startAppStateTracking();
@@ -61,13 +68,15 @@ function App() {
         <Sentry.ErrorBoundary fallback={renderFallback}>
           <QueryClientProvider client={queryClient}>
             <KeyboardInset>
-              <NavigationContainer ref={navigationRef} theme={theme} linking={linking} fallback={<Splash />} onReady={onNavReady} onStateChange={onNavState}>
-                <StatusBar barStyle="dark-content" />
-                <RootNavigator />
-              </NavigationContainer>
+              {updateRequired ? <UpdateRequiredScreen /> : (
+                <NavigationContainer ref={navigationRef} theme={theme} linking={linking} fallback={<Splash />} onReady={onNavReady} onStateChange={onNavState}>
+                  <StatusBar barStyle="dark-content" />
+                  <RootNavigator />
+                </NavigationContainer>
+              )}
             </KeyboardInset>
             <PreviewHost />
-            <MiniDisc />
+            {updateRequired ? null : <MiniDisc />}
             <DialogHost />
             <ToastHost />
           </QueryClientProvider>
