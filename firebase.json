@@ -1,8 +1,11 @@
 {
   "react-native": {
-    "messaging_ios_foreground_presentation_options": ["banner", "list", "sound"],
+    "messaging_ios_foreground_presentation_options": [
+      "banner",
+      "list",
+      "sound"
+    ],
     "messaging_android_notification_channel_id": "pado_default",
-    "messaging_android_notification_color": "@color/pado_notification",
     "messaging_android_notification_delivery_metrics_export_enabled": false
   }
 }
