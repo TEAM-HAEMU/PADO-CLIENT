@@ -62,8 +62,12 @@ interface PinProps {
   locked?: boolean;
 }
 
-/** 아트 한 변 A → 줄기 16 · 점(8×7) 중심 A+15.5 · 물결 반높이 14.5 */
-const box = (A: number) => ({ w: RIPPLE_W, h: A + 31, tipX: RIPPLE_W / 2, tipY: A + 15.5 });
+/**
+ * 아트 한 변 A → 줄기 16 · 점(8×7) 중심 A+15.5 · 물결 반높이 14.5.
+ * 위 여백 TOP: 아트 오른쪽 위에 걸치는 배지(투표·N곡)가 뷰 밖으로 나가면 마커 비트맵(특히 Android)에서 잘려서, 배지 자리를 뷰 안에 둔다
+ */
+const TOP = 6;
+const box = (A: number) => ({ w: RIPPLE_W, h: TOP + A + 31, tipX: RIPPLE_W / 2, tipY: TOP + A + 15.5, top: TOP });
 export const PIN_SIZE = { normal: box(55), active: box(63) };
 
 /**
@@ -84,11 +88,11 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
         {animated ? null : <Ripple cx={b.tipX} cy={b.tipY} />}
       </Svg>
       {/* 줄기 + 떨어진 점 */}
-      <View style={{ position: 'absolute', left: b.tipX - 0.5, top: A, width: 1, height: 16, borderBottomLeftRadius: 1, borderBottomRightRadius: 1, backgroundColor: 'rgba(250,250,250,0.7)' }} />
-      <View style={{ position: 'absolute', left: b.tipX - 4, top: A + 12, width: 8, height: 7, borderRadius: 4, backgroundColor: 'rgba(250,250,250,0.7)' }} />
+      <View style={{ position: 'absolute', left: b.tipX - 0.5, top: b.top + A, width: 1, height: 16, borderBottomLeftRadius: 1, borderBottomRightRadius: 1, backgroundColor: 'rgba(250,250,250,0.7)' }} />
+      <View style={{ position: 'absolute', left: b.tipX - 4, top: b.top + A + 12, width: 8, height: 7, borderRadius: 4, backgroundColor: 'rgba(250,250,250,0.7)' }} />
       <View
         style={[
-          { position: 'absolute', left, top: 0, width: A, height: A, borderRadius: R, backgroundColor: '#FFFFFF', borderWidth: B, borderColor: active ? (locked ? colors.ink3 : colors.accent) : '#FAFAFA', alignItems: 'center', justifyContent: 'center' },
+          { position: 'absolute', left, top: b.top, width: A, height: A, borderRadius: R, backgroundColor: '#FFFFFF', borderWidth: B, borderColor: active ? (locked ? colors.ink3 : colors.accent) : '#FAFAFA', alignItems: 'center', justifyContent: 'center' },
           Platform.OS === 'ios' ? (active && !locked ? glow(0.8, 14) : { shadowColor: '#12214A', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } }) : null,
         ]}
       >
@@ -105,12 +109,12 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
         )}
       </View>
       {type === 'VOTE' && art && !locked ? (
-        <View style={{ position: 'absolute', left: left + A - 14, top: -4, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent, borderWidth: 1.5, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ position: 'absolute', right: left - 6, top: b.top - 4, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent, borderWidth: 1.5, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="vote" size={11} color={colors.ink} strokeWidth={2.4} />
         </View>
       ) : null}
       {type === 'PLAYLIST' && count && !locked ? (
-        <View style={{ position: 'absolute', left: left + A - 20, top: -4, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 9, backgroundColor: colors.primary, borderWidth: 1.5, borderColor: '#FFFFFF' }}>
+        <View style={{ position: 'absolute', right: left - 6, top: b.top - 4, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 9, backgroundColor: colors.primary, borderWidth: 1.5, borderColor: '#FFFFFF' }}>
           <T v="micro" c="page" style={{ fontSize: 10, lineHeight: 13 }}>{count}곡</T>
         </View>
       ) : null}
