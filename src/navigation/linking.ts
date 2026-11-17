@@ -1,6 +1,7 @@
 import { Linking } from 'react-native';
 import { CommonActions, getStateFromPath, type LinkingOptions } from '@react-navigation/native';
 import { useAuth } from '@/store/auth';
+import { initialPushUrl, subscribePushOpened } from '@/services/push';
 import { navigationRef } from './ref';
 import type { RootStackParamList } from './types';
 
@@ -31,21 +32,25 @@ export function openPendingLink() {
 /**
  * pado:// 딥링크. 드랍 공유 링크는 타입을 모르므로 PinPreview로 보내고,
  * PinPreview가 투표·플리 드랍이면 상세로 넘긴다.
+ * 푸시 알림을 누른 것도 같은 경로로 연다 (services/push가 알림 data를 pado:// URL로 바꿔 줌)
  */
 export const linking: LinkingOptions<RootStackParamList> = {
   prefixes: [PREFIX],
   async getInitialURL() {
-    const url = await Linking.getInitialURL();
+    // 링크로 열었으면 그 링크, 아니면 꺼져 있던 앱을 알림으로 열었을 때 그 알림의 화면
+    const url = (await Linking.getInitialURL()) ?? (await initialPushUrl());
     if (!url) return null;
     if ((await authReady()) !== 'authed') { pendingUrl = url; return null; }
     return url;
   },
   subscribe(listener) {
-    const sub = Linking.addEventListener('url', ({ url }) => {
+    const open = (url: string) => {
       if (useAuth.getState().status !== 'authed') pendingUrl = url;
       else listener(url);
-    });
-    return () => sub.remove();
+    };
+    const sub = Linking.addEventListener('url', ({ url }) => open(url));
+    const unsubPush = subscribePushOpened(open);
+    return () => { sub.remove(); unsubPush(); };
   },
   config: {
     // 앱이 꺼진 상태에서 딥링크로 열어도 뒤에 지도(탭)가 깔리게
@@ -54,7 +59,8 @@ export const linking: LinkingOptions<RootStackParamList> = {
       Tabs: {
         screens: { Map: 'map', Playlists: 'playlists', Profile: 'me' },
       },
-      PinPreview: { path: 'drop/:dropId', parse: { dropId: uuid } },
+      // source=notification: 푸시 알림에서 열림 (분석 drop_opened) — 다른 값은 버린다
+      PinPreview: { path: 'drop/:dropId', parse: { dropId: uuid, source: (v: string) => (v === 'notification' ? 'notification' : undefined) } },
       VoteDrop: { path: 'vote/:dropId', parse: { dropId: uuid } },
       PlaylistDrop: { path: 'playlist-drop/:dropId', parse: { dropId: uuid } },
       // 링크로는 곡과 드랍만 — 대기열·자동재생 같은 내부 파라미터는 받지 않는다

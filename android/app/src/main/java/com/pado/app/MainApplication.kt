@@ -1,6 +1,9 @@
 package com.pado.app
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
@@ -29,6 +32,17 @@ class MainApplication : Application(), ReactApplication {
     // JS 모듈보다 먼저 뜨는 경우(앱이 내려갔다가 다시 만들어질 때)에도 SDK가 준비돼 있게
     val kakaoKey = getString(R.string.kakao_app_key)
     if (kakaoKey.isNotBlank()) KakaoSdk.init(this, kakaoKey)
+    createNotificationChannel()
     loadReactNative(this)
+  }
+
+  /**
+   * 푸시 알림 기본 채널 — 서버 발송의 android.notification.channel_id(pado_default)와 같다.
+   * 앱이 꺼져 있을 때 온 알림도 이 채널로 뜨도록 JS가 뜨기 전에 만든다 (이미 있으면 그대로)
+   */
+  private fun createNotificationChannel() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val channel = NotificationChannel("pado_default", "알림", NotificationManager.IMPORTANCE_HIGH)
+    getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
   }
 }

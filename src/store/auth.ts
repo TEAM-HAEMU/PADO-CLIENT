@@ -10,7 +10,7 @@ import { kv } from './storage';
 import { usePreviewStore } from '@/services/preview';
 import { signOutProviders } from '@/services/socialAuth';
 import { useDraft } from './draft';
-import { setOnDetailedAnalyticsEnabled } from './prefs';
+import { setOnDetailedAnalyticsEnabled, usePrefs } from './prefs';
 
 const SERVICE = 'pado.session';
 
@@ -24,6 +24,14 @@ interface AuthState {
   signIn: (pair: TokenPair, meta?: { method: string; signup?: boolean }) => Promise<void>;
   signOut: (opts?: { callServer?: boolean }) => Promise<void>;
 }
+
+/**
+ * 로그아웃 직전에 할 일 — 아직 로그인 토큰이 있을 때 (services/push가 등록: 이 기기 푸시 토큰 지우기).
+ * callServer: 사용자가 직접 로그아웃(세션이 살아 있음). 세션 만료·탈퇴 뒤엔 false
+ */
+type BeforeSignOut = (opts: { callServer: boolean }) => Promise<void>;
+let beforeSignOut: BeforeSignOut | undefined;
+export const setBeforeSignOut = (fn: BeforeSignOut) => { beforeSignOut = fn; };
 
 export const useAuth = create<AuthState>((set, get) => ({
   status: 'loading',
@@ -48,6 +56,8 @@ export const useAuth = create<AuthState>((set, get) => ({
     set({ status: 'guest' });
   },
   signIn: async (pair, meta) => {
+    // 막 가입했으면 지도에 들어가기 전에 알림 권한 안내 한 장 (로그인 상태가 되기 전에 정해야 첫 화면으로 뜬다)
+    if (meta?.signup) usePrefs.getState().setPushPromptPending(true);
     set({ accessToken: pair.accessToken, refreshToken: pair.refreshToken, status: 'authed' });
     identifyCurrentUser(pair.accessToken);
     if (meta) track(meta.signup ? 'sign_up_completed' : 'login_completed', { method: meta.method });
@@ -59,6 +69,8 @@ export const useAuth = create<AuthState>((set, get) => ({
     }).catch(() => {});
   },
   signOut: async ({ callServer = true } = {}) => {
+    // 푸시 토큰 삭제는 로그인 토큰이 필요하다 — 지우기 전에 (오래 걸려도 정해진 시간 안에 끝남)
+    await beforeSignOut?.({ callServer }).catch(() => {});
     const { refreshToken } = get();
     track('logout', { by: callServer ? 'user' : 'session_end' });
     resetUser();

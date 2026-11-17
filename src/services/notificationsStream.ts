@@ -10,6 +10,7 @@ import { queryClient } from '@/hooks/queryClient';
 import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
+import { pushActive } from './push';
 
 type Events = 'connect' | 'like-created' | 'comment-created' | 'dropping-created';
 let es: EventSource<Events> | null = null;
@@ -46,7 +47,8 @@ function connect() {
       const payload = JSON.parse(e.data ?? '{}');
       const prefs = usePrefs.getState().notify;
       const allowed = name === 'like-created' ? prefs.like : name === 'comment-created' ? prefs.comment : prefs.nearby;
-      if (allowed && TEXT[name]) toast(TEXT[name](payload.data ?? {}));
+      // 이 기기로 푸시를 받는 중이면 같은 소식이 시스템 배너로도 오므로 토스트는 띄우지 않는다
+      if (allowed && TEXT[name] && !pushActive()) toast(TEXT[name](payload.data ?? {}));
       if (name === 'dropping-created') queryClient.invalidateQueries({ queryKey: ['nearby'] });
     } catch {}
   };

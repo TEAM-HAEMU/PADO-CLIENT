@@ -7,6 +7,8 @@
 #   (선택) SENTRY_DSN — 오류 진단, SENTRY_AUTH_TOKEN — 릴리스 소스맵·심볼 업로드 (없으면 경고만 내고 건너뜀)
 #   (Play AAB) ANDROID_UPLOAD_KEYSTORE_BASE64, ANDROID_UPLOAD_STORE_PASSWORD, ANDROID_UPLOAD_KEY_ALIAS, ANDROID_UPLOAD_KEY_PASSWORD
 #   업로드 키 Secret이 없으면 AAB 단계는 건너뜀
+#   (푸시 FCM) GOOGLE_SERVICES_JSON_B64 — android/app/google-services.json을 base64로. 없으면 푸시 없이 빌드(경고)
+#   GOOGLE_SERVICE_INFO_PLIST_B64 — iOS용(ios/PADO/GoogleService-Info.plist). 같이 복원해 두지만 이 워크플로는 Android만 빌드
 name: Android APK
 
 on:
@@ -88,6 +90,17 @@ jobs:
             echo "SENTRY_DSN=$SENTRY_DSN"
           } > .env
           node scripts/sync-native-env.js
+
+      # 푸시(FCM) 설정 파일은 레포에 없다 — 시크릿에서 복원. 없으면 google-services 플러그인을 빼고 푸시 없이 빌드된다
+      - name: Firebase 설정 복원 (푸시)
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+          GOOGLE_SERVICE_INFO_PLIST_B64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_B64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICE_INFO_PLIST_B64" ]; then echo "$GOOGLE_SERVICE_INFO_PLIST_B64" | base64 -d > ios/PADO/GoogleService-Info.plist; fi
+          if [ -z "$GOOGLE_SERVICES_JSON_B64" ]; then echo "::warning::GOOGLE_SERVICES_JSON_B64 시크릿이 없어 푸시 알림 없이 빌드해요"; exit 0; fi
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > android/app/google-services.json
+          node -e "const j=require('./android/app/google-services.json'); if(!j.client.some(c=>c.client_info.android_client_info.package_name==='com.paado.app')) { console.error('google-services.json에 com.paado.app이 없어요'); process.exit(1); }"
 
       # sentry-cli는 토큰 말고도 org·project·주소가 있어야 한다 — 토큰 Secret이 있을 때만 android/sentry.properties를 만든다 (커밋 안 되는 파일, 기본값은 스크립트에)
       - name: Sentry 업로드 설정

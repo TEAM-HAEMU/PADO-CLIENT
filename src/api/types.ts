@@ -309,6 +309,13 @@ export interface AppNotification {
   readAt: string | null;
 }
 
+// ── 푸시 알림 (FCM)
+export type PushPlatform = 'IOS' | 'ANDROID';
+/** 설정 › 알림 — 서버가 보내기 전에 거른다. 행이 없으면 서버 기본값(like·comment·notice 켜짐, nearby 꺼짐) */
+export interface PushSettings { like: boolean; comment: boolean; nearby: boolean; notice: boolean }
+/** 푸시 data (값은 모두 문자열 — FCM 규칙). 앱이 열 화면을 정하는 데 쓴다 */
+export type PushType = 'comment' | 'like' | 'nearby' | 'notice';
+
 // ── 플레이리스트
 export interface PlaylistSummary {
   id: UUID;

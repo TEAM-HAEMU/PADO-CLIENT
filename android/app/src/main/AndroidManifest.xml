@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -7,6 +8,8 @@
     <!-- 미리듣기 백그라운드 재생 + 알림 컨트롤 (react-native-video 미디어 재생 서비스) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- 푸시 알림 (Android 13+는 실행 중 권한 요청 — 가입 직후 안내 화면·설정 › 알림) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- 외부 음악 앱·소셜 앱 열기 가능 여부 확인 (Android 11+ 패키지 가시성) -->
     <queries>
@@ -32,6 +35,10 @@
       android:supportsRtl="true">
       <!-- Google Maps (.env GOOGLE_MAPS_API_KEY → npm run env:sync) -->
       <meta-data android:name="com.google.android.geo.API_KEY" android:value="@string/google_maps_api_key" />
+      <!-- 푸시 알림 상태 표시줄 아이콘 (채널·색은 firebase.json → @react-native-firebase/messaging 매니페스트) -->
+      <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_notification" />
+      <!-- 알림 색 — firebase.json(messaging_android_notification_color)에 앱 색을 넣으면 라이브러리 릴리스 리소스 검사(verifyReleaseResources)가 앱 리소스를 못 찾아 실패해서, 앱 매니페스트에서 라이브러리 기본값(@color/white)을 덮어쓴다 -->
+      <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/pado_notification" tools:replace="android:resource" />
 
       <!-- 카카오 로그인 리다이렉트 -->
       <activity

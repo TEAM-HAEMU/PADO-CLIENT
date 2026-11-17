@@ -19,15 +19,17 @@ import type { RootScreen } from '@/navigation/types';
 import { SERVICES } from '@/services/musicLinks';
 import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
+import { openNotificationSettings, usePush } from '@/services/push';
+import { changePushSetting, loadPushSettings, type PushSettingKey } from '@/services/pushSettings';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 
 /** Figma 설정 행 아이콘 — 34px 둥근 사각(r11)에 같은 계열 색을 16%로 깔고 18px 채움 아이콘 */
-function Squircle({ glyph, tint, size = 18 }: { glyph: MeGlyphName; tint: string; size?: number }) {
+function Squircle({ glyph, tint, size = 18, color }: { glyph: MeGlyphName; tint: string; size?: number; color?: string }) {
   return (
     <View style={{ width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{ position: 'absolute', width: 34, height: 34, borderRadius: 11, backgroundColor: tint, opacity: 0.16 }} />
-      <MeGlyph name={glyph} size={size} />
+      <MeGlyph name={glyph} size={size} color={color} />
     </View>
   );
 }
@@ -42,9 +44,9 @@ const Group = ({ title, children }: { title: string; children: React.ReactNode }
 );
 /** 설명 한 줄 — 11 Medium 옅은 회색 */
 const SUB = { color: '#CECECE' };
-const Row = ({ glyph, tint, title, sub, right, onPress, last }: { glyph: MeGlyphName; tint: string; title: string; sub?: string; right?: React.ReactNode; onPress?: () => void; last?: boolean }) => (
+const Row = ({ glyph, tint, glyphColor, title, sub, right, onPress, last }: { glyph: MeGlyphName; tint: string; glyphColor?: string; title: string; sub?: string; right?: React.ReactNode; onPress?: () => void; last?: boolean }) => (
   <Press onPress={onPress} disabled={!onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 6, paddingVertical: 10, minHeight: 54, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.divider }}>
-    <Squircle glyph={glyph} tint={tint} />
+    <Squircle glyph={glyph} tint={tint} color={glyphColor} />
     <View style={{ flex: 1, gap: 1 }}>
       <T v="bodyStrong" style={{ color: '#000000' }}>{title}</T>
       {sub ? <T v="micro" style={SUB}>{sub}</T> : null}
@@ -97,6 +99,18 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
     finally { setMarketingOverride(null); setMarketingBusy(false); }
   };
 
+  // 알림 토글 — 서버에 저장하고 서버가 보내기 전에 거른다. 화면을 열 때 서버 값을 받아 맞춘다
+  const pushPermission = usePush(s => s.permission);
+  React.useEffect(() => {
+    usePush.getState().refreshPermission().catch(() => {});
+    loadPushSettings().catch(() => {}); // 못 받으면 마지막으로 받은 값 그대로
+  }, []);
+  const setPush = (k: PushSettingKey, v: boolean) => { changePushSetting(k, v).catch(e => toast(errorMessage(e), 'error')); };
+  const enableOsPush = () => {
+    if (usePush.getState().permission === 'unknown') usePush.getState().requestPermission('settings');
+    else openNotificationSettings();
+  };
+
   // 메일 앱이 없으면(시뮬레이터 등) 주소를 안내
   const contact = () => {
     Linking.openURL(`mailto:${OPERATOR.email}?subject=${encodeURIComponent('[PADO 문의]')}`)
@@ -133,9 +147,19 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
         </View>
 
         <Group title="알림">
-          <Row glyph="like" tint={colors.like} title="좋아요" sub="내 드랍을 누가 좋아하면" right={<Toggle label="좋아요 알림" value={prefs.notify.like} onChange={v => prefs.setNotify('like', v)} />} />
-          <Row glyph="comment" tint="#8DF2CB" title="댓글" sub="내 드랍에 댓글이 달리면" right={<Toggle label="댓글 알림" value={prefs.notify.comment} onChange={v => prefs.setNotify('comment', v)} />} />
-          <Row glyph="nearby" tint="#4BD0FF" title="주변 새 드랍" sub="지금 근처에 새 곡이 떨어지면" right={<Toggle label="주변 새 드랍 알림" value={prefs.notify.nearby} onChange={v => prefs.setNotify('nearby', v)} />} />
+          {pushPermission !== 'granted' ? (
+            // 휴대폰에서 알림이 꺼져 있으면 아래 토글을 켜도 오지 않는다 — 켜는 곳을 알려 준다 (아직 안 물어봤으면 시스템 창)
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 6, paddingVertical: 10 }}>
+              <T v="caption" c="ink2" style={{ flex: 1 }}>휴대폰 설정에서 알림을 켜 주세요</T>
+              <Press onPress={enableOsPush} trackAs="알림 설정 열기" hitSlop={8}>
+                <T v="captionStrong" c="primary">설정 열기</T>
+              </Press>
+            </View>
+          ) : null}
+          <Row glyph="like" tint={colors.like} title="좋아요" sub="내 드랍을 누가 좋아하면" right={<Toggle label="좋아요 알림" value={prefs.notify.like} onChange={v => setPush('like', v)} />} />
+          <Row glyph="comment" tint="#8DF2CB" title="댓글" sub="내 드랍에 댓글이 달리면" right={<Toggle label="댓글 알림" value={prefs.notify.comment} onChange={v => setPush('comment', v)} />} />
+          <Row glyph="nearby" tint="#4BD0FF" title="주변 새 드랍" sub="마지막으로 앱을 쓴 동네에 새 드랍이 생기면" right={<Toggle label="주변 새 드랍 알림" value={prefs.notify.nearby} onChange={v => setPush('nearby', v)} />} />
+          <Row glyph="bell" tint={LAVENDER} glyphColor={LAVENDER} title="공지" sub="서비스 안내와 새 소식" right={<Toggle label="공지 알림" value={prefs.notify.notice} onChange={v => setPush('notice', v)} />} />
           <Row glyph="mail" tint={colors.warning} title="마케팅 정보 수신" sub="이벤트·새 기능 소식" last right={<Toggle label="마케팅 정보 수신" value={marketing} onChange={setMarketing} />} />
         </Group>
 

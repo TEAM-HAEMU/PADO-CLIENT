@@ -6,6 +6,7 @@ import GoogleMaps
 import KakaoSDKAuth
 import KakaoSDKCommon
 import GoogleSignIn
+import FirebaseCore
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -28,6 +29,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // JS 모듈(RNKakaoLogins)이 아직 안 떠서 SDK가 비어 있고, 아래 open url 처리에서 fatal error가 난다
     if let kakaoKey = Bundle.main.object(forInfoDictionaryKey: "KAKAO_APP_KEY") as? String, !kakaoKey.isEmpty {
       KakaoSDK.initSDK(appKey: kakaoKey)
+    }
+
+    // 푸시(FCM) — GoogleService-Info.plist가 번들에 있을 때만 (레포엔 없고 빌드 때 복사: npm run env:sync / CI 시크릿).
+    // 없으면 configure()가 앱을 멈추므로 건너뛰고, JS(services/push)는 푸시 없이 동작한다
+    if FirebaseApp.app() == nil, Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+      FirebaseApp.configure()
     }
 
     let delegate = ReactNativeDelegate()

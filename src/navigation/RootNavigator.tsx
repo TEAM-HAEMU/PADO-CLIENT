@@ -6,6 +6,7 @@ import { PadoSymbol } from '@/components/ui/Brand';
 import { Dock } from '@/components/ui/Dock';
 import { startNotificationStream, stopNotificationStream } from '@/services/notificationsStream';
 import { useLocation } from '@/services/location';
+import { usePush } from '@/services/push';
 import { useDropRadius } from '@/hooks/useDropRadius';
 import { openPendingLink } from './linking';
 import { useAuth } from '@/store/auth';
@@ -19,6 +20,7 @@ import EmailLoginScreen from '@/screens/auth/EmailLoginScreen';
 import PasswordResetScreen from '@/screens/auth/PasswordResetScreen';
 import SignupScreen from '@/screens/auth/SignupScreen';
 import LocationPermissionScreen from '@/screens/auth/LocationPermissionScreen';
+import PushPermissionScreen from '@/screens/auth/PushPermissionScreen';
 import MapHomeScreen from '@/screens/map/MapHomeScreen';
 import PinPreviewScreen from '@/screens/map/PinPreviewScreen';
 import PlayerScreen from '@/screens/player/PlayerScreen';
@@ -74,6 +76,8 @@ export function Splash() {
 export function RootNavigator() {
   const status = useAuth(s => s.status);
   const locationPrompted = usePrefs(s => s.locationPrompted);
+  const pushPromptPending = usePrefs(s => s.pushPromptPending);
+  const pushPermission = usePush(s => s.permission);
   // 위치가 바뀔 때마다 전체 내비게이터가 다시 그려지지 않게 필요한 값만 구독
   const permission = useLocation(s => s.permission);
   const refreshPermission = useLocation(s => s.refreshPermission);
@@ -83,11 +87,14 @@ export function RootNavigator() {
   useDropRadius();
   // 로그인 전에 눌렀던 링크가 있으면 로그인 직후 그 화면으로
   const needLocationNow = !locationPrompted && permission !== 'granted';
+  // 막 가입한 사람에게 알림 권한 안내 한 장 — 이미 허용돼 있으면(Android 12 이하 등) 건너뛴다
+  const needPush = pushPromptPending && pushPermission !== 'granted';
+  useEffect(() => { if (pushPromptPending && pushPermission === 'granted') usePrefs.getState().setPushPromptPending(false); }, [pushPromptPending, pushPermission]);
   useEffect(() => {
-    if (status !== 'authed' || needLocationNow) return; // 위치 안내를 먼저 마친 뒤
+    if (status !== 'authed' || needLocationNow || needPush) return; // 위치·알림 안내를 먼저 마친 뒤
     const t = setTimeout(openPendingLink, 400);
     return () => clearTimeout(t);
-  }, [status, needLocationNow]);
+  }, [status, needLocationNow, needPush]);
   useEffect(() => {
     if (status === 'authed') startNotificationStream();
     else stopNotificationStream();
@@ -113,6 +120,7 @@ export function RootNavigator() {
       ) : (
         <>
           {needLocation ? <Stack.Screen name="LocationPermission" component={LocationPermissionScreen} options={{ animation: FADE }} /> : null}
+          {needPush ? <Stack.Screen name="PushPermission" component={PushPermissionScreen} options={{ animation: FADE, gestureEnabled: false }} /> : null}
           <Stack.Screen name="Tabs" component={Tabs} options={{ animation: FADE }} />
           <Stack.Screen name="Player" component={PlayerScreen} options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="SongSearch" component={SongSearchScreen} />
@@ -141,6 +149,7 @@ export function RootNavigator() {
             <Stack.Screen name="PlaylistPicker" component={PlaylistPickerScreen} />
             <Stack.Screen name="TermsUpdate" component={TermsUpdateScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="AppUpdate" component={AppUpdateSheet} />
+            <Stack.Screen name="PushPrompt" component={PushPermissionScreen} options={{ presentation: 'fullScreenModal', animation: FADE, gestureEnabled: false }} />
             <Stack.Screen name="ConfirmWithdraw" component={ConfirmWithdrawScreen} options={{ animation: FADE }} />
           </Stack.Group>
         </>

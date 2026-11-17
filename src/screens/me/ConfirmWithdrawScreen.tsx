@@ -11,6 +11,7 @@ import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
 import { track } from '@/services/analytics';
+import { unregisterPushToken } from '@/services/push';
 
 export default function ConfirmWithdrawScreen({ navigation }: RootScreen<'ConfirmWithdraw'>) {
   const n = useMyDrops().data?.length ?? 0;
@@ -18,7 +19,8 @@ export default function ConfirmWithdrawScreen({ navigation }: RootScreen<'Confir
   const [busy, setBusy] = useState(false);
   const go = async () => {
     setBusy(true);
-    try { await userApi.withdraw(); track('account_withdrawn', { drops: n }); await signOut({ callServer: false }); toast('탈퇴했어요. 90일 안에 다시 로그인하면 계정이 복구돼요.'); }
+    // 탈퇴하면 이 기기로 푸시가 가지 않게 토큰부터 지운다 (로그인 토큰이 살아 있을 때 — 실패해도 탈퇴는 계속)
+    try { await unregisterPushToken(); await userApi.withdraw(); track('account_withdrawn', { drops: n }); await signOut({ callServer: false }); toast('탈퇴했어요. 90일 안에 다시 로그인하면 계정이 복구돼요.'); }
     catch (e) { toast(errorMessage(e), 'error'); setBusy(false); }
   };
   return (
