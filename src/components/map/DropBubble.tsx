@@ -1,5 +1,5 @@
 /**
- * 지도 말풍선 — 하단 목록에서 고른 드랍의 핀 위에 뜨는 흰 말풍선 (문구 규칙은 utils/dropBubble).
+ * 지도 말풍선 — 하단 목록이나 지도 핀에서 고른 드랍의 핀 위에 뜨는 흰 말풍선 (문구 규칙은 utils/dropBubble).
  *
  * 핀과 같은 좌표의 지도 마커로 그린다 (화면 좌표로 바꿔 지도 위에 얹지 않는다):
  *  - 지도를 손으로 끄는 동안에도 지도 엔진이 핀과 같은 프레임에 옮기므로 말풍선이 핀에서 떨어지거나 늦게 따라오지 않는다.
@@ -94,7 +94,7 @@ export const DropBubbleMarker = memo(function DropBubbleMarkerItem({ id, latitud
         >
           <View style={[bubble, Platform.OS === 'ios' ? shadow : edge]}>
             {quote ? (
-              <T v="note" numberOfLines={2} style={{ fontSize: 16, lineHeight: 24, letterSpacing: -0.16 }}>{quote}</T>
+              <T v="body" numberOfLines={2}>{quote}</T>
             ) : (
               <T v="bodyLarge" numberOfLines={1} style={{ fontFamily: fonts.bold }}>{title}</T>
             )}

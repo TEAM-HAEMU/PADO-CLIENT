@@ -1,5 +1,5 @@
 /**
- * 지도 말풍선 — 하단 목록에서 드랍을 고르면 그 핀 위에 띄우는 한마디 말풍선의 문구와 카메라 이동 (그리기는 components/map/DropBubble).
+ * 지도 말풍선 — 하단 목록이나 지도 핀에서 드랍을 고르면 그 핀 위에 띄우는 한마디 말풍선의 문구와 카메라 이동 (그리기는 components/map/DropBubble).
  *  - 한마디가 있으면: 첫 줄 “한마디”, 둘째 줄 닉네임 · (투표·플레이리스트면 종류 ·) 제목
  *  - 한마디가 없으면: 첫 줄 제목(굵게), 둘째 줄 가수(투표·플리는 종류 · 곡 수) · 닉네임
  *  - 잠긴 드랍: 곡·커버를 숨기는 규칙 그대로 제목은 보이지 않는다. 첫 줄 한마디(없으면 '잠긴 드랍'), 둘째 줄 잠금 안내(lockMessage)
@@ -11,7 +11,7 @@ import type { Coords } from '@/utils/geo';
 import type { MapRegion } from '@/utils/mapPins';
 
 export interface BubbleText {
-  /** 첫 줄 — 한마디(따옴표 포함, 노트 글꼴). 없으면 null이고 title을 쓴다 */
+  /** 첫 줄 — 한마디(따옴표 포함, 앱 본문 글꼴). 없으면 null이고 title을 쓴다 */
   quote: string | null;
   /** 첫 줄 — 한마디가 없을 때의 제목 (굵게) */
   title: string | null;

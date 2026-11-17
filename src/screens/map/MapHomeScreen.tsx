@@ -28,8 +28,6 @@ import type { ScopeTipText } from '@/utils/scopeTip';
 import { placeKey, placeLevel, placeName, sanitizeRegionsAt, wantsPlace } from '@/utils/mapPlace';
 import { scopeLabel } from '@/utils/dropScope';
 import { track } from '@/services/analytics';
-import { toast } from '@/store/toast';
-import { lockMessage } from '@/utils/dropLock';
 import { useMiniDiscActions } from '@/components/music/MiniDisc';
 import { startPreview, usePreviewStore } from '@/services/preview';
 import { useTermsUpdateCheck } from '@/hooks/useTermsUpdateCheck';
@@ -224,47 +222,35 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     if ('region' in f) mapRef.current?.animateToRegion(f.region, 500);
     else mapRef.current?.animateCamera({ center: f.center }, { duration: 500 });
   };
-  // 하단 목록 누르기 — 처음 누르면 고르기(들을 수 있으면 미리듣기 + 지도 이동 + 말풍선), 고른 곡을 한 번 더 누르면 자세히
-  const tapList = (x: (typeof sorted)[number]) => {
+  // 하단 목록·지도 핀 누르기 (같은 흐름) — 처음 누르면 고르기(들을 수 있으면 미리듣기 + 지도 이동 + 말풍선), 고른 드랍을 한 번 더 누르면 자세히.
+  // 잠긴 드랍은 재생·자세히 없이 말풍선(잠금 안내)만 — 토스트는 띄우지 않는다
+  const pickDrop = (x: (typeof sorted)[number], via: 'list' | 'pin') => {
     const { d, m, lock } = x;
+    const source: DropOpenSource = via === 'list' ? 'map_list' : 'map_pin';
     if (d.droppingId === selectedId) {
       if (lock.locked) return focusOn(d);
-      track('map_bubble_open', { drop_id: d.droppingId, via: 'list' });
-      return openDrop(d, 'map_list');
+      track('map_bubble_open', { drop_id: d.droppingId, via });
+      return openDrop(d, source);
     }
     setSelectedId(d.droppingId);
     focusOn(d);
-    track('map_list_tap', { drop_id: d.droppingId, type: d.type, locked: lock.locked });
+    track(via === 'list' ? 'map_list_tap' : 'map_pin_tap', { drop_id: d.droppingId, type: d.type, locked: lock.locked });
     if (lock.locked) {
-      // 잠금 안내는 토스트 대신 말풍선이 한다. 서버 집계(drop_locked_tap)는 고를 때 한 번만 — 같은 곡을 또 눌러도 다시 세지 않는다
-      track('drop_locked_tap', { drop_id: d.droppingId, type: d.type, source: 'map_list', distance_m: Math.round(m), remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) });
+      // 서버 집계(drop_locked_tap)는 고를 때 한 번만 — 같은 드랍을 또 눌러도 다시 세지 않는다
+      track('drop_locked_tap', { drop_id: d.droppingId, type: d.type, source, distance_m: Math.round(m), remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) });
       return;
     }
     // 핀 미리보기와 같은 재생 — 같은 곡이면 이어서(처음부터 다시 틀지 않음). 투표·플리는 곡이 하나가 아니라 틀지 않는다
     if (d.type === 'MUSIC') startPreview({ id: d.songId, title: d.title, artist: d.artist, albumImagePath: d.albumImageUrl, previewUrl: d.previewUrl, dropId: d.droppingId }).catch(() => {});
   };
-  const tapDrop = ({ d, m, lock }: (typeof sorted)[number], source: DropOpenSource) => {
-    if (!lock.locked) return openDrop(d, source);
-    track('drop_locked_tap', { drop_id: d.droppingId, type: d.type, source, distance_m: Math.round(m), remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) });
-    toast(lockMessage(lock, radius));
-  };
   // 핀 누르기 — 마커가 다시 렌더되지 않게 고정 함수 하나 (누른 순간의 최신 목록·핸들러를 ref로 읽는다)
-  // 말풍선이 떠 있는 핀을 다시 누르면 자세히(잠긴 드랍은 말풍선이 이미 안내하므로 그대로), 다른 핀을 누르면 말풍선을 닫고 원래대로
-  const latest = useRef({ sorted, tapDrop, selectedId });
-  useEffect(() => { latest.current = { sorted, tapDrop, selectedId }; });
+  const latest = useRef({ sorted, pickDrop, selectedId });
+  useEffect(() => { latest.current = { sorted, pickDrop, selectedId }; });
   const markerPressedAt = useRef(0);
   const onPinPress = useCallback((id: string) => {
     markerPressedAt.current = Date.now();
-    const { sorted: list, selectedId: sel } = latest.current;
-    const x = list.find(p => p.d.droppingId === id);
-    if (!x) return;
-    if (id === sel) {
-      if (x.lock.locked) return;
-      track('map_bubble_open', { drop_id: id, via: 'pin' });
-      return openRef.current(x.d, 'map_pin');
-    }
-    if (sel) setSelectedId(null);
-    latest.current.tapDrop(x, 'map_pin');
+    const x = latest.current.sorted.find(p => p.d.droppingId === id);
+    if (x) latest.current.pickDrop(x, 'pin');
   }, []);
   // 말풍선 누르기 = 자세히 (잠긴 드랍은 열지 않는다)
   const openRef = useRef(openDrop);
@@ -456,7 +442,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
               if (lock.locked) {
                 // 잠긴 드랍 — 곡·커버 대신 자물쇠와 거리만
                 return (
-                  <Press key={d.droppingId} onPress={() => tapList(x)} accessibilityLabel={`잠긴 드랍 · ${formatDistance(m)}`} accessibilityState={{ selected: picked }} trackAs="주변 목록 잠긴 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
+                  <Press key={d.droppingId} onPress={() => pickDrop(x, 'list')} accessibilityLabel={`잠긴 드랍 · ${formatDistance(m)}`} accessibilityState={{ selected: picked }} trackAs="주변 목록 잠긴 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
                     <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: picked ? 1 : 0.6 }}>
                       <View style={{ width: 49, height: 49, borderRadius: 9, backgroundColor: colors.card2, alignItems: 'center', justifyContent: 'center' }}>
                         <Icon name="lock" size={18} color={colors.ink3} />
@@ -472,7 +458,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
               const fresh = i < 3;
               const onAir = d.type === 'MUSIC' && !!playingKey && d.songId === playingKey;
               return (
-                <Press key={d.droppingId} onPress={() => tapList(x)} accessibilityState={{ selected: picked }} trackAs="주변 목록 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
+                <Press key={d.droppingId} onPress={() => pickDrop(x, 'list')} accessibilityState={{ selected: picked }} trackAs="주변 목록 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
                   {/* Figma 'stay music' 아트: 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 (재생 중이면 시안 테두리 + 글로우) */}
                   <View style={[{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: onAir || picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: fresh || onAir || picked ? 1 : 0.6 }, onAir || picked || fresh ? glow(onAir || picked ? 0.9 : 0.5, 12) : null]}>
                     <Art uri={dropArt(d)} size={49} radius={9} />
