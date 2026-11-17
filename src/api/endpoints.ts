@@ -111,8 +111,8 @@ export const notificationApi = {
 export const pushApi = {
   /** 같은 토큰이 다른 사용자에게 있으면 서버가 지금 사용자로 옮긴다 */
   registerToken: (token: string, platform: PushPlatform, appVersion: string) => api.put('/push/tokens', { token, platform, appVersion }),
-  /** 로그아웃 직전 — 없어도 204 */
-  deleteToken: (token: string) => request('DELETE', '/push/tokens', { body: { token } }),
+  /** 로그아웃 직전 — 없어도 204. accessToken: 로그아웃 순간에 잡아 둔 로그인 토큰 (그 사이 비워져도 이 토큰으로) */
+  deleteToken: (token: string, accessToken?: string) => request('DELETE', '/push/tokens', { body: { token }, accessToken }),
   settings: () => api.get<PushSettings>('/push/settings'),
   /** 일부만 보내도 된다. 바뀐 전체 값이 돌아온다 */
   updateSettings: (patch: Partial<PushSettings>) => api.put<PushSettings>('/push/settings', patch),

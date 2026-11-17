@@ -119,3 +119,12 @@ test('errorMessage — 친절한 문구 우선, 제재(U21)는 서버 메시지 
   expect(errorMessage(new ApiError(403, { code: 'U21', message: '2026-10-01까지 정지' }))).toBe('2026-10-01까지 정지');
   expect(errorMessage(new ApiError(500, { code: 'ZZ', message: '서버 메시지' }))).toBe('서버 메시지');
 });
+
+test('요청별 로그인 토큰: 저장소 토큰 대신 그 토큰을 붙이고, 401이어도 재발급·로그아웃 처리를 안 한다', async () => {
+  globalThis.fetch = jest.fn(async (url: string, init: RequestInit) => { calls.push({ url, init }); return reply(401, { code: 'U2', message: '만료' }); }) as never;
+  tokens = { accessToken: null as never, refreshToken: null as never };
+  await expect(request('DELETE', '/push/tokens', { body: { token: 't' }, accessToken: 'captured' })).rejects.toBeInstanceOf(ApiError);
+  expect(calls).toHaveLength(1);
+  expect(auth(calls[0])).toBe('Bearer captured');
+  expect(onExpired).not.toHaveBeenCalled();
+});

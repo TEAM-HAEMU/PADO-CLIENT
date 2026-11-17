@@ -242,3 +242,26 @@ test('토큰에서 사용자 ID (JWT sub), 형식이 다르면 null', () => {
   expect(a.userIdFromToken('mock.access.abc')).toBeNull();
   expect(a.userIdFromToken(null)).toBeNull();
 });
+
+test('SDK 시작 전에 들어온 사용자 식별(자동 로그인)은 시작하면 적용한다 — 상세 모드만', async () => {
+  const { a, amp } = load({ saved: { analyticsMode: 'detailed' } });
+  a.identifyUser('user-123', { username: 'zerone' });
+  expect(amp.setUserId).not.toHaveBeenCalled();
+  await a.setAnalyticsMode('detailed');
+  expect(amp.setUserId).toHaveBeenCalledWith('user-123');
+  expect(amp.identify.mock.calls.flatMap(c => Object.keys(c[0].props))).toContain('username');
+});
+
+test('시작 전 식별은 로그아웃하거나 기본 모드로 시작하면 버린다', async () => {
+  const out = load({ saved: { analyticsMode: 'detailed' } });
+  out.a.identifyUser('user-123', { username: 'zerone' });
+  out.a.resetUser();
+  await out.a.setAnalyticsMode('detailed');
+  expect(out.amp.setUserId).not.toHaveBeenCalled();
+
+  jest.clearAllMocks();
+  const basic = load({ saved: { analyticsMode: 'detailed' } });
+  basic.a.identifyUser('user-123', { username: 'zerone' });
+  await basic.a.setAnalyticsMode('basic');
+  expect(basic.amp.setUserId).not.toHaveBeenCalled();
+});

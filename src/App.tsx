@@ -49,12 +49,13 @@ function App() {
   // 필수 업데이트면 내비게이션 대신 업데이트 화면 한 장만 (시트·모달까지 모두 내려서 앱을 쓸 수 없게)
   const updateRequired = useAppUpdate(s => s.decision?.kind === 'required');
   useEffect(() => {
-    // 분석 모드(기본 익명·상세·끔)를 먼저 적용해 자동 로그인(bootstrap)의 사용자 식별(상세일 때만)이 기록되게 한다
+    // 자동 로그인(bootstrap)은 분석 SDK 시작을 기다리지 않는다 — SDK가 늦거나 응답이 없어도 Splash에 머물지 않게.
+    // 시작 전에 생긴 이벤트·사용자 식별(상세일 때만)은 분석 모듈이 모아 두었다가 시작하면 보낸다
     startAppStateTracking();
     setAnalyticsMode(usePrefs.getState().analyticsMode)
       .then(() => trackAppOpened())
-      .catch(e => reportError(e, 'analytics_start')) // 분석을 못 켜도 로그인은 계속
-      .finally(() => bootstrap());
+      .catch(e => reportError(e, 'analytics_start'));
+    bootstrap();
     // 푸시 — 로그인 상태를 따라 토큰 등록·알림 설정 받기, 주변 새 드랍용 마지막 동네 알리기
     startPush();
     startPushRegionSync();

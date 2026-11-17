@@ -9,8 +9,10 @@ import { queryClient } from '@/hooks/queryClient';
 import { kv } from './storage';
 import { usePreviewStore } from '@/services/preview';
 import { signOutProviders } from '@/services/socialAuth';
+import { SESSION_EXPIRED_MESSAGE } from '@/api/errors';
 import { useDraft } from './draft';
-import { setOnDetailedAnalyticsEnabled, usePrefs } from './prefs';
+import { NOTIFY_DEFAULTS, setOnDetailedAnalyticsEnabled, usePrefs } from './prefs';
+import { toast } from './toast';
 
 const SERVICE = 'pado.session';
 
@@ -20,16 +22,17 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   bootstrap: () => Promise<void>;
-  /** meta: 분석용 로그인 방식 (email · kakao · google), signup이면 가입 완료 */
-  signIn: (pair: TokenPair, meta?: { method: string; signup?: boolean }) => Promise<void>;
+  /** meta: 분석용 로그인 방식 (email · kakao · google), signup이면 가입 완료. refreshed: 토큰 재발급(같은 사용자 — 다시 식별하지 않음) */
+  signIn: (pair: TokenPair, meta?: { method: string; signup?: boolean }, opts?: { refreshed?: boolean }) => Promise<void>;
   signOut: (opts?: { callServer?: boolean }) => Promise<void>;
 }
 
 /**
  * 로그아웃 직전에 할 일 — 아직 로그인 토큰이 있을 때 (services/push가 등록: 이 기기 푸시 토큰 지우기).
+ * 로그아웃은 끝나길 기다리지 않고 바로 토큰을 비우므로, 서버 요청엔 넘겨받은 accessToken(로그아웃 순간의 토큰)을 쓴다.
  * callServer: 사용자가 직접 로그아웃(세션이 살아 있음). 세션 만료·탈퇴 뒤엔 false
  */
-type BeforeSignOut = (opts: { callServer: boolean }) => Promise<void>;
+type BeforeSignOut = (opts: { callServer: boolean; accessToken: string | null }) => Promise<void>;
 let beforeSignOut: BeforeSignOut | undefined;
 export const setBeforeSignOut = (fn: BeforeSignOut) => { beforeSignOut = fn; };
 
@@ -55,11 +58,12 @@ export const useAuth = create<AuthState>((set, get) => ({
     } catch {}
     set({ status: 'guest' });
   },
-  signIn: async (pair, meta) => {
+  signIn: async (pair, meta, opts) => {
     // 막 가입했으면 지도에 들어가기 전에 알림 권한 안내 한 장 (로그인 상태가 되기 전에 정해야 첫 화면으로 뜬다)
     if (meta?.signup) usePrefs.getState().setPushPromptPending(true);
     set({ accessToken: pair.accessToken, refreshToken: pair.refreshToken, status: 'authed' });
-    identifyCurrentUser(pair.accessToken);
+    // 재발급은 같은 사용자 — 매번 GET /users로 다시 식별하지 않는다
+    if (!opts?.refreshed) identifyCurrentUser(pair.accessToken);
     if (meta) track(meta.signup ? 'sign_up_completed' : 'login_completed', { method: meta.method });
     // 키체인 저장 실패는 이번 실행의 로그인을 깨뜨리지 않는다 (재시작 시 다시 로그인)
     await Keychain.setGenericPassword('pado', JSON.stringify({ accessToken: pair.accessToken, refreshToken: pair.refreshToken }), {
@@ -69,14 +73,16 @@ export const useAuth = create<AuthState>((set, get) => ({
     }).catch(() => {});
   },
   signOut: async ({ callServer = true } = {}) => {
-    // 푸시 토큰 삭제는 로그인 토큰이 필요하다 — 지우기 전에 (오래 걸려도 정해진 시간 안에 끝남)
-    await beforeSignOut?.({ callServer }).catch(() => {});
-    const { refreshToken } = get();
+    const { accessToken, refreshToken } = get();
+    // 푸시 토큰 삭제는 로그인 토큰이 필요하다 — 지금 토큰을 넘겨 두고, 끝나길(최대 몇 초) 기다리지 않고 화면부터 바꾼다
+    const pushCleanup = (async () => { await beforeSignOut?.({ callServer, accessToken }); })().catch(() => {});
     track('logout', { by: callServer ? 'user' : 'session_end' });
     resetUser();
     set({ accessToken: null, refreshToken: null, status: 'guest' });
-    if (callServer && refreshToken) authApi.logout(refreshToken).catch(() => {});
-    // 다음 사용자에게 이전 사용자의 흔적이 남지 않게
+    // 서버 로그아웃은 푸시 토큰 삭제 뒤에 (먼저 세션을 끊으면 삭제 요청이 거절될 수 있다)
+    if (callServer && refreshToken) pushCleanup.then(() => authApi.logout(refreshToken)).catch(() => {});
+    // 다음 사용자에게 이전 사용자의 흔적이 남지 않게 (알림 설정도 — 다음 사용자의 설정을 못 받으면 기본값으로 보이게)
+    usePrefs.getState().applyNotify(NOTIFY_DEFAULTS);
     queryClient.clear();
     usePreviewStore.getState().stop();
     useDraft.getState().reset();
@@ -88,8 +94,13 @@ export const useAuth = create<AuthState>((set, get) => ({
 // API 클라이언트에 토큰 저장소 연결 (재발급 시 새 토큰 쌍 저장, 재발급 실패 시 로그아웃)
 setTokenBridge({
   get: () => ({ accessToken: useAuth.getState().accessToken, refreshToken: useAuth.getState().refreshToken }),
-  set: pair => useAuth.getState().signIn(pair),
-  onExpired: () => { if (useAuth.getState().status === 'authed') useAuth.getState().signOut({ callServer: false }); },
+  set: pair => useAuth.getState().signIn(pair, undefined, { refreshed: true }),
+  onExpired: () => {
+    if (useAuth.getState().status !== 'authed') return;
+    useAuth.getState().signOut({ callServer: false });
+    // 아무 말 없이 로그인 화면으로 바뀌지 않게
+    toast(SESSION_EXPIRED_MESSAGE);
+  },
 });
 
 /** 분석 사용자 식별 (상세 분석일 때만 실제로 보냄) — 토큰의 sub(사용자 ID), 없으면 닉네임 기반 */
