@@ -38,8 +38,13 @@ const ME_ANCHOR = { x: 0.5, y: 0.5 };
 /** 아트를 미리 받아 둔 핀의 처음 추적 시간 — 디스크에 있는 52pt 그림을 디코딩해 그리는 데 넉넉히 */
 const READY_TRACK_MS = 2000;
 
-/** 처음 ms 동안 추적을 켜 두고, trackFor(ms)로 다시 잠깐 켠다 */
-function useTracking(initialMs: number) {
+/** 지도 마커 그림 하나를 미리 받는다 (지도 홈 핀과 같은 줄·같은 기록 — 같은 주소는 한 번). urgent면 줄 맨 앞으로 */
+export const prefetchMarkerImage = (url: string, urgent = false) => art.prefetch(url, urgent);
+/** 이미 받아 둔 마커 그림인가 (동기) */
+export const isMarkerImageReady = (url: string) => art.isReady(url);
+
+/** 처음 ms 동안 추적을 켜 두고, trackFor(ms)로 다시 잠깐 켠다 (마커 스냅샷 추적 — 다른 지도 마커도 같은 방식으로) */
+export function useTracking(initialMs: number) {
   const [on, setOn] = useState(true);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const trackFor = useCallback((ms: number) => {
