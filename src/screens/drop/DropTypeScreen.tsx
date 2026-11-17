@@ -15,7 +15,7 @@ import { currentCoords, preciseDropHint, PRECISE_DROP_TITLE, tooImpreciseToDrop,
 import { useDraft } from '@/store/draft';
 import { useRecentAlbumArt } from '@/hooks/useRecentAlbumArt';
 import { SLOT } from '@/utils/albumSlots';
-import { colors, fonts, glow } from '@/theme/tokens';
+import { colors, fonts } from '@/theme/tokens';
 
 const TYPES: { type: DropType; title: string; desc: string; route: keyof RootStackParamList }[] = [
   { type: 'MUSIC', title: '음악', desc: '한 곡을 골라 이 자리에 남겨요', route: 'SongSearch' },
@@ -50,8 +50,7 @@ function Illustration({ type, art }: { type: DropType; art: (string | null)[] })
   if (type === 'MUSIC')
     return (
       <View style={{ width: 76, height: 64 }}>
-        {disc(56, ['#BFE0FF', '#4F97F2'], SLOT.music, { left: 10, top: 4, borderWidth: 2, borderColor: colors.primary }, glow(0.4, 12))}
-        <View style={{ position: 'absolute', left: 32, top: 26, width: 12, height: 12, borderRadius: 6, backgroundColor: '#050916', borderWidth: 1.5, borderColor: colors.accent }} />
+        {disc(56, ['#BFE0FF', '#4F97F2'], SLOT.music, { left: 10, top: 4 })}
       </View>
     );
   if (type === 'VOTE')
@@ -59,7 +58,7 @@ function Illustration({ type, art }: { type: DropType; art: (string | null)[] })
       <View style={{ width: 76, height: 64 }}>
         {disc(40, ['#4F97F2', '#E3EDF9'], SLOT.vote[1], { left: 0, top: 12, opacity: 0.8 })}
         {disc(40, ['#D3E6FD', '#7DB5F7'], SLOT.vote[2], { left: 36, top: 12, opacity: 0.8 })}
-        {disc(46, ['#BFE0FF', '#4F97F2'], SLOT.vote[0], { left: 15, top: 6, borderWidth: 2, borderColor: colors.primary })}
+        {disc(46, ['#BFE0FF', '#4F97F2'], SLOT.vote[0], { left: 15, top: 6 })}
         <View style={{ position: 'absolute', left: 54, top: 0, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
           <VoteGlyph />
         </View>
@@ -68,10 +67,10 @@ function Illustration({ type, art }: { type: DropType; art: (string | null)[] })
   return (
     <View style={{ width: 76, height: 64 }}>
       <Tile size={50} radius={12} cs={['#C7DEFC', '#F6FAFF']} uri={art[SLOT.playlistBack] ?? null} style={{ left: 6, top: 14, opacity: 0.6, transform: [{ rotate: '-10deg' }] }} />
-      <View style={{ position: 'absolute', left: 20, top: 6, width: 52, height: 52, borderRadius: 12, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: colors.line }}>
+      <View style={{ position: 'absolute', left: 20, top: 6, width: 52, height: 52, borderRadius: 12, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }}>
         {[['#BFE0FF', '#4F97F2'], ['#4F97F2', '#D3E6FD'], ['#7DB5F7', '#E3EDF9'], ['#D3E6FD', '#BFE0FF']].map((c, i) => (
-          // 테두리(1) 안쪽 50px을 2×2로 — 26이면 한 줄에 두 칸이 안 들어가 한 줄씩 쌓여 오른쪽이 비었다
-          <View key={i} style={{ width: 25, height: 25 }}>
+          // 52px을 2×2로 (테두리 없음)
+          <View key={i} style={{ width: 26, height: 26 }}>
             <LinearGradient colors={c} style={StyleSheet.absoluteFill} />
             <Cover uri={art[SLOT.playlistTiles[i]] ?? null} />
           </View>
