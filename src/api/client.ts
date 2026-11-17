@@ -36,7 +36,12 @@ async function transport(method: string, url: string, baseHeaders: Record<string
   const requestId = newRequestId();
   const headers = { ...baseHeaders, [REQUEST_ID_HEADER]: requestId };
   // 목 서버는 목 모드에서만 불러온다 (운영 빌드에선 시드 데이터를 만들지 않음)
-  if (env.useMock) return { ...(await (require('./mock/server') as typeof import('./mock/server')).mockFetch(method, url, headers, body)), requestId };
+  if (env.useMock) {
+    // 푸시 API 목은 따로 둔 파일 (mock/push) — 처리할 경로가 아니면 기존 목 서버로
+    const push = (require('./mock/push') as typeof import('./mock/push')).mockPush(method, url, headers, body);
+    if (push) return { ...push, requestId };
+    return { ...(await (require('./mock/server') as typeof import('./mock/server')).mockFetch(method, url, headers, body)), requestId };
+  }
   // 멈춘 연결에서 요청이 무한정 걸려 있지 않게 타임아웃 (재발급 단일화가 전체를 막지 않도록)
   // 파일 업로드(FormData)는 느린 망에서 오래 걸릴 수 있어 넉넉하게
   const ctrl = new AbortController();

@@ -1,3 +1,5 @@
 <resources>
     <color name="pado_page">#FFFFFF</color>
+    <!-- 푸시 알림 아이콘 색 (firebase.json messaging_android_notification_color) -->
+    <color name="pado_notification">#4F97F2</color>
 </resources>

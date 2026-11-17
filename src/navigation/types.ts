@@ -21,6 +21,8 @@ export type RootStackParamList = {
   PasswordReset: { email?: string } | undefined;
   Signup: { mode: 'email' } | { mode: 'social'; provider: SocialProvider; signupToken: string; profile: SocialProfile | null };
   LocationPermission: undefined;
+  /** 가입 직후 알림 권한 안내 (위치 안내 다음) */
+  PushPermission: undefined;
   /** 첫 실행 서비스 설명 3장 (로그인 전) */
   Onboarding: undefined;
   // 메인

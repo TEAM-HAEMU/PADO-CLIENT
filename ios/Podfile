@@ -11,11 +11,16 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
+# 푸시(@react-native-firebase 26) — Firebase를 SPM 대신 CocoaPods로 받는다.
+# SPM 방식은 앱 전체를 동적 프레임워크(use_frameworks! dynamic)로 바꿔야 해서 다른 파드(지도·카카오 등)까지 영향이 크다
+$RNFirebaseDisableSPM = true
+
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
 setup_permissions([
   'LocationWhenInUse',
+  'Notifications',
   'PhotoLibrary',
 ])
 
@@ -33,6 +38,13 @@ target 'PADO' do
   # Google Sign-In(AppCheckCore)이 Swift에서 import할 수 있도록 모듈 맵 생성
   pod 'GoogleUtilities', :modular_headers => true
   pod 'RecaptchaInterop', :modular_headers => true
+  # 푸시(@react-native-firebase) — Firebase의 Swift 파드를 정적 라이브러리로 쓰려면 의존 파드에 모듈 맵이 필요
+  pod 'FirebaseCore', :modular_headers => true
+  pod 'FirebaseCoreInternal', :modular_headers => true
+  pod 'FirebaseCoreExtension', :modular_headers => true
+  pod 'FirebaseInstallations', :modular_headers => true
+  pod 'GoogleDataTransport', :modular_headers => true
+  pod 'nanopb', :modular_headers => true
 
   use_react_native!(
     :path => config[:reactNativePath],

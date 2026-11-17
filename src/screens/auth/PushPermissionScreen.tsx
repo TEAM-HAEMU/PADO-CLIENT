@@ -1,0 +1,66 @@
+/** 1.5 알림 권한 안내 — 가입 직후 한 번. 위치 권한 화면과 같은 모양(흰 바탕 · 가운데 제목 · 파문 · 아래 파도) */
+import React, { useState } from 'react';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ripples } from '@/components/anim';
+import { AuthTitle } from '@/components/auth/AuthChrome';
+import { Icon, Press, PrimaryButton, T } from '@/components/ui';
+import { Wave } from '@/components/ui/Wave';
+import type { RootScreen } from '@/navigation/types';
+import { track } from '@/services/analytics';
+import { openNotificationSettings, usePush } from '@/services/push';
+import { usePrefs } from '@/store/prefs';
+import { toast } from '@/store/toast';
+import { colors, glow } from '@/theme/tokens';
+
+const LATER_HINT = '설정 › 알림에서 언제든 켤 수 있어요.';
+
+export default function PushPermissionScreen({ navigation }: RootScreen<'PushPermission'>) {
+  const insets = useSafeAreaInsets();
+  const [busy, setBusy] = useState(false);
+  const finish = () => {
+    usePrefs.getState().setPushPromptPending(false);
+    navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+  };
+  // '계속'은 늘 시스템 권한 창으로. 이미 막혀 있으면 창이 안 뜨니 휴대폰 설정을 연다
+  const allow = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const before = await usePush.getState().refreshPermission();
+      const after = before === 'denied' ? before : await usePush.getState().requestPermission('onboarding');
+      if (before === 'denied') openNotificationSettings();
+      else if (after !== 'granted') toast(LATER_HINT);
+    } catch {} finally {
+      finish();
+    }
+  };
+  const later = () => {
+    track('push_permission_result', { result: 'later', was: usePush.getState().permission, source: 'onboarding' });
+    toast(LATER_HINT);
+    finish();
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.page }}>
+      <Wave style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }} />
+      <AuthTitle
+        title={'내 드랍에 생긴 소식을\n알림으로 알려 드릴게요'}
+        desc={'댓글이나 좋아요가 달리면 바로 알 수 있어요.\n광고 알림은 보내지 않아요.'}
+        style={{ marginTop: insets.top + 80 }}
+      />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Ripples size={240} count={4} duration={4800} />
+        <View style={[{ position: 'absolute', width: 64, height: 64, borderRadius: 32, backgroundColor: colors.iconTint, alignItems: 'center', justifyContent: 'center' }, glow(0.6, 16)]}>
+          <Icon name="bell" size={28} color={colors.primary} />
+        </View>
+      </View>
+      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 12, gap: 4 }}>
+        <PrimaryButton label="계속" style={{ alignSelf: 'stretch' }} onPress={allow} loading={busy} />
+        <Press onPress={later} disabled={busy} trackAs="알림 나중에" hitSlop={6} style={{ alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 }}>
+          <T v="captionStrong" c="ink2">나중에</T>
+        </Press>
+      </View>
+    </View>
+  );
+}

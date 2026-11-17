@@ -4,6 +4,13 @@ apply plugin: "com.facebook.react"
 // .env → BuildConfig (react-native-config)
 apply from: project(':react-native-config').projectDir.getPath() + "/dotenv.gradle"
 apply plugin: "io.sentry.android.gradle"
+// 푸시(FCM) — google-services.json은 레포에 없다 (npm run env:sync가 ~/.pado/firebase에서 복사, CI는 시크릿에서 복원).
+// 없으면 플러그인을 빼고 푸시 없이 빌드한다 (앱은 Firebase 없이도 동작)
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+} else {
+    logger.warn("warning: android/app/google-services.json이 없어 푸시 알림 없이 빌드해요 (npm run env:sync).")
+}
 
 // ── Sentry 업로드 (릴리스 빌드만 — debug 변형은 Sentry 쪽에서 건너뜀)
 // 토큰: 환경변수 SENTRY_AUTH_TOKEN 또는 android/sentry.properties 의 auth.token (npm run sentry:props, 커밋 금지)

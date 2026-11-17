@@ -1,10 +1,10 @@
 /**
  * API 명세 1:1 함수. 경로·메서드·인증 요구사항은 명세 그대로 (운영자용 /admin 제외).
  */
-import { api } from './client';
+import { api, request } from './client';
 import type {
   AppNotification, BlockedUser, Comment, CreateDropBody, DropDetail, DropSummary, LikedDrop, MyProfile,
-  PlaylistDetail, PlaylistSummary, RegisterBody, ReportReason, ReportTarget, SocialLoginBody, SocialLoginResponse, SocialProvider,
+  PlaylistDetail, PlaylistSummary, PushPlatform, PushSettings, RegisterBody, ReportReason, ReportTarget, SocialLoginBody, SocialLoginResponse, SocialProvider,
   SocialSignupBody, Song, Term, TokenPair, UpdateProfileBody, UserAgreement, UUID,
 } from './types';
 
@@ -96,6 +96,19 @@ export const notificationApi = {
   unreadCount: () => api.get<{ count: number }>('/notifications/unread-count').then(r => r.count),
   read: (id: UUID) => api.patch(`/notifications/${e(id)}/read`),
   readAll: () => api.patch('/notifications/read-all'),
+};
+
+// ── 푸시 알림 (FCM) — 토큰·설정·마지막 행정동
+export const pushApi = {
+  /** 같은 토큰이 다른 사용자에게 있으면 서버가 지금 사용자로 옮긴다 */
+  registerToken: (token: string, platform: PushPlatform, appVersion: string) => api.put('/push/tokens', { token, platform, appVersion }),
+  /** 로그아웃 직전 — 없어도 204 */
+  deleteToken: (token: string) => request('DELETE', '/push/tokens', { body: { token } }),
+  settings: () => api.get<PushSettings>('/push/settings'),
+  /** 일부만 보내도 된다. 바뀐 전체 값이 돌아온다 */
+  updateSettings: (patch: Partial<PushSettings>) => api.put<PushSettings>('/push/settings', patch),
+  /** 주변 새 드랍 — 서버가 행정동 코드만 남기고 좌표는 버린다 (nearby가 꺼져 있으면 저장 안 함) */
+  region: (latitude: number, longitude: number) => api.put('/push/region', { latitude: Number(latitude.toFixed(4)), longitude: Number(longitude.toFixed(4)) }),
 };
 
 // ── 플레이리스트

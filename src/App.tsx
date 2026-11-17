@@ -22,6 +22,8 @@ import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
 import { setAnalyticsMode, startAppStateTracking, trackAppOpened, trackScreen } from '@/services/analytics';
 import { initMonitoring, registerNavigation, reportError, Sentry } from '@/services/monitoring';
+import { startPush } from '@/services/push';
+import { startPushRegionSync } from '@/services/pushRegion';
 import { AppErrorFallback } from '@/components/AppErrorFallback';
 import { colors } from '@/theme/tokens';
 
@@ -46,6 +48,9 @@ function App() {
       .then(() => trackAppOpened())
       .catch(e => reportError(e, 'analytics_start')) // 분석을 못 켜도 로그인은 계속
       .finally(() => bootstrap());
+    // 푸시 — 로그인 상태를 따라 토큰 등록·알림 설정 받기, 주변 새 드랍용 마지막 동네 알리기
+    startPush();
+    startPushRegionSync();
   }, [bootstrap]);
   const onNavState = () => { const r = navigationRef.getCurrentRoute(); trackScreen(r?.name, r?.params as object | undefined, r?.key); };
   const onNavReady = () => { registerNavigation(navigationRef); onNavState(); };

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { kv } from './storage';
 import { migrateAnalyticsMode, setAnalyticsMode as applyAnalyticsMode, setUserProps, track, type AnalyticsMode, type SavedAnalyticsPrefs } from '@/services/analytics';
 import { reportError, setMonitoringMode } from '@/services/monitoring';
+import type { PushSettings } from '@/api/types';
 
 export { migrateAnalyticsMode };
 
@@ -13,9 +14,14 @@ interface Prefs {
   rememberService: boolean;
   /** 지도에 들어오면 가까운 음악 드랍 미리듣기를 순서대로 자동 재생 */
   autoplayNearby: boolean;
-  /** 알림 설정 — 서버에 개별 설정 API가 없어 기기 로컬 (인앱 SSE 표시 여부) */
-  notify: { like: boolean; comment: boolean; nearby: boolean };
+  /**
+   * 알림 설정 — 서버(GET·PUT /push/settings)가 원본이고 여기는 마지막으로 받은 값 (설정 화면 첫 표시·인앱 SSE 토스트 거르기).
+   * 바꾸기는 services/pushSettings (서버 저장 · 실패하면 되돌림)
+   */
+  notify: PushSettings;
   locationPrompted: boolean;
+  /** 막 가입했다 — 알림 권한 안내(온보딩 한 장)를 아직 안 보여 줌. 보여 주면 끈다 */
+  pushPromptPending: boolean;
   /** 처음 실행 소개 3장(온보딩)을 봤는지 — 본 뒤엔 로그인 화면부터 */
   onboardingSeen: boolean;
   /**
@@ -28,8 +34,12 @@ interface Prefs {
   /** null = 매번 선택 */
   setService: (s: ServiceId | null, remember?: boolean) => void;
   setAutoplayNearby: (v: boolean) => void;
-  setNotify: (k: keyof Prefs['notify'], v: boolean) => void;
+  /** 사용자가 바꿈 (분석 setting_changed) */
+  setNotify: (k: keyof PushSettings, v: boolean) => void;
+  /** 서버 값으로 맞춤 (분석 안 함) */
+  applyNotify: (next: Partial<PushSettings>) => void;
   setLocationPrompted: () => void;
+  setPushPromptPending: (v: boolean) => void;
   setOnboardingSeen: () => void;
 }
 
@@ -41,8 +51,8 @@ export const setOnDetailedAnalyticsEnabled = (fn: () => void) => { onDetailedEna
 
 export const usePrefs = create<Prefs>((set, get) => {
   const persist = () => {
-    const { service, rememberService, autoplayNearby, notify, locationPrompted, onboardingSeen, analyticsMode } = get();
-    kv.set('prefs', { service, rememberService, autoplayNearby, notify, locationPrompted, onboardingSeen, analyticsMode });
+    const { service, rememberService, autoplayNearby, notify, locationPrompted, pushPromptPending, onboardingSeen, analyticsMode } = get();
+    kv.set('prefs', { service, rememberService, autoplayNearby, notify, locationPrompted, pushPromptPending, onboardingSeen, analyticsMode });
   };
   const changed = (key: string, value: string | boolean | null) => {
     track('setting_changed', { key, value });
@@ -52,13 +62,21 @@ export const usePrefs = create<Prefs>((set, get) => {
     service: saved.service ?? null,
     rememberService: saved.rememberService ?? true,
     autoplayNearby: saved.autoplayNearby ?? true,
-    notify: saved.notify ?? { like: true, comment: true, nearby: false },
+    // 서버 기본값과 같게 (공지는 예전 저장값에 없음)
+    notify: { like: true, comment: true, nearby: false, notice: true, ...saved.notify },
     locationPrompted: saved.locationPrompted ?? false,
+    pushPromptPending: saved.pushPromptPending ?? false,
     onboardingSeen: saved.onboardingSeen ?? false,
     analyticsMode: migrateAnalyticsMode(saved),
     setService: (service, remember = true) => { set({ service: remember ? service : get().service, rememberService: remember }); persist(); changed('service', service); },
     setAutoplayNearby: autoplayNearby => { set({ autoplayNearby }); persist(); changed('autoplay_nearby', autoplayNearby); },
     setNotify: (k, v) => { set({ notify: { ...get().notify, [k]: v } }); persist(); changed(`notify_${k}`, v); },
+    applyNotify: next => {
+      const cur = get().notify;
+      const merged = { ...cur, ...next };
+      if ((Object.keys(merged) as (keyof PushSettings)[]).every(k => merged[k] === cur[k])) return;
+      set({ notify: merged }); persist();
+    },
     setAnalyticsMode: next => {
       const prev = get().analyticsMode;
       if (prev === next) return;
@@ -76,6 +94,7 @@ export const usePrefs = create<Prefs>((set, get) => {
         .catch(e => reportError(e, 'analytics_mode'));
     },
     setLocationPrompted: () => { set({ locationPrompted: true }); persist(); },
+    setPushPromptPending: v => { if (get().pushPromptPending !== v) { set({ pushPromptPending: v }); persist(); } },
     setOnboardingSeen: () => { if (!get().onboardingSeen) { set({ onboardingSeen: true }); persist(); } },
   };
 });

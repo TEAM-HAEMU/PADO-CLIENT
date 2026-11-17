@@ -78,6 +78,9 @@ yarn-error.log
 .env
 # Sentry 소스맵·dSYM 업로드 인증 (npm run sentry:props 로 만든다 — 커밋 금지)
 ios/sentry.properties
+# 푸시(FCM) Firebase 설정 — ~/.pado/firebase에서 npm run env:sync로 복사, CI는 시크릿에서 복원 (커밋 금지)
+ios/PADO/GoogleService-Info.plist
+android/app/google-services.json
 android/sentry.properties
 .env.sentry-build-plugin
 

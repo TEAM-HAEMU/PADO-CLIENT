@@ -11,6 +11,7 @@ import { useLocation } from '@/services/location';
 import { useDropRadius } from '@/hooks/useDropRadius';
 import { permissionScope } from '@/utils/dropScope';
 import { usePrefs } from '@/store/prefs';
+import { usePush } from '@/services/push';
 import { colors, glow } from '@/theme/tokens';
 
 export default function LocationPermissionScreen({ navigation }: RootScreen<'LocationPermission'>) {
@@ -28,7 +29,12 @@ export default function LocationPermissionScreen({ navigation }: RootScreen<'Loc
   const scope = permissionScope(useDropRadius());
   const request = useLocation(s => s.requestPermission);
   const done = usePrefs(s => s.setLocationPrompted);
-  const finish = () => { done(); navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] }); };
+  // 막 가입했으면 다음은 알림 권한 안내 (RootNavigator가 그 화면을 등록해 둠)
+  const finish = () => {
+    done();
+    const next = usePrefs.getState().pushPromptPending && usePush.getState().permission !== 'granted' ? 'PushPermission' : 'Tabs';
+    navigation.reset({ index: 0, routes: [{ name: next }] });
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>

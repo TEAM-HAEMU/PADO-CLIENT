@@ -17,6 +17,8 @@ buildscript {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
         // Sentry Android Gradle Plugin — 릴리스 빌드의 네이티브(NDK) 디버그 심볼 업로드 (app/build.gradle)
         classpath("io.sentry:sentry-android-gradle-plugin:6.25.0")
+        // 푸시(FCM) — google-services.json을 리소스로 (app/build.gradle에서 파일이 있을 때만 적용)
+        classpath("com.google.gms:google-services:4.4.4")
     }
 }
 

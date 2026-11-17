@@ -26,11 +26,24 @@ git update-index --skip-worktree ios/PADO/Info.plist android/app/src/main/res/va
 
 레포의 두 파일에는 `unset` 값만 들어 있다. 두 파일 자체를 고쳐야 할 때는 `--no-skip-worktree`로 풀고 `node scripts/sync-native-env.js <빈 파일>`로 값을 비운 뒤 커밋한다.
 
+## 푸시 알림 (FCM)
+
+Firebase 프로젝트 `pado-510105`. 계약은 `handoff/push-fcm-contract.md`(PETA 폴더), 코드는 `src/services/push*.ts`.
+
+- 설정 파일 두 개는 커밋하지 않는다(.gitignore). `~/.pado/firebase/`에 두면 `npm run env:sync`(ios/android 실행 전 자동)가 제자리로 복사한다.
+  - `GoogleService-Info.plist` → `ios/PADO/` (Xcode 'Copy Firebase config' 단계가 앱에 넣음. 없으면 경고만, 아카이브는 실패)
+  - `google-services.json` → `android/app/` (없으면 google-services 플러그인을 빼고 빌드)
+  - 다른 폴더: `PADO_FIREBASE_DIR=/경로 npm run env:sync`
+- 파일이 없는 빌드는 푸시만 빠지고 나머지는 그대로 동작한다.
+- iOS는 Firebase를 CocoaPods로 받는다(`$RNFirebaseDisableSPM = true`). 앱 전체를 동적 프레임워크로 바꾸지 않기 위해서다.
+- 앱이 앞에 있을 때: iOS는 `firebase.json`의 presentation 옵션, Android는 notifee(Android에만 연결)로 시스템 알림을 띄운다. Android 채널 `pado_default`("알림")는 `MainApplication`이 만든다.
+
 ## CI · APK
 
 `.github/workflows/android.yml` — `main`에 푸시되면 검사(tsc · eslint · jest) → 실서버용 release APK(arm64) 빌드 → **Releases**에 `PADO 1.0.<실행 번호>`로 올라간다 (가장 최신은 Latest). PR은 검사와 빌드만 한다.
 
 - Secrets: `API_BASE_URL`, `KAKAO_NATIVE_APP_KEY`, `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_ANDROID_API_KEY`, `AMPLITUDE_API_KEY`
+- 푸시: `GOOGLE_SERVICES_JSON_B64`(`base64 -i ~/.pado/firebase/google-services.json`), `GOOGLE_SERVICE_INFO_PLIST_B64`. 없으면 푸시 없이 빌드하고 경고를 남긴다.
 - 버전 코드 = 실행 번호라서 새 APK는 기존 설치본 위에 업데이트로 설치된다.
 - 서명: `android/app/debug.keystore` (RN 기본 키). Google 로그인·지도·카카오에 이 키의 SHA-1이 등록돼 있다. 스토어 배포 전에는 업로드 키를 만들어 release 서명을 바꾸고 새 SHA-1을 각 콘솔에 추가해야 한다.
 
