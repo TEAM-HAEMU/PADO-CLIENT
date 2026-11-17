@@ -193,6 +193,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   // 하단 목록에서 고른 드랍 — 지도가 그 핀으로 옮겨 가고 핀 위에 말풍선 (지도 빈 곳·다른 핀을 누르거나 화면을 떠나면 닫힘)
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = selectedId ? sorted.find(x => x.d.droppingId === selectedId) : undefined;
+  useEffect(() => { if (!focused) setSelectedId(null); }, [focused]);
   // 고른 핀은 그릴 핀 목록(보이는 영역·개수 제한) 밖이어도 늘 그린다
   const shownPins = useMemo(() => (!selected || pins.some(p => p.item === selected) ? pins : [...pins, { item: selected, rank: Infinity }]), [pins, selected]);
 
@@ -354,7 +355,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     }, 1500);
     return () => clearTimeout(t);
   }, [scopeTip, focused, mapReady, !!coords, shownTip]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!focused) { setShownTip(null); setSelectedId(null); } }, [focused]);
+  useEffect(() => { if (!focused) setShownTip(null); }, [focused]);
 
   // 다른 탭에 갔다가 지도로 돌아오면 다시 내 위치로 (보던 곳을 끌어 둔 채였어도)
   const wasFocused = useRef(focused);
