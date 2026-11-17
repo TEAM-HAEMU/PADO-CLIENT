@@ -62,6 +62,9 @@ export function passwordResetErrorMessage(e: unknown): string {
   return errorMessage(e);
 }
 
+/** 세션이 끝나 로그인 화면으로 돌아갈 때 안내 (store/auth) */
+export const SESSION_EXPIRED_MESSAGE = FRIENDLY.U9;
+
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {
     // 제재(U21/U22)는 서버 message에 해제 시각이 들어 있으므로 그대로 노출
