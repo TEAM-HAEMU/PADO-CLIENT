@@ -25,6 +25,7 @@ import PlayerScreen from '@/screens/player/PlayerScreen';
 import CommentsScreen from '@/screens/player/CommentsScreen';
 import ServicePickerScreen from '@/screens/player/ServicePickerScreen';
 import TermsUpdateScreen from '@/screens/me/TermsUpdateScreen';
+import AppUpdateSheet from '@/screens/update/AppUpdateSheet';
 import TermsViewScreen from '@/screens/me/TermsViewScreen';
 import PlaylistPickerScreen from '@/screens/detail/PlaylistPickerScreen';
 import DropTypeScreen from '@/screens/drop/DropTypeScreen';
@@ -139,6 +140,7 @@ export function RootNavigator() {
             <Stack.Screen name="Report" component={ReportScreen} />
             <Stack.Screen name="PlaylistPicker" component={PlaylistPickerScreen} />
             <Stack.Screen name="TermsUpdate" component={TermsUpdateScreen} options={{ gestureEnabled: false }} />
+            <Stack.Screen name="AppUpdate" component={AppUpdateSheet} />
             <Stack.Screen name="ConfirmWithdraw" component={ConfirmWithdrawScreen} options={{ animation: FADE }} />
           </Stack.Group>
         </>

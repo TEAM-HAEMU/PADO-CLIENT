@@ -31,6 +31,7 @@ import { track } from '@/services/analytics';
 import { useMiniDiscActions } from '@/components/music/MiniDisc';
 import { startPreview, usePreviewStore } from '@/services/preview';
 import { useTermsUpdateCheck } from '@/hooks/useTermsUpdateCheck';
+import { useAppUpdatePrompt } from '@/hooks/useAppUpdatePrompt';
 import { distanceM, FALLBACK, formatDistance, lastKnown, useLocation } from '@/services/location';
 import { googleMapStyle } from '@/theme/mapStyle';
 import { colors, fonts, glow } from '@/theme/tokens';
@@ -342,6 +343,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     return () => clearTimeout(t);
   }, [scopeTip, focused, mapReady, !!coords, shownTip]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!focused) setShownTip(null); }, [focused]);
+  // 선택 업데이트 안내 시트 — 범위 말풍선이 떠 있는 동안은 기다린다 (시트가 떠 있으면 말풍선이 기다림)
+  useAppUpdatePrompt(!!shownTip);
 
   // 다른 탭에 갔다가 지도로 돌아오면 다시 내 위치로 (보던 곳을 끌어 둔 채였어도)
   const wasFocused = useRef(focused);

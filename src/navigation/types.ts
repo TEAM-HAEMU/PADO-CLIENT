@@ -60,6 +60,8 @@ export type RootStackParamList = {
   ConfirmWithdraw: undefined;
   Report: { targetType: ReportTarget; targetId: UUID; userId?: UUID; label?: string };
   TermsUpdate: { changed: UserAgreement[] };
+  /** 선택 업데이트 안내 (시트) — 필수 업데이트는 내비게이션 밖 UpdateRequiredScreen */
+  AppUpdate: undefined;
   TermsView: { type: AgreementType };
 };
 
