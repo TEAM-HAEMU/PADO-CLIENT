@@ -1,5 +1,5 @@
 /** 4.6 새 플레이리스트 (시트) — POST /playlists {name}. rename 파라미터가 오면 이름 변경(PATCH) (Figma 'B 4.8 새 플레이리스트 (시트)') */
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { playlistApi } from '@/api/endpoints';
@@ -11,16 +11,20 @@ import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { track } from '@/services/analytics';
+import { createPlaylistAndFind } from '@/utils/playlists';
 
 export default function NewPlaylistScreen({ navigation, route }: RootScreen<'NewPlaylist'>) {
   const qc = useQueryClient();
   const renaming = route.params?.rename;
   const [name, setName] = useState(renaming?.name ?? '');
   const [busy, setBusy] = useState(false);
+  // 렌더를 기다리지 않는 중복 방지 — 버튼 연타·키보드 완료가 같은 프레임에 들어와도 한 번만 만든다
+  const working = useRef(false);
 
   const create = async () => {
-    if (busy) return;
+    if (working.current) return;
     if (!name.trim()) return toast('이름을 입력해주세요.', 'error');
+    working.current = true;
     setBusy(true);
     try {
       if (renaming) {
@@ -30,20 +34,23 @@ export default function NewPlaylistScreen({ navigation, route }: RootScreen<'New
         navigation.goBack();
         return;
       }
-      // 명세상 생성 응답 본문이 없어, 생성 전 목록에 없던 플리를 새 플리로 본다 (같은 이름이 있어도 정확)
-      const prior = await playlistApi.mine().catch(() => null);
-      const before = prior ? new Set(prior.map(p => p.id)) : null;
-      await playlistApi.create(name.trim());
+      // 생성 자체가 실패할 때만 catch로 — 생성 뒤 목록 조회가 실패해도 오류로 남기지 않는다(다시 누르면 같은 플리가 또 생김)
+      const { list, created } = await createPlaylistAndFind(name.trim(), playlistApi);
       track('playlist_created', { name_length: name.trim().length });
-      const list = await playlistApi.mine();
-      qc.setQueryData(['playlists'], list);
-      const created = (before && list.find(p => !before.has(p.id))) || list.find(p => p.name === name.trim());
+      if (list) qc.setQueryData(['playlists'], list);
+      else qc.invalidateQueries({ queryKey: ['playlists'] });
       // 시트 위에 새 화면을 쌓으면 iOS가 카드 모달로 띄우므로 시트를 새 화면으로 바꾼다
       // 버튼 문구대로 곧바로 곡 담기 화면까지 — 담고 나면(또는 뒤로) 방금 만든 플리 상세
       if (created) navigation.replace('PlaylistDetail', { playlistId: created.id, openAdd: true });
-      else navigation.goBack();
-    } catch (e) { toast(errorMessage(e), 'error'); }
-    finally { setBusy(false); }
+      else {
+        toast('플레이리스트를 만들었어요.', 'success');
+        navigation.goBack();
+      }
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+      working.current = false;
+      setBusy(false);
+    }
   };
 
   return (

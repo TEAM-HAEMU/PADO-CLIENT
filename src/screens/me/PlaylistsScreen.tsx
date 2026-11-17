@@ -1,19 +1,18 @@
 /** 4.5 플리 (탭) — 내 플레이리스트(전체) · 좋아요한 드랍 · 내가 드랍한 플리(바다에 떨어뜨린) (Figma 'B 4.3 플리 (탭)') */
 import React, { useState } from 'react';
 import { ScrollView, View, useWindowDimensions } from 'react-native';
-import { useQueries } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { playlistApi } from '@/api/endpoints';
 import { Collage } from '@/components/music/Collage';
 import type { PlaylistDropSummary } from '@/api/types';
 import { Art, Chip, Empty, Press, T, PrimaryButton } from '@/components/ui';
 import { listStatus } from '@/components/ui/ScreenState';
 import { Glyph } from '@/components/detail/glyphs';
 import { BgWave } from '@/components/detail/parts';
-import { useMyDrops, useMyLikes, useMyPlaylists } from '@/hooks/api';
+import { useMyDrops, useMyLikes, useMyPlaylists, usePlaylistDetails } from '@/hooks/api';
 import { dropPlace } from '@/utils/address';
+import { playlistCover } from '@/utils/playlists';
 import { colors, fonts } from '@/theme/tokens';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 
 type Tab = 'mine' | 'liked' | 'dropped';
 const TABS: [Tab, string][] = [['mine', '전체'], ['liked', '좋아요'], ['dropped', '바다에 떨어뜨린']];
@@ -39,7 +38,9 @@ export default function PlaylistsScreen() {
   const [tab, setTab] = useState<Tab>('mine');
   const listsQ = useMyPlaylists();
   const lists = listsQ.data;
-  const details = useQueries({ queries: (lists ?? []).map(p => ({ queryKey: ['playlist', p.id], queryFn: () => playlistApi.get(p.id) })) });
+  const focused = useIsFocused();
+  // 카드마다 곡 수·콜라주용 상세 — 이 탭이 보이고 '전체'를 볼 때만, 신선도 길게 (hooks/api usePlaylistDetails)
+  const details = usePlaylistDetails((lists ?? []).map(p => p.id), focused && tab === 'mine');
   const likesQ = useMyLikes();
   const likes = likesQ.data ?? [];
   const myDropsQ = useMyDrops();
@@ -71,7 +72,7 @@ export default function PlaylistsScreen() {
             <View style={grid}>
               {lists.map((p, i) => {
                 const d = details[i]?.data;
-                return <Cell key={p.id} size={cell} cover={<Collage images={d?.songs.map(s => s.albumImagePath) ?? [p.albumImageUrl]} size={cell} radius={18.9} />} title={p.name} sub={d ? `${d.songs.length}곡` : ' '} onPress={() => nav.navigate('PlaylistDetail', { playlistId: p.id })} />;
+                return <Cell key={p.id} size={cell} cover={<Collage images={playlistCover(p, d, !!details[i]?.isError)} size={cell} radius={18.9} />} title={p.name} sub={d ? `${d.songs.length}곡` : ' '} onPress={() => nav.navigate('PlaylistDetail', { playlistId: p.id })} />;
               })}
             </View>
           ))

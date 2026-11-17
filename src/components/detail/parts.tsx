@@ -23,8 +23,11 @@ import { colors, fonts } from '@/theme/tokens';
 import { artUrl } from '@/utils/artUrl';
 import { Glyph, Shuffle } from './glyphs';
 
-/** 지금 재생 중인 곡 카드 바탕 / 투표 선택 바탕 */
-export const ROW_ON = '#F6FDFF';
+/**
+ * 지금 재생 중인 곡 카드 바탕 — 흰 바탕 위에선 예전 #F6FDFF와 같은 색이 되는 반투명.
+ * 불투명으로 칠하면 화면 아래 물결(BgWave) 위에서 줄 모양대로 네모나게 가린다
+ */
+export const ROW_ON = 'rgba(79,209,255,0.05)';
 
 export const BgWave = () => <Wave scale={1.2} style={{ position: 'absolute', left: -90, right: -90, bottom: -34 }} />;
 
@@ -113,7 +116,7 @@ function PreviewDisc({ song }: { song: DiscSong }) {
 /** 오른쪽 요소: duration(있으면 3:12) + right. height 79(목록) / 67(시트). song을 주면 앨범 = 미리듣기 버튼, 나머지 = onPress */
 export function DiscRow({ art, song, title, artist, duration, right, onPress, onLongPress, onArt, artLabel, active, dim, height = 79, accessibilityLabel, trackAs = '곡 행', style, children }: { trackAs?: string; art?: string | null; song?: DiscSong; title: string; artist: string; duration?: string; right?: React.ReactNode; onPress?: () => void; onLongPress?: () => void; onArt?: () => void; artLabel?: string; active?: boolean; dim?: boolean; height?: number; accessibilityLabel?: string; style?: ViewStyle; children?: React.ReactNode }) {
   return (
-    <Press onPress={onPress} onLongPress={onLongPress} accessibilityLabel={accessibilityLabel} trackAs={trackAs} accessibilityState={active ? { selected: true } : undefined} style={[{ height, borderRadius: 12, overflow: 'hidden', backgroundColor: active ? ROW_ON : colors.page, opacity: dim ? 0.5 : 1, justifyContent: 'center' }, style]}>
+    <Press onPress={onPress} onLongPress={onLongPress} accessibilityLabel={accessibilityLabel} trackAs={trackAs} accessibilityState={active ? { selected: true } : undefined} style={[{ height, borderRadius: 12, overflow: 'hidden', backgroundColor: active ? ROW_ON : 'transparent', opacity: dim ? 0.5 : 1, justifyContent: 'center' }, style]}>
       {children}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 15, paddingRight: 16 }}>
         {song ? <PreviewDisc song={song} /> : <DiscArt uri={art} onPress={onArt} accessibilityLabel={artLabel} />}
@@ -145,7 +148,7 @@ export function SheetTitle({ title, desc, right }: { title: string; desc?: strin
 /** '곡 추가 +' 줄 (플리 상세 목록 끝) */
 export function AddSongRow({ onPress }: { onPress: () => void }) {
   return (
-    <Press onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 9, borderRadius: 8, backgroundColor: colors.page }}>
+    <Press onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 9, borderRadius: 8 }}>
       <T style={{ fontFamily: fonts.medium, fontSize: 12, lineHeight: 17, letterSpacing: -0.24, color: '#73BEFF' }}>곡 추가</T>
       <Glyph name="plus" size={16} color="#73BEFF" />
     </Press>

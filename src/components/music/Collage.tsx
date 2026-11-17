@@ -4,7 +4,9 @@ import { Image, View, type ViewStyle } from 'react-native';
 import { Art } from '@/components/ui';
 import { colors } from '@/theme/tokens';
 
-export function Collage({ images, size, radius = 18, style }: { images: (string | null | undefined)[]; size: number; radius?: number; style?: ViewStyle }) {
+/** images가 null이면 아직 모르는 중 — 같은 크기의 빈 칸만 (곡 없는 플리의 음표 그림과 구분) */
+export function Collage({ images, size, radius = 18, style }: { images: (string | null | undefined)[] | null; size: number; radius?: number; style?: ViewStyle }) {
+  if (!images) return <View style={[{ width: size, height: size, borderRadius: radius, backgroundColor: colors.card2 }, style]} />;
   const list = images.filter(Boolean) as string[];
   if (list.length < 4) return <Art uri={list[0]} size={size} radius={radius} style={style} />;
   const h = size / 2;
