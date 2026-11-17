@@ -5,7 +5,7 @@ import type { AgreementType, ReportTarget, SocialProfile, SocialProvider, Song, 
 
 
 /** 드랍을 연 곳 (drop_opened source) */
-export type DropOpenSource = 'map_pin' | 'map_list' | 'notification' | 'profile' | 'playlists' | 'link';
+export type DropOpenSource = 'map_pin' | 'map_list' | 'map_bubble' | 'notification' | 'profile' | 'playlists' | 'link';
 export type TabParamList = {
   Map: undefined;
   Playlists: undefined;

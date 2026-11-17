@@ -58,7 +58,7 @@ interface PinProps {
   /** 물결 애니메이션 (Google 지도에선 Marker tracksViewChanges가 켜져 있어야 보인다) */
   animated?: boolean;
   onImageLoad?: () => void;
-  /** 재생 반경 밖 — 곡·커버 없이 흐리게 (art·count는 무시) */
+  /** 재생 반경 밖 — 곡·커버 없이 흐리게 (art·count는 무시). active(말풍선으로 고름)면 조금 크게 · 덜 흐리게 · 회청색 테두리 */
   locked?: boolean;
 }
 
@@ -78,7 +78,7 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
   const b = active ? PIN_SIZE.active : PIN_SIZE.normal;
   const left = (b.w - A) / 2;
   return (
-    <View style={{ width: b.w, height: b.h, opacity: locked ? 0.55 : 1 }} accessible={!!title} accessibilityLabel={title ? `${title}${subtitle ? ` · ${subtitle}` : ''}` : undefined}>
+    <View style={{ width: b.w, height: b.h, opacity: locked ? (active ? 0.9 : 0.55) : 1 }} accessible={!!title} accessibilityLabel={title ? `${title}${subtitle ? ` · ${subtitle}` : ''}` : undefined}>
       {animated ? <AnimatedRipple cx={b.tipX} cy={b.tipY} rings={active ? 3 : 2} /> : null}
       <Svg width={b.w} height={b.h} style={{ position: 'absolute' }}>
         {animated ? null : <Ripple cx={b.tipX} cy={b.tipY} />}
@@ -88,8 +88,8 @@ export function DropPin({ type, art, active, title, subtitle, count, animated, o
       <View style={{ position: 'absolute', left: b.tipX - 4, top: A + 12, width: 8, height: 7, borderRadius: 4, backgroundColor: 'rgba(250,250,250,0.7)' }} />
       <View
         style={[
-          { position: 'absolute', left, top: 0, width: A, height: A, borderRadius: R, backgroundColor: '#FFFFFF', borderWidth: B, borderColor: active ? colors.accent : '#FAFAFA', alignItems: 'center', justifyContent: 'center' },
-          Platform.OS === 'ios' ? (active ? glow(0.8, 14) : { shadowColor: '#12214A', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } }) : null,
+          { position: 'absolute', left, top: 0, width: A, height: A, borderRadius: R, backgroundColor: '#FFFFFF', borderWidth: B, borderColor: active ? (locked ? colors.ink3 : colors.accent) : '#FAFAFA', alignItems: 'center', justifyContent: 'center' },
+          Platform.OS === 'ios' ? (active && !locked ? glow(0.8, 14) : { shadowColor: '#12214A', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } }) : null,
         ]}
       >
         {locked ? (

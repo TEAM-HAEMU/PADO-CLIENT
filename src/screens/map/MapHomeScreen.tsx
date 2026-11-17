@@ -22,14 +22,14 @@ import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useDropLock } from '@/hooks/useDropLock';
 import { markScopeTipSeen, useDropRadius, useScopeTip } from '@/hooks/useDropRadius';
 import { ScopeTip } from '@/components/map/ScopeTip';
+import { SelectedDropBubble } from '@/components/map/DropBubble';
+import { focusCamera } from '@/utils/dropBubble';
 import type { ScopeTipText } from '@/utils/scopeTip';
 import { placeKey, placeLevel, placeName, sanitizeRegionsAt, wantsPlace } from '@/utils/mapPlace';
 import { scopeLabel } from '@/utils/dropScope';
 import { track } from '@/services/analytics';
-import { toast } from '@/store/toast';
-import { lockMessage } from '@/utils/dropLock';
 import { useMiniDiscActions } from '@/components/music/MiniDisc';
-import { usePreviewStore } from '@/services/preview';
+import { startPreview, usePreviewStore } from '@/services/preview';
 import { useTermsUpdateCheck } from '@/hooks/useTermsUpdateCheck';
 import { useAppUpdatePrompt } from '@/hooks/useAppUpdatePrompt';
 import { distanceM, FALLBACK, formatDistance, lastKnown, useLocation } from '@/services/location';
@@ -189,6 +189,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const pins = useMemo(() => (clustered ? singlePins(sorted, clusters) : pickPins(sorted, view)), [clustered, clusters, sorted, view]);
   const groups = useMemo(() => clusters.filter(c => c.count > 1), [clusters]);
 
+  // 하단 목록에서 고른 드랍 — 지도가 그 핀으로 옮겨 가고 핀 위에 말풍선 (지도 빈 곳·다른 핀을 누르거나 화면을 떠나면 닫힘)
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = selectedId ? sorted.find(x => x.d.droppingId === selectedId) : undefined;
+  useEffect(() => { if (!focused) setSelectedId(null); }, [focused]);
+  // 고른 핀은 그릴 핀 목록(보이는 영역·개수 제한) 밖이어도 늘 그린다
+  const shownPins = useMemo(() => (!selected || pins.some(p => p.item === selected) ? pins : [...pins, { item: selected, rank: Infinity }]), [pins, selected]);
+
   // 주변 곡 자동 재생 — 가까운 음악 드랍부터 차례로 (지도 화면일 때, 앱을 내려도 계속)
   const musicDrops = useMemo(() => sorted.filter(x => !x.lock.locked).map(x => x.d).filter((d): d is MusicDropSummary => d.type === 'MUSIC'), [sorted]);
   const auto = useNearbyAutoplay(musicDrops, focused && !!coords);
@@ -209,17 +216,60 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     else if (d.type === 'PLAYLIST') parent?.navigate('PlaylistDrop', { dropId: d.droppingId, source });
     else parent?.navigate('PinPreview', { dropId: d.droppingId, source });
   };
-  const tapDrop = ({ d, m, lock }: (typeof sorted)[number], source: DropOpenSource) => {
-    if (!lock.locked) return openDrop(d, source);
-    track('drop_locked_tap', { drop_id: d.droppingId, type: d.type, source, distance_m: Math.round(m), remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) });
-    toast(lockMessage(lock, radius));
+  // 고른 드랍으로 카메라 이동 (~0.5초) — 지금 확대 수준 그대로 가운데만, 너무 넓게 보고 있으면 핀이 잘 보이게 확대
+  const focusOn = (d: DropSummary) => {
+    follow.current = false;
+    const f = focusCamera(d, view);
+    if ('region' in f) mapRef.current?.animateToRegion(f.region, 500);
+    else mapRef.current?.animateCamera({ center: f.center }, { duration: 500 });
+  };
+  // 하단 목록·지도 핀 누르기 (같은 흐름) — 처음 누르면 고르기(들을 수 있으면 미리듣기 + 지도 이동 + 말풍선), 고른 드랍을 한 번 더 누르면 자세히.
+  // 잠긴 드랍은 재생·자세히 없이 말풍선(잠금 안내)만 — 토스트는 띄우지 않는다
+  const pickDrop = (x: (typeof sorted)[number], via: 'list' | 'pin') => {
+    const { d, m, lock } = x;
+    const source: DropOpenSource = via === 'list' ? 'map_list' : 'map_pin';
+    if (d.droppingId === selectedId) {
+      if (lock.locked) return focusOn(d);
+      track('map_bubble_open', { drop_id: d.droppingId, via });
+      return openDrop(d, source);
+    }
+    setSelectedId(d.droppingId);
+    focusOn(d);
+    track(via === 'list' ? 'map_list_tap' : 'map_pin_tap', { drop_id: d.droppingId, type: d.type, locked: lock.locked });
+    if (lock.locked) {
+      // 서버 집계(drop_locked_tap)는 고를 때 한 번만 — 같은 드랍을 또 눌러도 다시 세지 않는다
+      track('drop_locked_tap', { drop_id: d.droppingId, type: d.type, source, distance_m: Math.round(m), remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) });
+      return;
+    }
+    // 핀 미리보기와 같은 재생 — 같은 곡이면 이어서(처음부터 다시 틀지 않음). 투표·플리는 곡이 하나가 아니라 틀지 않는다
+    if (d.type === 'MUSIC') startPreview({ id: d.songId, title: d.title, artist: d.artist, albumImagePath: d.albumImageUrl, previewUrl: d.previewUrl, dropId: d.droppingId }).catch(() => {});
   };
   // 핀 누르기 — 마커가 다시 렌더되지 않게 고정 함수 하나 (누른 순간의 최신 목록·핸들러를 ref로 읽는다)
-  const latest = useRef({ sorted, tapDrop });
-  useEffect(() => { latest.current = { sorted, tapDrop }; });
+  const latest = useRef({ sorted, pickDrop, selectedId });
+  useEffect(() => { latest.current = { sorted, pickDrop, selectedId }; });
+  const markerPressedAt = useRef(0);
   const onPinPress = useCallback((id: string) => {
+    markerPressedAt.current = Date.now();
     const x = latest.current.sorted.find(p => p.d.droppingId === id);
-    if (x) latest.current.tapDrop(x, 'map_pin');
+    if (x) latest.current.pickDrop(x, 'pin');
+  }, []);
+  // 말풍선 누르기 = 자세히 (잠긴 드랍은 열지 않는다)
+  const openRef = useRef(openDrop);
+  openRef.current = openDrop;
+  const onBubblePress = useCallback((id: string) => {
+    markerPressedAt.current = Date.now();
+    const x = latest.current.sorted.find(p => p.d.droppingId === id);
+    if (!x || x.lock.locked) return;
+    track('map_bubble_open', { drop_id: id, via: 'bubble' });
+    openRef.current(x.d, 'map_bubble');
+  }, []);
+  // 지도 빈 곳 누르기 = 말풍선 닫기. Apple 지도는 마커를 눌러도 지도 누르기가 같이 오므로 마커 누르기 직후·마커 누르기 표시는 건너뛴다
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+  const onMapPress = useCallback((e: { nativeEvent: { action?: string } }) => {
+    if (!latest.current.selectedId || e.nativeEvent.action === 'marker-press') return;
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => { if (Date.now() - markerPressedAt.current > 400) setSelectedId(null); }, 120);
   }, []);
   // 묶음 누르기 — 묶인 드랍이 다 보이게 확대 (둘러보는 중이므로 내 위치 따라가기는 멈춘다)
   const latestClusters = useRef({ clusters, view });
@@ -322,6 +372,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         onPanDrag={() => { follow.current = false; }}
         onMapReady={() => setMapReady(true)}
         onRegionChangeComplete={onRegionChangeComplete}
+        onPress={onMapPress}
         // Android Google 지도는 마커를 누르면 그 마커를 가운데로 옮긴다 — 묶음을 누를 땐 animateToRegion과 겹쳐 지도가 한 번 튀므로 묶음 모드에서만 끈다 (지도 단위 설정이라 마커별로는 못 정한다)
         moveOnMarkerPress={!clustered}
       >
@@ -329,7 +380,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
         {!useGoogle ? <Polygon coordinates={tintArea(here)} fillColor="rgba(120,200,232,0.22)" strokeWidth={0} strokeColor="transparent" tappable={false} /> : null}
         {coords ? <MyLocationMarker latitude={coords.latitude} longitude={coords.longitude} /> : null}
         {groups.map(c => <ClusterMarker key={c.key} id={c.key} latitude={c.latitude} longitude={c.longitude} count={c.count} onPress={onClusterPress} />)}
-        {pins.map(({ item: { d, m, lock }, rank }) => (
+        {shownPins.map(({ item: { d, m, lock }, rank }) => (
           // 잠금이 풀리거나 잠기면 핀 모양이 통째로 바뀌므로 새 마커로
           <DropMarker
             key={`${d.droppingId}:${lock.locked ? 'l' : 'o'}`}
@@ -338,7 +389,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
             longitude={d.longitude}
             type={d.type}
             locked={lock.locked}
-            active={d.droppingId === nearestId}
+            active={selectedId ? d.droppingId === selectedId : d.droppingId === nearestId}
             animated={animatePins && rank < ANIMATED_PINS && !lock.locked}
             art={lock.locked ? null : dropArt(d)}
             title={lock.locked ? '잠긴 드랍' : dropTitle(d)}
@@ -347,6 +398,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
             onPress={onPinPress}
           />
         ))}
+        {selected ? <SelectedDropBubble key={selected.d.droppingId} drop={selected.d} lock={selected.lock} radius={radius} onPress={onBubblePress} /> : null}
       </MapView>
 
       {/* 상단 페이드 + 동 이름 */}
@@ -389,11 +441,12 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, gap: 12 }}>
             {sorted.slice(0, 12).map((x, i) => {
               const { d, m, lock } = x;
+              const picked = d.droppingId === selectedId;
               if (lock.locked) {
                 // 잠긴 드랍 — 곡·커버 대신 자물쇠와 거리만
                 return (
-                  <Press key={d.droppingId} onPress={() => tapDrop(x, 'map_list')} accessibilityLabel={`잠긴 드랍 · ${formatDistance(m)}`} trackAs="주변 목록 잠긴 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
-                    <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: '#FAFAFA', backgroundColor: '#FFFFFF', opacity: 0.6 }}>
+                  <Press key={d.droppingId} onPress={() => pickDrop(x, 'list')} accessibilityLabel={`잠긴 드랍 · ${formatDistance(m)}`} accessibilityState={{ selected: picked }} trackAs="주변 목록 잠긴 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: picked ? 1 : 0.6 }}>
                       <View style={{ width: 49, height: 49, borderRadius: 9, backgroundColor: colors.card2, alignItems: 'center', justifyContent: 'center' }}>
                         <Icon name="lock" size={18} color={colors.ink3} />
                       </View>
@@ -408,9 +461,9 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
               const fresh = i < 3;
               const onAir = d.type === 'MUSIC' && !!playingKey && d.songId === playingKey;
               return (
-                <Press key={d.droppingId} onPress={() => tapDrop(x, 'map_list')} trackAs="주변 목록 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
+                <Press key={d.droppingId} onPress={() => pickDrop(x, 'list')} accessibilityState={{ selected: picked }} trackAs="주변 목록 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
                   {/* Figma 'stay music' 아트: 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 (재생 중이면 시안 테두리 + 글로우) */}
-                  <View style={[{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: onAir ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: fresh || onAir ? 1 : 0.6 }, onAir || fresh ? glow(onAir ? 0.9 : 0.5, 12) : null]}>
+                  <View style={[{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: onAir || picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: fresh || onAir || picked ? 1 : 0.6 }, onAir || picked || fresh ? glow(onAir || picked ? 0.9 : 0.5, 12) : null]}>
                     <Art uri={dropArt(d)} size={49} radius={9} />
                     {onAir ? (
                       <View style={{ position: 'absolute', right: -7, bottom: -7, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#040916' }}>
