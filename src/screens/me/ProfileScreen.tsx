@@ -19,6 +19,7 @@ import { env } from '@/config';
 import { invalidateAfterDropRemoved, qk, useMe, useMyDrops, useMyLikeCount, useMyLikes, useMyPlaylists, useUnreadCount } from '@/hooks/api';
 import { likeApi } from '@/api/endpoints';
 import { dropPlace } from '@/utils/address';
+import { newestFirst } from '@/utils/dropOrder';
 import { dropArt, dropSub, dropTitle } from '@/screens/map/MapHomeScreen';
 import { toast } from '@/store/toast';
 import { googleMapStyle } from '@/theme/mapStyle';
@@ -28,7 +29,7 @@ const useGoogle = !!env.googleMapsKey || Platform.OS === 'android';
 /** '내 드랍 지도' 칸 높이 · 핀 전체 키 (아트 55 + 막대 19) */
 const DROP_MAP_H = 120;
 const PIN_H = 74;
-/** 미니 지도에 그릴 핀 수 상한 (목록 순서 — 위에서부터). 120pt 칸이라 이보다 많으면 겹쳐 보이지도 않고 마커 스냅샷만 늘어난다 */
+/** 미니 지도에 그릴 핀 수 상한 (최신순 — utils/dropOrder.ts). 120pt 칸이라 이보다 많으면 겹쳐 보이지도 않고 마커 스냅샷만 늘어난다 */
 const MAP_PIN_LIMIT = 30;
 /** 핀 앨범 아트 칸 (테두리 3을 뺀 안쪽) */
 const PIN_ART = 49;
@@ -48,8 +49,8 @@ export default function ProfileScreen() {
   const myDropsQ = useMyDrops();
   const myDrops = myDropsQ.data;
   const drops = useMemo(() => myDrops ?? EMPTY, [myDrops]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 미니 지도 핀 — 목록 위에서부터 MAP_PIN_LIMIT개만
-  const mapDrops = useMemo(() => drops.slice(0, MAP_PIN_LIMIT), [drops]);
+  // 미니 지도 핀 — 최신 MAP_PIN_LIMIT개만 (만든 시각이 응답에 없으면 목록 순서 그대로 위에서부터)
+  const mapDrops = useMemo(() => newestFirst(drops).slice(0, MAP_PIN_LIMIT), [drops]);
   // 플리 드랍 핀은 플리 상세와 같은 4칸 커버 — 요약엔 첫 곡 아트뿐이라 드랍 상세의 곡 아트를 쓴다 (지도에 그리는 핀만)
   const playlistDrops = mapDrops.filter(d => d.type === 'PLAYLIST');
   const plDetails = useQueries({ queries: playlistDrops.map(d => ({ queryKey: qk.drop(d.droppingId), queryFn: () => dropApi.get(d.droppingId), staleTime: 5 * 60_000, enabled: focused && tab === 'drops' })) });

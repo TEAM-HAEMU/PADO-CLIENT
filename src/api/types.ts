@@ -159,6 +159,8 @@ interface DropSummaryBase {
   /** 서버가 찾은 드랍 자리의 장소 이름(카카오 — 가게·건물 등). 새 필드라 예전 서버·못 찾은 드랍은 없거나 null → 주소를 보여 준다 */
   placeName?: string | null;
   isMyDropping: boolean;
+  /** 만든 시각 (ISO) — 요약 응답에 있을 때만. 없으면 목록 순서를 그대로 쓴다 (utils/dropOrder.ts) */
+  createdAt?: string | null;
   /** 같은 지역 재생 판정용 — 새 필드라 예전 서버·백필 안 된 드랍은 없거나 null (그러면 거리로만 판정) */
   regionCodes?: RegionCodes | null;
 }
