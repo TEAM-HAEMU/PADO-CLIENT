@@ -285,6 +285,8 @@ export type CreateDropBody =
 export interface LikedDrop {
   droppingId: UUID;
   droppingType: DropType;
+  /** 음악 드랍의 곡 ID — 현재 백엔드 응답엔 없음. 들어오면 곡 추가 시트가 드랍 상세를 따로 받지 않는다 */
+  songId?: UUID | null;
   title?: string;
   artist?: string;
   topic?: string;

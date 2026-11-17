@@ -1,10 +1,8 @@
 /** 3.5 플리 드랍 만들기 — 내 플레이리스트 선택 또는 새로 구성 (명세: playlistId | playlistName+songIds 1~50) · Figma '3.4 플리 드랍' */
 import React, { useCallback, useState, useEffect } from 'react';
 import { ScrollView, View, type ViewStyle } from 'react-native';
-import { useQueries } from '@tanstack/react-query';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { playlistApi } from '@/api/endpoints';
 import type { Song } from '@/api/types';
 import { RadioGlyph } from '@/components/drop/glyphs';
 import { AddLink, DropTopBar } from '@/components/drop/parts';
@@ -12,13 +10,14 @@ import { Collage } from '@/components/music/Collage';
 import { Empty, Loading, Press, PrimaryButton, T, SecondaryButton } from '@/components/ui';
 import { Field } from '@/components/ui/Field';
 import { Wave } from '@/components/ui/Wave';
-import { useMyPlaylists } from '@/hooks/api';
+import { useMyPlaylists, usePlaylistDetails } from '@/hooks/api';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
 import { useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { formatTotal } from '@/utils/format';
+import { playlistCover } from '@/utils/playlists';
 
 /** 플리 카드 (Figma 높이 80 · 모서리 4) — 고르면 옅은 하늘 바탕 + 시안 동그라미 */
 const card = (on: boolean): ViewStyle => ({
@@ -35,7 +34,9 @@ export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'Pla
   const scroll = useFocusedInputScroll();
   const { playlist, picked, set } = useDraft();
   const { data: mine, isLoading, isError, refetch } = useMyPlaylists();
-  const details = useQueries({ queries: (mine ?? []).map(p => ({ queryKey: ['playlist', p.id], queryFn: () => playlistApi.get(p.id) })) });
+  // 카드마다 곡 수·길이·콜라주용 상세 — 플리 탭과 같은 캐시를 길게 써서, 열 때마다 플리 수만큼 다시 받지 않는다
+  const focused = useIsFocused();
+  const details = usePlaylistDetails((mine ?? []).map(p => p.id), focused);
   const [newName, setNewName] = useState(playlist?.kind === 'new' ? playlist.name : '');
   const [newSongs, setNewSongs] = useState<Song[]>(playlist?.kind === 'new' ? playlist.songs : []);
   const [mode, setMode] = useState<'existing' | 'new'>(playlist?.kind ?? 'existing');
@@ -76,7 +77,7 @@ export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'Pla
             const total = d?.songs.reduce((a, s) => a + (s.duration || 0), 0) ?? 0;
             return (
               <Press key={p.id} trackAs="기존 플레이리스트 고르기" accessibilityState={{ selected: on }} onPress={() => { setMode('existing'); set({ playlist: { kind: 'existing', playlistId: p.id, name: p.name, art: p.albumImageUrl } }); }} style={[card(on), { flexDirection: 'row', alignItems: 'center', gap: 14 }]}>
-                <Collage images={d?.songs.map(s => s.albumImagePath) ?? [p.albumImageUrl]} size={60} radius={30} />
+                <Collage images={playlistCover(p, d, !!details[i]?.isError)} size={60} radius={30} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <T numberOfLines={1} style={NAME}>{p.name}</T>
                   <T style={META}>{d ? `${d.songs.length}곡 · ${formatTotal(total)}` : ' '}</T>

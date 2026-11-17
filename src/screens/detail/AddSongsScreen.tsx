@@ -5,16 +5,16 @@
  */
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, TextInput, View } from 'react-native';
-import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { dropApi, playlistApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
-import { isMusicDetail, type DropSummary, type Song } from '@/api/types';
-import { Empty, Press, PrimaryButton, T } from '@/components/ui';
+import { isMusicDetail, type DropDetail, type DropSummary, type Song } from '@/api/types';
+import { Empty, Press, PrimaryButton, SecondaryButton, T } from '@/components/ui';
 import { Glyph } from '@/components/detail/glyphs';
 import { DiscRow, SheetTitle } from '@/components/detail/parts';
 import { ServiceGlyph } from '@/components/ui/Brand';
 import { Sheet } from '@/components/ui/Sheet';
-import { useMyLikes, useSongSearch } from '@/hooks/api';
+import { qk, useMyLikes, useSongSearch } from '@/hooks/api';
 import { useDebounced } from '@/hooks/useDebounced';
 import { useDropLock } from '@/hooks/useDropLock';
 import type { RootScreen } from '@/navigation/types';
@@ -22,9 +22,14 @@ import { useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { formatDuration } from '@/utils/format';
+import { resolveLikedSongIds } from '@/utils/playlists';
 import { track } from '@/services/analytics';
 
 type Tab = 'search' | 'nearby' | 'liked';
+/** 좋아요 탭에서 한 번에 상세를 받는 드랍 수 · 동시 요청 수 — 끝까지 내리면 다음 묶음 */
+const LIKED_BATCH = 30;
+const LIKED_CONCURRENCY = 4;
+const DETAIL_STALE = 5 * 60_000;
 const asSong = (id: string, title: string, artist: string, art: string | null): Song => ({ id, title, artist, duration: 0, albumImagePath: art, links: { spotify: null, youtubeMusic: null } });
 
 export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSongs'>) {
@@ -48,12 +53,45 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
     const seen = new Set<string>();
     return all.filter(d => d.type === 'MUSIC' && !lockOf(d).locked).map(d => d.type === 'MUSIC' ? asSong(d.songId, d.title, d.artist, d.albumImageUrl) : null).filter((s): s is Song => !!s && !seen.has(s.id) && !!seen.add(s.id));
   }, [qc, lockOf]);
-  const likes = useMyLikes().data ?? [];
-  const likedMusic = likes.filter(l => l.droppingType === 'MUSIC');
-  const likedDetails = useQueries({ queries: tab === 'liked' ? likedMusic.map(l => ({ queryKey: ['drop', l.droppingId], queryFn: () => dropApi.get(l.droppingId) })) : [] });
+  // 좋아요한 음악 드랍의 곡 — 좋아요 목록 응답엔 곡 ID가 없어 드랍 상세로 찾는다(백엔드에 songId 요청 중).
+  // 응답·캐시(주변·내 드랍·상세)로 알 수 있으면 요청하지 않고, 나머지는 LIKED_BATCH개씩 동시 LIKED_CONCURRENCY개로
+  const likesQ = useMyLikes();
+  const likedMusic = useMemo(() => (likesQ.data ?? []).filter(l => l.droppingType === 'MUSIC'), [likesQ.data]);
+  const [likedRound, setLikedRound] = useState(0);
+  const likedQ = useQuery({
+    queryKey: ['likedSongIds', likedMusic.map(l => l.droppingId), likedRound],
+    enabled: tab === 'liked' && likedMusic.length > 0,
+    staleTime: DETAIL_STALE,
+    placeholderData: keepPreviousData,
+    queryFn: () => {
+      const fromList = new Map(likedMusic.map(l => [l.droppingId, l.songId]));
+      const summaries = [['nearby'], qk.myDrops].flatMap(key => qc.getQueriesData<DropSummary[]>({ queryKey: key }).flatMap(([, v]) => (Array.isArray(v) ? v : [])));
+      const known = (id: string) => {
+        const detail = qc.getQueryData<DropDetail>(qk.drop(id));
+        if (detail && isMusicDetail(detail)) return detail.songId;
+        const sum = summaries.find(x => x.droppingId === id);
+        return fromList.get(id) ?? (sum?.type === 'MUSIC' ? sum.songId : null);
+      };
+      const fetchSongId = (id: string) => qc.fetchQuery({ queryKey: qk.drop(id), queryFn: () => dropApi.get(id), staleTime: DETAIL_STALE }).then(d => (isMusicDetail(d) ? d.songId : null));
+      return resolveLikedSongIds(likedMusic.map(l => l.droppingId), known, fetchSongId, { limit: LIKED_BATCH, concurrency: LIKED_CONCURRENCY });
+    },
+  });
   const likedSeen = new Set<string>();
-  const liked = likedMusic.map((l, i) => { const d = likedDetails[i]?.data; return d && isMusicDetail(d) ? asSong(d.songId, l.title ?? '', l.artist ?? '', l.imageUrl) : null; }).filter((s): s is Song => !!s && !likedSeen.has(s.id) && !!likedSeen.add(s.id));
-  const likedLoading = tab === 'liked' && likedDetails.some(x => x.isLoading);
+  const liked = likedMusic.map(l => { const id = likedQ.data?.songIds.get(l.droppingId); return id ? asSong(id, l.title ?? '', l.artist ?? '', l.imageUrl) : null; }).filter((s): s is Song => !!s && !likedSeen.has(s.id) && !!likedSeen.add(s.id));
+  const likedLoading = likesQ.isLoading || (likedQ.isFetching && !liked.length);
+  const likedMore = !!likedQ.data?.remaining && !likedQ.isFetching;
+  const likedFailed = likedQ.data?.failed ?? 0;
+  // 목록 끝: 받는 중 표시 / 일부 실패 → 다시 시도 / 남은 좋아요 → 더 불러오기 (끝까지 내려도 자동으로 불러온다)
+  const footerLink = (label: string, onPress: () => void, trackAs: string) => (
+    <Press onPress={onPress} trackAs={trackAs} style={{ alignItems: 'center', paddingVertical: 8 }}>
+      <T style={{ fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, color: colors.ink3 }}>{label}</T>
+    </Press>
+  );
+  const likedFooter = tab !== 'liked' || !liked.length ? undefined
+    : likedQ.isFetching ? <ActivityIndicator color={colors.primary} />
+    : likedFailed ? footerLink(`${likedFailed}곡을 불러오지 못했어요 · 다시 시도`, () => likedQ.refetch(), '좋아요 곡 다시 불러오기')
+    : likedMore ? footerLink('더 불러오기', () => setLikedRound(r => r + 1), '좋아요 곡 더 불러오기')
+    : undefined;
 
   const data = tab === 'search' ? search.data ?? [] : tab === 'nearby' ? nearby : liked;
   const toggle = (s: Song) => {
@@ -114,7 +152,11 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
           keyExtractor={s => s.id}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ gap: 12, paddingBottom: 12 }}
-          ListEmptyComponent={tab === 'search' && !query ? <Empty icon="search" title="어떤 곡을 담을까요?" /> : search.isFetching || likedLoading ? <ActivityIndicator color={colors.primary} /> : tab === 'search' && search.isError ? <Empty icon="alert" title="검색하지 못했어요" desc={errorMessage(search.error)} /> : <Empty title={tab === 'liked' ? '좋아요한 음악 드랍이 없어요' : tab === 'nearby' ? '주변에 음악 드랍이 없어요' : '검색 결과가 없어요'} />}
+          ListEmptyComponent={tab === 'search' && !query ? <Empty icon="search" title="어떤 곡을 담을까요?" /> : (tab === 'search' && search.isFetching) || (tab === 'liked' && likedLoading) ? <ActivityIndicator color={colors.primary} /> : tab === 'search' && search.isError ? <Empty icon="alert" title="검색하지 못했어요" desc={errorMessage(search.error)} /> : tab === 'liked' && (likesQ.isError || likedQ.isError || likedFailed) ? (
+            <Empty icon="alert" title="좋아요한 곡을 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => (likesQ.isError ? likesQ.refetch() : likedQ.refetch())} style={{ marginTop: 8 }} />} />
+          ) : <Empty title={tab === 'liked' ? '좋아요한 음악 드랍이 없어요' : tab === 'nearby' ? '주변에 음악 드랍이 없어요' : '검색 결과가 없어요'} />}
+          ListFooterComponent={likedFooter}
+          onEndReached={tab === 'liked' && likedMore ? () => setLikedRound(r => r + 1) : undefined}
           renderItem={({ item: s }) => {
             const inList = existing.has(s.id);
             const on = picked.some(x => x.id === s.id);

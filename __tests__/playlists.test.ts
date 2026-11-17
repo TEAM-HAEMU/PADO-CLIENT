@@ -1,0 +1,108 @@
+/* 플레이리스트 순수 로직 — 새 플리 만들기(A6), 카드 커버(A10), 좋아요한 곡 찾기(A11) */
+import type { PlaylistSummary } from '@/api/types';
+import { createPlaylistAndFind, playlistCover, resolveLikedSongIds } from '@/utils/playlists';
+
+const pl = (id: string, name = id): PlaylistSummary => ({ id, name, albumImageUrl: `art-${id}` });
+
+describe('createPlaylistAndFind', () => {
+  test('생성 전 목록에 없던 플리를 새 플리로 (같은 이름이 이미 있어도)', async () => {
+    const lists = [[pl('a', '산책')], [pl('b', '산책'), pl('a', '산책')]];
+    const api = { mine: jest.fn(async () => lists.shift()!), create: jest.fn(async () => undefined) };
+    const r = await createPlaylistAndFind('산책', api);
+    expect(api.create).toHaveBeenCalledTimes(1);
+    expect(r.created?.id).toBe('b');
+    expect(r.list?.map(p => p.id)).toEqual(['b', 'a']);
+  });
+
+  test('생성이 실패하면 throw — 아무것도 안 생겼으니 다시 시도해도 된다', async () => {
+    const api = { mine: jest.fn(async () => []), create: jest.fn(async () => { throw new Error('S1'); }) };
+    await expect(createPlaylistAndFind('x', api)).rejects.toThrow('S1');
+  });
+
+  test('생성 뒤 목록 조회가 한 번 실패하면 한 번 더 받아 새 플리를 찾는다', async () => {
+    const calls: (() => Promise<PlaylistSummary[]>)[] = [
+      async () => [],
+      async () => { throw new Error('net'); },
+      async () => [pl('n', '새 플리')],
+    ];
+    const api = { mine: jest.fn(() => calls.shift()!()), create: jest.fn(async () => undefined) };
+    const r = await createPlaylistAndFind('새 플리', api);
+    expect(r.created?.id).toBe('n');
+    expect(api.create).toHaveBeenCalledTimes(1);
+  });
+
+  test('생성 뒤 목록 조회가 계속 실패해도 throw하지 않는다 — 오류로 남겨 다시 누르면 중복 생성', async () => {
+    let n = 0;
+    const api = { mine: jest.fn(async () => { if (n++ === 0) return []; throw new Error('net'); }), create: jest.fn(async () => undefined) };
+    await expect(createPlaylistAndFind('x', api)).resolves.toEqual({ list: null, created: null });
+    expect(api.create).toHaveBeenCalledTimes(1);
+  });
+
+  test('생성 전 목록을 못 받았으면 이름으로 찾는다', async () => {
+    let n = 0;
+    const api = { mine: jest.fn(async () => { if (n++ === 0) throw new Error('net'); return [pl('a', '다른'), pl('b', '내 플리')]; }), create: jest.fn(async () => undefined) };
+    expect((await createPlaylistAndFind('내 플리', api)).created?.id).toBe('b');
+  });
+});
+
+describe('playlistCover', () => {
+  const summary = { albumImageUrl: 'first' };
+  test('상세가 있으면 곡 아트들 (콜라주)', () => {
+    expect(playlistCover(summary, { songs: [{ albumImagePath: 'a' }, { albumImagePath: null }] as never }, false)).toEqual(['a', null]);
+  });
+  test('받는 중이면 null — 첫 곡 아트를 그렸다가 4칸으로 바뀌며 튀지 않게', () => {
+    expect(playlistCover(summary, undefined, false)).toBeNull();
+  });
+  test('상세를 못 받았으면 목록의 첫 곡 아트', () => {
+    expect(playlistCover(summary, undefined, true)).toEqual(['first']);
+  });
+});
+
+describe('resolveLikedSongIds', () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `d${i}`);
+
+  test('응답·캐시로 아는 곡은 요청하지 않는다', async () => {
+    const fetchSongId = jest.fn(async (id: string) => `s-${id}`);
+    const r = await resolveLikedSongIds(['d0', 'd1', 'd2'], id => (id === 'd1' ? 'known' : null), fetchSongId, { limit: 10, concurrency: 2 });
+    expect(fetchSongId.mock.calls.map(c => c[0])).toEqual(['d0', 'd2']);
+    expect([...r.songIds.entries()]).toEqual(expect.arrayContaining([['d0', 's-d0'], ['d1', 'known'], ['d2', 's-d2']]));
+    expect(r).toMatchObject({ failed: 0, remaining: 0 });
+  });
+
+  test('모르는 드랍은 앞에서부터 limit개까지만 — 나머지는 remaining', async () => {
+    const fetchSongId = jest.fn(async (id: string) => `s-${id}`);
+    const r = await resolveLikedSongIds(ids(100), () => null, fetchSongId, { limit: 30, concurrency: 4 });
+    expect(fetchSongId).toHaveBeenCalledTimes(30);
+    expect(fetchSongId.mock.calls[0][0]).toBe('d0');
+    expect(r.songIds.size).toBe(30);
+    expect(r.remaining).toBe(70);
+  });
+
+  test('동시에 concurrency개를 넘지 않는다', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const fetchSongId = async (id: string) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise<void>(res => setTimeout(res, 1));
+      inFlight--;
+      return `s-${id}`;
+    };
+    const r = await resolveLikedSongIds(ids(20), () => null, fetchSongId, { limit: 20, concurrency: 4 });
+    expect(peak).toBe(4);
+    expect(r.songIds.size).toBe(20);
+  });
+
+  test('개별 실패는 세어서 돌려준다 (말없이 빠지지 않게) — 나머지는 계속 받는다', async () => {
+    const fetchSongId = async (id: string) => { if (id === 'd1' || id === 'd3') throw new Error('x'); return `s-${id}`; };
+    const r = await resolveLikedSongIds(ids(5), () => null, fetchSongId, { limit: 10, concurrency: 2 });
+    expect(r.failed).toBe(2);
+    expect([...r.songIds.keys()].sort()).toEqual(['d0', 'd2', 'd4']);
+  });
+
+  test('곡이 아닌 상세(null)는 실패가 아니라 그냥 빠진다', async () => {
+    const r = await resolveLikedSongIds(['d0'], () => null, async () => null, { limit: 10, concurrency: 2 });
+    expect(r).toMatchObject({ failed: 0, remaining: 0 });
+    expect(r.songIds.size).toBe(0);
+  });
+});

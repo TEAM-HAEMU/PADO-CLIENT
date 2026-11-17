@@ -1,5 +1,5 @@
 /** React Query 훅 — 화면은 이 훅들만 쓴다 */
-import { keepPreviousData, skipToken, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, skipToken, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { commentApi, dropApi, likeApi, notificationApi, playlistApi, safetyApi, songApi, userApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import type { CreateDropBody, LikedDrop, UUID } from '@/api/types';
@@ -60,6 +60,14 @@ export const useUnreadCount = () => useQuery({ queryKey: ['notifications', 'unre
 
 export const useMyPlaylists = () => useQuery({ queryKey: ['playlists'], enabled: authed(), queryFn: playlistApi.mine });
 export const usePlaylist = (id: UUID | undefined) => useQuery({ queryKey: ['playlist', id], enabled: !!id && authed(), queryFn: () => playlistApi.get(id!) });
+/**
+ * 플리 카드용 상세 여러 개 (플리 탭·플리 드랍 만들기) — 목록 응답(/playlists/my)에 곡 수·커버 4장이 없어 플리마다 상세를 받는다.
+ * 곡 담기·빼기·이름 변경은 모두 ['playlist', id]를 무효화하므로 신선도를 길게 잡아, 탭을 오가거나 앱에 돌아올 때마다 전부 다시 받지 않는다.
+ * enabled는 화면이 보일 때만 — 늘 마운트된 탭이 다른 화면에 있는 동안 받지 않게. 꺼져 있어도 캐시된 값은 그대로 보인다
+ */
+export const PLAYLIST_CARD_STALE = 10 * 60_000;
+export const usePlaylistDetails = (ids: UUID[], enabled: boolean) =>
+  useQueries({ queries: ids.map(id => ({ queryKey: ['playlist', id], enabled: enabled && authed(), queryFn: () => playlistApi.get(id), staleTime: PLAYLIST_CARD_STALE })) });
 
 /** 내가 이 드랍에 좋아요를 눌렀는지 — 방금 누른 결과(qk.liked)가 있으면 그것, 없으면 내 좋아요 목록. 둘 다 구독한다 */
 export function useIsLiked(dropId: UUID | undefined) {
