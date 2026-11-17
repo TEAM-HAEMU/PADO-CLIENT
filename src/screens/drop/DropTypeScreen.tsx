@@ -1,6 +1,10 @@
-/** 3.1 드랍 유형 선택 (시트) — Figma 'Type sheet' (그림의 앨범 아트는 시안용 iTunes 이미지라 앱에는 그라데이션 원판으로) */
+/**
+ * 3.1 드랍 유형 선택 (시트) — Figma 'Type sheet'.
+ * 예시 그림 9자리(음악 1·투표 3·플리 5)는 최근 드랍 앨범 이미지로 채운다 (hooks/useRecentAlbumArt, 자리 순서는 utils/albumSlots).
+ * 받기 전·실패·모자란 자리는 그라데이션 예시 그대로
+ */
 import React from 'react';
-import { View, Linking } from 'react-native';
+import { Image, Linking, StyleSheet, View, type ViewStyle } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import type { DropType } from '@/api/types';
 import { ChevronGlyph, PinGlyph, VoteGlyph } from '@/components/drop/glyphs';
@@ -9,6 +13,8 @@ import { Sheet } from '@/components/ui/Sheet';
 import type { RootScreen, RootStackParamList } from '@/navigation/types';
 import { currentCoords, preciseDropHint, PRECISE_DROP_TITLE, tooImpreciseToDrop, useLocation } from '@/services/location';
 import { useDraft } from '@/store/draft';
+import { useRecentAlbumArt } from '@/hooks/useRecentAlbumArt';
+import { SLOT } from '@/utils/albumSlots';
 import { colors, fonts, glow } from '@/theme/tokens';
 
 const TYPES: { type: DropType; title: string; desc: string; route: keyof RootStackParamList }[] = [
@@ -17,23 +23,43 @@ const TYPES: { type: DropType; title: string; desc: string; route: keyof RootSta
   { type: 'PLAYLIST', title: '플레이리스트', desc: '여러 곡을 묶어 한 번에 남겨요', route: 'PlaylistDropCreate' },
 ];
 
-function Illustration({ type }: { type: DropType }) {
-  const disc = (size: number, cs: string[], style?: object) => (
-    <LinearGradient colors={cs} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2 }, style]} />
+/** 앨범 이미지 한 장 — 예시 그림(그라데이션) 위에 겹쳐 두고, 다 받은 뒤에야 보이게 해서 빈칸·깜빡임이 없다 */
+function Cover({ uri }: { uri: string | null }) {
+  const [loaded, setLoaded] = React.useState(false);
+  React.useEffect(() => setLoaded(false), [uri]);
+  if (!uri) return null;
+  return <Image source={{ uri }} onLoad={() => setLoaded(true)} resizeMode="cover" style={[StyleSheet.absoluteFill, { opacity: loaded ? 1 : 0 }]} accessibilityIgnoresInvertColors />;
+}
+
+/** 예시 그림 한 칸: 그라데이션 + (있으면) 앨범 이미지. 그림자(glow)는 잘리지 않게 바깥, 둥근 자르기는 안쪽 */
+function Tile({ size, radius, cs, uri, style, shadow }: { size: number; radius: number; cs: string[]; uri: string | null; style?: ViewStyle | ViewStyle[]; shadow?: ViewStyle }) {
+  return (
+    <View style={[{ position: 'absolute', width: size, height: size, borderRadius: radius }, shadow ? [{ backgroundColor: colors.page }, shadow] : null, style]}>
+      <View style={{ flex: 1, borderRadius: radius, overflow: 'hidden' }}>
+        <LinearGradient colors={cs} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <Cover uri={uri} />
+      </View>
+    </View>
+  );
+}
+
+function Illustration({ type, art }: { type: DropType; art: (string | null)[] }) {
+  const disc = (size: number, cs: string[], slot: number, style?: ViewStyle | ViewStyle[], shadow?: ViewStyle) => (
+    <Tile size={size} radius={size / 2} cs={cs} uri={art[slot] ?? null} style={style} shadow={shadow} />
   );
   if (type === 'MUSIC')
     return (
       <View style={{ width: 76, height: 64 }}>
-        {disc(56, ['#BFE0FF', '#4F97F2'], [{ left: 10, top: 4, borderWidth: 2, borderColor: colors.primary }, glow(0.4, 12)])}
+        {disc(56, ['#BFE0FF', '#4F97F2'], SLOT.music, { left: 10, top: 4, borderWidth: 2, borderColor: colors.primary }, glow(0.4, 12))}
         <View style={{ position: 'absolute', left: 32, top: 26, width: 12, height: 12, borderRadius: 6, backgroundColor: '#050916', borderWidth: 1.5, borderColor: colors.accent }} />
       </View>
     );
   if (type === 'VOTE')
     return (
       <View style={{ width: 76, height: 64 }}>
-        {disc(40, ['#4F97F2', '#E3EDF9'], { left: 0, top: 12, opacity: 0.8 })}
-        {disc(40, ['#D3E6FD', '#7DB5F7'], { left: 36, top: 12, opacity: 0.8 })}
-        {disc(46, ['#BFE0FF', '#4F97F2'], [{ left: 15, top: 6, borderWidth: 2, borderColor: colors.primary }])}
+        {disc(40, ['#4F97F2', '#E3EDF9'], SLOT.vote[1], { left: 0, top: 12, opacity: 0.8 })}
+        {disc(40, ['#D3E6FD', '#7DB5F7'], SLOT.vote[2], { left: 36, top: 12, opacity: 0.8 })}
+        {disc(46, ['#BFE0FF', '#4F97F2'], SLOT.vote[0], { left: 15, top: 6, borderWidth: 2, borderColor: colors.primary })}
         <View style={{ position: 'absolute', left: 54, top: 0, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
           <VoteGlyph />
         </View>
@@ -41,9 +67,15 @@ function Illustration({ type }: { type: DropType }) {
     );
   return (
     <View style={{ width: 76, height: 64 }}>
-      <LinearGradient colors={['#C7DEFC', '#F6FAFF']} style={{ position: 'absolute', left: 6, top: 14, width: 50, height: 50, borderRadius: 12, opacity: 0.6, transform: [{ rotate: '-10deg' }] }} />
+      <Tile size={50} radius={12} cs={['#C7DEFC', '#F6FAFF']} uri={art[SLOT.playlistBack] ?? null} style={{ left: 6, top: 14, opacity: 0.6, transform: [{ rotate: '-10deg' }] }} />
       <View style={{ position: 'absolute', left: 20, top: 6, width: 52, height: 52, borderRadius: 12, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: colors.line }}>
-        {[['#BFE0FF', '#4F97F2'], ['#4F97F2', '#D3E6FD'], ['#7DB5F7', '#E3EDF9'], ['#D3E6FD', '#BFE0FF']].map((c, i) => <LinearGradient key={i} colors={c} style={{ width: 26, height: 26 }} />)}
+        {[['#BFE0FF', '#4F97F2'], ['#4F97F2', '#D3E6FD'], ['#7DB5F7', '#E3EDF9'], ['#D3E6FD', '#BFE0FF']].map((c, i) => (
+          // 테두리(1) 안쪽 50px을 2×2로 — 26이면 한 줄에 두 칸이 안 들어가 한 줄씩 쌓여 오른쪽이 비었다
+          <View key={i} style={{ width: 25, height: 25 }}>
+            <LinearGradient colors={c} style={StyleSheet.absoluteFill} />
+            <Cover uri={art[SLOT.playlistTiles[i]] ?? null} />
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -51,6 +83,7 @@ function Illustration({ type }: { type: DropType }) {
 
 export default function DropTypeScreen({ navigation }: RootScreen<'DropType'>) {
   const start = useDraft(s => s.start);
+  const art = useRecentAlbumArt();
   const place = useLocation(s => s.address || s.label);
   const hasFix = useLocation(s => !!currentCoords(s)); // 낡은 좌표(백그라운드에서 오래 있다 돌아와 새 위치를 기다리는 중)는 없는 것으로
   const locating = useLocation(s => s.fix === 'locating');
@@ -106,7 +139,7 @@ export default function DropTypeScreen({ navigation }: RootScreen<'DropType'>) {
             onPress={() => { start(t.type); navigation.replace(t.route as 'SongSearch'); }}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 18, paddingHorizontal: 6, borderTopWidth: i ? 1 : 0, borderTopColor: colors.divider }}
           >
-            <Illustration type={t.type} />
+            <Illustration type={t.type} art={art} />
             <View style={{ flex: 1, gap: 4 }}>
               <T style={{ fontFamily: fonts.bold, fontSize: 17, lineHeight: 24, letterSpacing: -0.255, color: '#000000' }}>{t.title}</T>
               <T style={{ fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, letterSpacing: -0.065, color: colors.ink2 }}>{t.desc}</T>
