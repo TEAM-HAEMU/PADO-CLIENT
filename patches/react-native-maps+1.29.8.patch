@@ -1,18 +1,40 @@
 diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
-index 94288ef..8d458f6 100644
+index 94288ef..fabb2d2 100644
 --- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
 +++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
-@@ -152,6 +152,9 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+@@ -14,6 +14,8 @@ import androidx.lifecycle.DefaultLifecycleObserver;
+ import androidx.lifecycle.LifecycleOwner;
+ 
+ import android.os.Bundle;
++import android.os.Handler;
++import android.os.Looper;
+ import android.util.Log;
+ import android.view.GestureDetector;
+ import android.view.MotionEvent;
+@@ -81,6 +83,7 @@ import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.HashMap;
+ import java.util.Iterator;
++import java.util.LinkedHashSet;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.concurrent.ExecutionException;
+@@ -152,6 +155,14 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
      private final GestureDetector gestureDetector;
      private boolean paused = false;
      private boolean destroyed = false;
 +    // PADO: Google MapView.onCreate를 이미 불렀는가 / 창에서 떨어지며 멈췄는가 (다시 붙을 때 이어서 시작)
 +    private boolean mapCreated = false;
 +    private boolean stoppedOnDetach = false;
++    // PADO: 지도에서 떼기로 했지만 아직 Google 마커를 지우지 않은 마커 (removeFeatureAt → 같은 마운트 안에서 addFeature면 그대로 쓴다)
++    private final LinkedHashSet<MapMarker> padoDetachedMarkers = new LinkedHashSet<>();
++    private final Handler padoHandler = new Handler(Looper.getMainLooper());
++    private boolean padoFlushPosted = false;
++    private final Runnable padoFlushDetached = this::padoFlushDetachedMarkers;
      private final ThemedReactContext context;
      private final FusedLocationSource fusedLocationSource;
  
-@@ -205,6 +208,10 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+@@ -205,6 +216,10 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
  
      @Override
      public void onCreate(LifecycleOwner owner) {
@@ -23,7 +45,7 @@ index 94288ef..8d458f6 100644
          super.onCreate(null);
      }
  
-@@ -321,75 +328,48 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+@@ -321,75 +336,48 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
  
      }
  
@@ -124,6 +146,72 @@ index 94288ef..8d458f6 100644
          super.onDetachedFromWindow();
          detachLifecycleObserver();
      }
+@@ -799,6 +787,9 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+         savedMapState = null;
+         savedFeatures = null;
+         try {
++            // PADO: 떼기로 한 마커는 지도가 살아 있을 때 지운다 (예약된 정리가 destroy된 지도를 건드리지 않게)
++            padoHandler.removeCallbacks(padoFlushDetached);
++            padoFlushDetachedMarkers();
+             if (!paused) {
+                 pauseSafely();
+             }
+@@ -1211,7 +1202,10 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+         // This is where we intercept them and do the appropriate underlying mapview action.
+         if (child instanceof MapMarker) {
+             MapMarker annotation = (MapMarker) child;
+-            annotation.addToMap(markerCollection);
++            // PADO: 같은 마운트 안에서 떼었다 다시 붙음 = 자식 순서만 바뀜 → 지도에 있던 Google 마커를 그대로 쓴다 (padoDetachMarker)
++            if (!padoDetachedMarkers.remove(annotation) || annotation.getFeature() == null) {
++                annotation.addToMap(markerCollection);
++            }
+             safeAddFeature(index, annotation);
+ 
+             // Allow visibility event to be triggered later
+@@ -1325,7 +1319,11 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+         }
+         if (feature instanceof MapMarker) {
+             markerMap.remove(feature.getFeature());
+-            feature.removeFromMap(markerCollection);
++            if (!destroyed && feature.getFeature() != null) {
++                padoDetachMarker((MapMarker) feature);
++            } else {
++                feature.removeFromMap(markerCollection);
++            }
+             safeRemoveFeatureFromAttacherGroup(feature);
+         } else if (feature instanceof MapHeatmap) {
+             heatmapMap.remove(feature.getFeature());
+@@ -1343,6 +1341,30 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+         }
+     }
+ 
++    /*
++     * PADO: Fabric은 자식 순서가 바뀌면(고른 핀의 zIndex가 바뀜·걸어서 거리순이 바뀜) 그 뒤 자식들을 '떼기(removeFeatureAt) + 붙이기(addFeature)'로 보낸다.
++     * 원래는 뗄 때 Google 마커를 지우고 붙일 때 새로 만들어(addToMap → 뷰를 비트맵으로 다시 그림 → 지도에 새로 올림),
++     * 드랍 하나를 고를 때마다 마커 ~100개를 새로 만들었다 → 뗄 때는 지도에서 바로 지우지 않고, 같은 마운트(메인 스레드 작업 하나) 안에서
++     * 다시 붙으면 있던 마커를 그대로 쓴다. 다시 붙지 않았으면 그 작업이 끝난 뒤 지운다.
++     */
++    private void padoDetachMarker(MapMarker marker) {
++        padoDetachedMarkers.add(marker);
++        if (!padoFlushPosted) {
++            padoFlushPosted = true;
++            padoHandler.post(padoFlushDetached);
++        }
++    }
++
++    private void padoFlushDetachedMarkers() {
++        padoFlushPosted = false;
++        if (padoDetachedMarkers.isEmpty()) return;
++        ArrayList<MapMarker> gone = new ArrayList<>(padoDetachedMarkers);
++        padoDetachedMarkers.clear();
++        for (MapMarker marker : gone) {
++            marker.removeFromMap(markerCollection);
++        }
++    }
++
+     public WritableMap makeClickEventData(LatLng point) {
+         WritableMap event = new WritableNativeMap();
+ 
 diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/ViewChangesTracker.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/ViewChangesTracker.java
 index 238fcb5..e5b1beb 100644
 --- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/ViewChangesTracker.java
@@ -174,7 +262,7 @@ index 82a78e2..7f39fd5 100644
  
  #endif
 diff --git a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
-index d729954..d4230eb 100644
+index d729954..7a817e8 100644
 --- a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
 +++ b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
 @@ -47,6 +47,10 @@ CGRect unionRect(CGRect a, CGRect b) {
