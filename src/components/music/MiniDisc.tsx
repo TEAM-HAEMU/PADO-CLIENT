@@ -13,6 +13,8 @@ import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, wi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 import { Spin } from '@/components/anim';
+import { LoopView, nativeLoops } from '@/components/anim/LoopView';
+import { spinLoops } from '@/utils/ambientMotion';
 import { Art, Press } from '@/components/ui';
 import { ArtPlayGlyph } from '@/components/player/glyphs';
 import { useScreenVisible } from '@/hooks/useScreenVisible';
@@ -52,9 +54,31 @@ function ProgressRing() {
  * '불러오는 중' — 테두리 위를 짧은 호가 빙글빙글.
  * 불러오는 동안 계속 돈다. 앱이 백그라운드거나 화면이 가려지면 멈췄다가 돌아오면 이어서 돈다.
  */
-function LoadingRing() {
+const LoadingRing = nativeLoops ? LoadingRingNative : LoadingRingAnimated;
+
+function LoadingArc() {
   const r = RING / 2 - 2;
   const c = 2 * Math.PI * r;
+  return (
+    <Svg width={RING} height={RING}>
+      <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={colors.line} strokeWidth={2.5} fill="none" />
+      <Circle cx={RING / 2} cy={RING / 2} r={r} stroke="#00C9FF" strokeWidth={2.5} fill="none" strokeDasharray={`${c * 0.22} ${c}`} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+const LOADING_LOOPS = spinLoops(900);
+/** iOS — Core Animation 회전 (앱이 매 프레임 각도를 계산하지 않는다) */
+function LoadingRingNative() {
+  const visible = useScreenVisible();
+  return (
+    <LoopView loops={LOADING_LOOPS} paused={!visible} pointerEvents="none" style={{ position: 'absolute', width: RING, height: RING }}>
+      <LoadingArc />
+    </LoopView>
+  );
+}
+
+function LoadingRingAnimated() {
   const spin = useSharedValue(0);
   const visible = useScreenVisible();
   useEffect(() => {
@@ -66,10 +90,7 @@ function LoadingRing() {
   const st = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: RING, height: RING }, st]}>
-      <Svg width={RING} height={RING}>
-        <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={colors.line} strokeWidth={2.5} fill="none" />
-        <Circle cx={RING / 2} cy={RING / 2} r={r} stroke="#00C9FF" strokeWidth={2.5} fill="none" strokeDasharray={`${c * 0.22} ${c}`} strokeLinecap="round" />
-      </Svg>
+      <LoadingArc />
     </Animated.View>
   );
 }

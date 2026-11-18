@@ -9,6 +9,8 @@ import { View, type ViewStyle } from 'react-native';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import { useScreenVisible } from '@/hooks/useScreenVisible';
+import { LoopView, nativeLoops } from '@/components/anim/LoopView';
+import { spinLoops } from '@/utils/ambientMotion';
 import { colors } from '@/theme/tokens';
 
 const W = 402;
@@ -59,8 +61,21 @@ export function ParticleWave({ style, width = W, animate = true }: { style?: Vie
   );
 }
 
-/** 8초에 한 바퀴 도는 디스크 (paused면 정지 · 화면이 가려지거나 앱이 백그라운드여도 그 자리에서 정지) */
-export function Spin({ children, paused, duration = 8000 }: { children: React.ReactNode; paused?: boolean; duration?: number }) {
+type SpinProps = { children: React.ReactNode; paused?: boolean; duration?: number };
+
+/**
+ * 8초에 한 바퀴 도는 디스크 (paused면 정지 · 화면이 가려지거나 앱이 백그라운드여도 그 자리에서 정지).
+ * iOS는 Core Animation 회전(LoopView) — 재생 중 미니 디스크가 도는 동안 앱이 매 프레임 각도를 계산하지 않는다. Android는 Reanimated
+ */
+export const Spin = nativeLoops ? SpinNative : SpinAnimated;
+
+function SpinNative({ children, paused, duration = 8000 }: SpinProps) {
+  const visible = useScreenVisible();
+  const loops = useMemo(() => spinLoops(duration), [duration]);
+  return <LoopView loops={loops} paused={paused || !visible}>{children}</LoopView>;
+}
+
+function SpinAnimated({ children, paused, duration = 8000 }: SpinProps) {
   const r = useSharedValue(0);
   const visible = useScreenVisible();
   const stopped = paused || !visible;

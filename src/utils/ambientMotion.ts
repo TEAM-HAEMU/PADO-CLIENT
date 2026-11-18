@@ -38,3 +38,57 @@ export function ringProgress(clock: number, i: number, rings: number) {
   if (i >= rings) return -1;
   return (clock + i / rings) % 1;
 }
+
+/**
+ * Core Animation 반복 하나 (iOS PADOLoopView) — key 값을 from→to로 duration(ms)마다 되풀이.
+ *  · easing: linear · outQuad(1-(1-t)²) · inOutSine(-(cos πt - 1)/2) — Reanimated 쪽 곡선과 같다
+ *  · autoreverse: to에 닿으면 같은 시간에 거슬러 돌아온다 (Reanimated withRepeat(…, -1, true))
+ *  · phase: 처음부터 이만큼(0~1) 앞서 시작 · sync: 앱 전체 시계 하나를 함께 쓴다 (물결 고리들이 서로 어긋난 채로 맞물리게)
+ */
+export interface Loop {
+  key: 'rotate' | 'translateX' | 'translateY' | 'scaleX' | 'scaleY' | 'opacity';
+  from: number;
+  to: number;
+  duration: number;
+  easing?: 'linear' | 'outQuad' | 'inOutSine';
+  autoreverse?: boolean;
+  phase?: number;
+  sync?: boolean;
+}
+
+/** 도는 디스크 — duration마다 한 바퀴 */
+export const spinLoops = (duration: number): Loop[] => [{ key: 'rotate', from: 0, to: 360, duration }];
+
+/** 핀 물결 한 겹 (81×29 납작한 타원, 2.6초) */
+export const RIPPLE = { w: 81, h: 29, duration: 2600 } as const;
+
+/**
+ * 핀 물결 고리 i의 Core Animation — WaveRing(Reanimated)과 같은 모습: 진행 t = ringProgress(시계, i, rings),
+ * e = outQuad(t) → 크기 0.15+0.85e (세로는 29/81배), 투명도 0.85(1-e). 고리들은 시계 하나를 i/rings씩 어긋나게 쓴다
+ */
+export function ringLoops(i: number, rings: number): Loop[] {
+  const phase = i / rings;
+  const k = RIPPLE.h / RIPPLE.w;
+  const base = { duration: RIPPLE.duration, easing: 'outQuad' as const, phase, sync: true };
+  return [
+    { key: 'scaleX', from: 0.15, to: 1, ...base },
+    { key: 'scaleY', from: 0.15 * k, to: k, ...base },
+    { key: 'opacity', from: 0.85, to: 0, ...base },
+  ];
+}
+
+/** 파도 배경이 한 번 흘러가는 시간 — 두 폭만큼 흘러 처음 그림으로 돌아온다 */
+export const WAVE_FLOW_MS = 8000;
+
+/**
+ * 파도 배경 한 겹의 Core Animation — Wave(Reanimated)와 같은 모습.
+ *  · 흐름: translateX 0 → -2·폭, 8초 직선 반복
+ *  · 뒤 겹: translateY (출렁임 -18 / 보통 -7) + 일렁임 × (18 / 10), 일렁임은 sin 곡선 왕복 (0.8 / 2초)
+ *  · 앞 겹: translateY 2 - 일렁임 × (18 / 11), scaleY 1 + 일렁임 × (0.1 / 0.07), 왕복 (0.8 / 1.333초)
+ */
+export function waveLoops(layer: 'back' | 'front', width: number, surge: boolean): Loop[] {
+  const flow: Loop = { key: 'translateX', from: 0, to: -width * 2, duration: WAVE_FLOW_MS };
+  const bob = { easing: 'inOutSine' as const, autoreverse: true, duration: surge ? 800 : layer === 'back' ? 2000 : 1333 };
+  if (layer === 'back') return [flow, { key: 'translateY', from: surge ? -18 : -7, to: surge ? 0 : 3, ...bob }];
+  return [flow, { key: 'translateY', from: 2, to: 2 - (surge ? 18 : 11), ...bob }, { key: 'scaleY', from: 1, to: 1 + (surge ? 0.1 : 0.07), ...bob }];
+}

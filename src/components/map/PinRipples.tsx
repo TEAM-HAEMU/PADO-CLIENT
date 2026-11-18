@@ -8,18 +8,21 @@
  *  · 고리 뷰는 다시 만들지 않는다 — 위치·보이기는 공유 값으로 UI 스레드에서 바꾸고, 고리들은 시계 하나를 어긋나게 나눠 쓴다.
  *    드랍을 고르거나 지도를 움직여도 다시 재기·마운트·애니메이션 재시작이 없고, 크게 그린 핀이 바뀌면 그 핀의 셋째 고리만 붙이거나 뗀다
  *    (늘 3겹을 만들어 두고 숨기면 보이지 않는 고리도 매 프레임 UI 스레드에서 계산된다)
+ *  · iOS는 고리가 퍼지는 움직임을 Core Animation(LoopView)이 돌린다 — Reanimated로 테두리 있는 뷰를 매 프레임 바꾸면
+ *    RN이 프레임마다 테두리 그림을 CPU로 다시 그렸다(RCTGetBorderImage, 재생 중 지도 메인 스레드의 약 3/4). 테두리는 움직이지 않는 자식 뷰에 둔다
  */
 import React, { type Ref, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { cancelAnimation, Easing, type SharedValue, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import type MapView from 'react-native-maps';
 import { usePreviewStore } from '@/services/preview';
-import { isPlaying, RING_COUNT, ringProgress, rippleToken, type RipplePin } from '@/utils/ambientMotion';
+import { LoopView, nativeLoops } from '@/components/anim/LoopView';
+import { isPlaying, type Loop, RING_COUNT, ringLoops, ringProgress, RIPPLE, rippleToken, type RipplePin } from '@/utils/ambientMotion';
 
 // DropPin 멈춘 물결과 같은 크기 (Figma 'Group 4' 81×29)
-const RIPPLE_W = 81;
-const RIPPLE_H = 29;
-const DURATION = 2600;
+const RIPPLE_W = RIPPLE.w;
+const RIPPLE_H = RIPPLE.h;
+const DURATION = RIPPLE.duration;
 /** 지도가 멈추고 물결을 다시 띄우기까지 */
 export const SETTLE_MS = 300;
 /** 다시 띄울 때 페이드 */
@@ -41,6 +44,32 @@ function WaveRing({ id, i, rings, clock, shown, points }: { id: string; i: numbe
   });
   return <Animated.View pointerEvents="none" style={[styles.ring, st]} />;
 }
+
+/**
+ * iOS — 핀 하나의 물결 고리들. 위치·보이기만 공유 값으로 바꾸고(지도가 멈춰 좌표를 다시 잴 때뿐), 퍼지는 움직임은 Core Animation이 돌린다.
+ * 모습은 WaveRing과 같다 (ringLoops: 같은 곡선·같은 어긋남). 재생 중 지도에 가만히 있어도 앱 UI 스레드가 매 프레임 고리를 계산하지 않는다
+ */
+function PinRings({ id, rings, shown, points }: { id: string; rings: number; shown: SharedValue<number>; points: SharedValue<Points> }) {
+  const st = useAnimatedStyle(() => {
+    const p = points.value[id];
+    return {
+      opacity: p ? shown.value : 0,
+      transform: [{ translateX: (p ? p.x : 0) - RIPPLE_W / 2 }, { translateY: (p ? p.y : 0) - RIPPLE_W / 2 }],
+    };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[styles.pin, st]}>
+      {Array.from({ length: rings }, (_, i) => (
+        <LoopView key={i} pointerEvents="none" loops={RING_LOOPS[rings]?.[i] ?? ringLoops(i, rings)} style={StyleSheet.absoluteFill}>
+          <View style={styles.nativeRing} />
+        </LoopView>
+      ))}
+    </Animated.View>
+  );
+}
+const RING_LOOPS: Record<number, Loop[][]> = Object.fromEntries(
+  [RING_COUNT.normal, RING_COUNT.active].map(n => [n, Array.from({ length: n }, (_, i) => ringLoops(i, n))]),
+);
 
 export interface PinRipplesHandle {
   /** 지도가 움직이기 시작함 — 곧바로 숨기고 재던 좌표는 버린다 (다시 멈추면 view가 바뀌어 다시 잰다) */
@@ -102,8 +131,11 @@ export function PinRipples({ ref, mapRef, pins, activeId, view, visible }: Props
           points.value = Object.fromEntries(list);
           if (showing.current) return;
           showing.current = true;
-          clock.value = 0;
-          clock.value = withRepeat(withTiming(1, { duration: DURATION, easing: Easing.linear }), -1, false);
+          // iOS는 고리가 Core Animation으로 퍼진다 — 시계를 돌리면 아무도 안 써도 UI 스레드가 매 프레임 깨어난다
+          if (!nativeLoops) {
+            clock.value = 0;
+            clock.value = withRepeat(withTiming(1, { duration: DURATION, easing: Easing.linear }), -1, false);
+          }
           shown.value = withTiming(1, { duration: FADE_MS });
         })
         .catch(() => { if (round.current === my) hide(); });
@@ -117,6 +149,7 @@ export function PinRipples({ ref, mapRef, pins, activeId, view, visible }: Props
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {pins.map(p => {
         const rings = p.id === activeId ? RING_COUNT.active : RING_COUNT.normal;
+        if (nativeLoops) return <PinRings key={p.id} id={p.id} rings={rings} shown={shown} points={points} />;
         return Array.from({ length: rings }, (_, i) => <WaveRing key={`${p.id}:${i}`} id={p.id} i={i} rings={rings} clock={clock} shown={shown} points={points} />);
       })}
     </View>
@@ -125,4 +158,6 @@ export function PinRipples({ ref, mapRef, pins, activeId, view, visible }: Props
 
 const styles = StyleSheet.create({
   ring: { position: 'absolute', left: 0, top: 0, width: RIPPLE_W, height: RIPPLE_W, borderRadius: RIPPLE_W / 2, borderWidth: 2.4, borderColor: '#FFFFFF' },
+  pin: { position: 'absolute', left: 0, top: 0, width: RIPPLE_W, height: RIPPLE_W },
+  nativeRing: { width: RIPPLE_W, height: RIPPLE_W, borderRadius: RIPPLE_W / 2, borderWidth: 2.4, borderColor: '#FFFFFF' },
 });
