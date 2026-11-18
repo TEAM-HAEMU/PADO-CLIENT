@@ -84,6 +84,7 @@ export const DropBubbleMarker = memo(function DropBubbleMarkerItem({ id, latitud
   const press = useCallback(() => onPress(id), [onPress, id]);
 
   return (
+    // zIndex 10 이상: iOS 지도 마커 패치가 처음 0.25초는 매 프레임 찍는다(페이드). 다른 마커는 0.1초마다 (patches/react-native-maps)
     <Marker key={epoch} coordinate={coordinate} anchor={anchor} tracksViewChanges={tracking} zIndex={10} onPress={press}>
       <View onLayout={onLayout} style={{ padding: PAD, maxWidth: maxW + PAD * 2, alignItems: 'center' }}>
         <Animated.View
