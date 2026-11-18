@@ -12,7 +12,10 @@ const judge = lockJudge();
 export function useDropLock() {
   const coords = useLocation(currentCoords);
   const accuracy = useLocation(s => s.accuracy);
-  const here = useMemo(() => (coords ? { ...coords, accuracy } : null), [coords, accuracy]);
+  // 값이 같으면 같은 객체 — 같은 좌표·오차로 위치가 다시 와도(새 객체) 판정 함수가 새로 생겨 지도 화면의 거리순 목록·핀을 다시 계산하지 않게
+  const lat = coords?.latitude;
+  const lng = coords?.longitude;
+  const here = useMemo(() => (lat != null && lng != null ? { latitude: lat, longitude: lng, accuracy } : null), [lat, lng, accuracy]);
   // 낡은 좌표를 들고 새 위치를 기다리는 중(백그라운드에서 오래 있다 돌아옴) — 그동안은 지난 판정을 유지
   const awaiting = useLocation(s => s.stale && s.fix === 'locating');
   const radius = useDropRadius();
