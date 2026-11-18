@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
-index 09278e7..8ed09af 100644
+index 09278e7..ea282f6 100644
 --- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
 +++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
 @@ -99,7 +99,17 @@ public class MapMarker extends MapFeature {
@@ -20,7 +20,21 @@ index 09278e7..8ed09af 100644
  
      private boolean tracksViewChanges = true;
      private boolean tracksViewChangesActive = false;
-@@ -344,16 +354,20 @@ public class MapMarker extends MapFeature {
+@@ -311,8 +321,13 @@ public class MapMarker extends MapFeature {
+     }
+ 
+     public void setTracksViewChanges(boolean tracksViewChanges) {
++        boolean wasTracking = this.tracksViewChanges;
++        boolean wasActive = tracksViewChangesActive;
+         this.tracksViewChanges = tracksViewChanges;
+         updateTracksViewChanges();
++        // PADO: JS가 추적을 끌 때는 늘 마지막으로 한 번 찍는다 — 추적기는 바뀐 게 없으면(updated 0) 먼저 빠져서
++        // 위 '한 번 더'(tracksViewChangesActive일 때만)가 안 돈다. 150ms 뒤에도 아트를 아직 못 받았으면 여기서 잡힌다
++        if (wasTracking && !tracksViewChanges && !wasActive && marker != null && hasCustomMarkerView) updateMarkerIcon();
+     }
+ 
+     private void updateTracksViewChanges() {
+@@ -344,16 +359,20 @@ public class MapMarker extends MapFeature {
              return false;
          }
  
@@ -44,7 +58,16 @@ index 09278e7..8ed09af 100644
          marker.setIcon(getIcon());
      }
  
-@@ -562,8 +576,16 @@ public class MapMarker extends MapFeature {
+@@ -469,6 +488,8 @@ public class MapMarker extends MapFeature {
+         // if children are added, it means we are rendering a custom marker
+         if (!(child instanceof MapCallout)) {
+             hasCustomMarkerView = true;
++            // PADO: 지도에 붙은 뒤에 자식이 들어온 경우에도 아트용 한 번을 예약한다(addToMap 때는 커스텀 뷰인지 몰랐다)
++            if (marker != null && tracksViewChanges) padoFollowUp = true;
+             updateTracksViewChanges();
+             hackToHandleDraweeLifecycle(child);
+         }
+@@ -562,8 +583,16 @@ public class MapMarker extends MapFeature {
      @Override
      public void addToMap(Object collection) {
          MarkerManager.Collection markerCollection = (MarkerManager.Collection) collection;
@@ -62,7 +85,7 @@ index 09278e7..8ed09af 100644
          updateTracksViewChanges();
      }
  
-@@ -575,6 +597,8 @@ public class MapMarker extends MapFeature {
+@@ -575,6 +604,8 @@ public class MapMarker extends MapFeature {
          MarkerManager.Collection markerCollection = (MarkerManager.Collection) collection;
          markerCollection.remove(marker);
          marker = null;
@@ -71,7 +94,7 @@ index 09278e7..8ed09af 100644
          updateTracksViewChanges();
      }
  
-@@ -613,7 +637,14 @@ public class MapMarker extends MapFeature {
+@@ -613,7 +644,14 @@ public class MapMarker extends MapFeature {
          options.draggable(draggable);
          options.zIndex(zIndex);
          options.alpha(opacity);
@@ -87,7 +110,7 @@ index 09278e7..8ed09af 100644
          return options;
      }
  
-@@ -636,13 +667,12 @@ public class MapMarker extends MapFeature {
+@@ -636,13 +674,12 @@ public class MapMarker extends MapFeature {
          } else {
              marker.setInfoWindowAnchor(0.5f, 0);
          }
@@ -102,7 +125,7 @@ index 09278e7..8ed09af 100644
          updateTracksViewChanges();
          clearDrawableCache();
          update(true);
-@@ -810,7 +840,7 @@ public class MapMarker extends MapFeature {
+@@ -810,7 +847,7 @@ public class MapMarker extends MapFeature {
  
      public void setUpdated(boolean updated) {
          if (updated) {

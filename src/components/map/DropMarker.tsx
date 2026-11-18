@@ -42,9 +42,10 @@ const ME_ANCHOR = { x: 0.5, y: 0.5 };
  *  · iOS(추적 중 0.1초마다 찍음): 잠긴 핀·묶음은 그림이 없어 첫 모습만 — 0.3초. 아트 핀은 디스크의 52pt 그림을 디코딩해 그릴 동안 — 0.5초.
  *    늦게 도착한 아트는 이미지 onLoadEnd → trackFor(TRACK.image)로 받는다.
  *  · Android: 잠긴 핀·묶음은 추적을 켜지 않는다 — 붙은 뒤 한 번 찍은 그림으로 끝(패치). 아트 핀은 추적을 켠 채 붙어 150ms 뒤 한 번 더 찍는다
- *    (마커 안 SVG 이미지는 처음 그릴 때 디스크에서 받기 시작해 그다음 그릴 때 나온다. 로드 이벤트는 JS로 오지 않는다)
+ *    (마커 안 SVG 이미지는 처음 그릴 때 디스크에서 받기 시작해 그다음 그릴 때 나온다. 로드 이벤트는 JS로 오지 않는다 — image는 쓰이지 않아 0)
+ *    JS가 추적을 끌 때(art 500ms 뒤) 패치가 마지막으로 한 번 더 찍는다 — 150ms 안에 못 받은 아트는 거기서 잡힌다.
  */
-const TRACK = Platform.OS === 'ios' ? { locked: 300, art: 500, cluster: 300, change: 300, image: 300 } : { locked: 0, art: 500, cluster: 0, change: 600, image: 1200 };
+const TRACK = Platform.OS === 'ios' ? { locked: 300, art: 500, cluster: 300, change: 300, image: 300 } : { locked: 0, art: 500, cluster: 0, change: 600, image: 0 };
 
 /** 지도 마커 그림 하나를 미리 받는다 (지도 홈 핀과 같은 줄·같은 기록 — 같은 주소는 한 번). urgent면 줄 맨 앞으로 */
 export const prefetchMarkerImage = (url: string, urgent = false) => art.prefetch(url, urgent);

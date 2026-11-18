@@ -82,6 +82,8 @@ export const CLUSTER_LNG_DELTA = 0.04;
 export const UNCLUSTER_LNG_DELTA = 0.032;
 /** 묶음 격자 — 화면 가로를 몇 칸으로 나누는가 (칸 하나 ≈ 화면 폭/5 ≈ 80pt, 가장 큰 묶음 48pt보다 넉넉히) */
 export const CLUSTER_COLUMNS = 5;
+/** 묶음을 눌러 여유 구간에 떨어질 때 맞추는 폭 — UNCLUSTER_LNG_DELTA보다 5% 좁게(지도가 영역을 조금 바꿔 맞춰도 핀 쪽에 떨어지게) */
+export const ZOOM_INTO_PINS = 0.95;
 /** 묶음을 눌렀을 때 가장 많이 확대하는 폭 — 처음 지도 폭과 같게 (한 점에 몰린 묶음도 이 줌에선 핀으로 보인다) */
 export const CLUSTER_MIN_ZOOM_DELTA = 0.012;
 /**
@@ -191,7 +193,9 @@ export function singlePins<T extends { d: Coords }>(sorted: readonly T[], cluste
 export function clusterZoomRegion(c: Pick<DropCluster, 'minLat' | 'maxLat' | 'minLng' | 'maxLng'>, current: MapRegion): MapRegion {
   const aspect = current.latitudeDelta / current.longitudeDelta;
   const fit = Math.max((c.maxLng - c.minLng) * 1.6, ((c.maxLat - c.minLat) * 1.6) / aspect);
-  const longitudeDelta = Math.max(CLUSTER_MIN_ZOOM_DELTA, Math.min(fit, current.longitudeDelta / 2));
+  let longitudeDelta = Math.max(CLUSTER_MIN_ZOOM_DELTA, Math.min(fit, current.longitudeDelta / 2));
+  // 경계 여유 구간(UNCLUSTER~CLUSTER)에 떨어지면 묶음 모드가 그대로라 묶음이 한 번 더 나뉘기만 한다 → 핀이 보이게 조금 더 들어간다 (1.6배 여유가 1.2배까지 줄 뿐 묶인 드랍은 다 보인다)
+  if (longitudeDelta > UNCLUSTER_LNG_DELTA && longitudeDelta <= CLUSTER_LNG_DELTA) longitudeDelta = UNCLUSTER_LNG_DELTA * ZOOM_INTO_PINS;
   const latitudeDelta = longitudeDelta * aspect;
   return { latitude: (c.minLat + c.maxLat) / 2 - latitudeDelta * 0.1, longitude: (c.minLng + c.maxLng) / 2, latitudeDelta, longitudeDelta };
 }

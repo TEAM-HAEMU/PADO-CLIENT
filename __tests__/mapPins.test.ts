@@ -1,7 +1,7 @@
 /* 지도 핀 고르기 · 축소 시 묶음 · 드랍 목록 키 · 역지오코딩 간격 · 아트 프리패처 */
 import {
   CLUSTER_LNG_DELTA, CLUSTER_MIN_ZOOM_DELTA, clusterCell, clusterLabel, clusterPoints, clusterSize, clusterZoomRegion, covers, createPrefetcher,
-  GEOCODE_EVERY_MS, geocodeDue, idSetKey, inRegion, KEEP_PAD, MAX_CLUSTERS, MAX_PINS, needsRepick, pickPins, shouldCluster, singlePins, UNCLUSTER_LNG_DELTA,
+  GEOCODE_EVERY_MS, geocodeDue, ZOOM_INTO_PINS, idSetKey, inRegion, KEEP_PAD, MAX_CLUSTERS, MAX_PINS, needsRepick, pickPins, shouldCluster, singlePins, UNCLUSTER_LNG_DELTA,
 } from '@/utils/mapPins';
 
 const here = { latitude: 35.1575, longitude: 129.0604 };
@@ -334,6 +334,20 @@ describe('singlePins', () => {
 describe('clusterZoomRegion', () => {
   const wide = { ...here, latitudeDelta: 0.3, longitudeDelta: 0.2 };
   const one = (lat: number, lng: number, span = 0) => ({ key: 'k', latitude: lat, longitude: lng, count: 3, minLat: lat - span / 2, maxLat: lat + span / 2, minLng: lng - span / 2, maxLng: lng + span / 2 });
+
+  test('경계 여유 구간(0.032~0.04)에 떨어지면 핀이 보이게 조금 더 들어간다 — 묶음이 한 번 더 나뉘지 않게', () => {
+    for (const w of [0.066, 0.07, 0.08]) {
+      const r = clusterZoomRegion(one(here.latitude, here.longitude, w), { ...here, latitudeDelta: w * 1.5, longitudeDelta: w });
+      expect(r.longitudeDelta).toBeCloseTo(UNCLUSTER_LNG_DELTA * ZOOM_INTO_PINS, 9);
+      expect(shouldCluster(r, true)).toBe(false);
+    }
+    // 여유 구간 밖(절반이 0.04 초과)은 그대로 절반 — 묶음 모드가 맞다
+    const far = clusterZoomRegion(one(here.latitude, here.longitude, 0.1), { ...here, latitudeDelta: 0.15, longitudeDelta: 0.1 });
+    // 다 보이게 맞춘 폭이 여유 구간이어도 같다 (퍼진 정도 0.022 → 0.0352)
+    const fit = clusterZoomRegion(one(here.latitude, here.longitude, 0.022), wide);
+    expect(fit.longitudeDelta).toBeCloseTo(UNCLUSTER_LNG_DELTA * ZOOM_INTO_PINS, 9);
+    expect(far.longitudeDelta).toBeCloseTo(0.05, 9);
+  });
 
   test('한 점에 몰린 묶음은 핀이 보이는 줌까지 확대한다 (그 이상은 안 들어감)', () => {
     const r = clusterZoomRegion(one(here.latitude, here.longitude), wide);
