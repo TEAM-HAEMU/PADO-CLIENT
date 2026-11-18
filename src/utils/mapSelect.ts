@@ -35,11 +35,11 @@ export const AUTO_MOVE_SLACK_MS = 300;
 /**
  * 지도가 움직이는 중에 그릴 핀·묶음을 다시 고를까 (onRegionChange).
  * 앱이 옮기는 중(autoUntil 전, 사용자 제스처 아님)이면 고르지 않는다 — 시작할 때 도착 영역으로 이미 골라 두었다.
- * 그 밖(손으로 끌기·핀치)은 needsRepick 그대로 (#24: 크게 축소하는 동안에도 핀·묶음이 따라 나오게)
+ * 그 밖(손으로 끌기·핀치)은 needsRepick 그대로 (#24: 크게 축소하는 동안에도 핀·묶음이 따라 나오게). clustered: 지금 묶음을 그리고 있는가
  */
-export function repickWhileMoving(drawn: MapRegion | null, next: MapRegion, opts: { autoUntil: number | null; now: number; isGesture?: boolean }) {
+export function repickWhileMoving(drawn: MapRegion | null, next: MapRegion, opts: { autoUntil: number | null; now: number; isGesture?: boolean; clustered?: boolean }) {
   if (opts.autoUntil != null && opts.now < opts.autoUntil && !opts.isGesture) return false;
-  return needsRepick(drawn, next);
+  return needsRepick(drawn, next, opts.clustered);
 }
 
 /**

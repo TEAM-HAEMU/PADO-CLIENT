@@ -196,8 +196,15 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   // view: 지도가 멈춘 영역 (지역 이름·카메라 이동 기준). drawView: 핀·묶음을 고른 영역 — 움직이는 중에도 화면이 그려 둔 범위(화면 2배)를
   // 벗어나 빈 곳이 보이기 시작하거나 핀↔묶음이 바뀌면 바꿔서(REPICK_MS 간격), 크게 축소해도 멈출 때까지 기다리지 않고 핀·묶음이 따라 나온다
   const [view, setView] = useState<Region | null>(null);
-  const [drawView, setDrawView] = useState<Region | null>(null);
-  const drawn = useRef<{ region: Region | null; at: number }>({ region: null, at: 0 });
+  // clustered: 그 영역에서 묶음을 그리는가 — 핀↔묶음 경계에 여유가 있어(shouldCluster) 영역만으로 정하지 않고 바로 전 모드를 함께 본다
+  const [drawState, setDrawState] = useState<{ view: Region; clustered: boolean } | null>(null);
+  const drawView = drawState?.view ?? null;
+  const drawn = useRef<{ region: Region | null; at: number; clustered: boolean }>({ region: null, at: 0, clustered: false });
+  const drawAt = useCallback((r: Region, at = Date.now()) => {
+    const clustered = shouldCluster(r, drawn.current.clustered);
+    drawn.current = { region: r, at, clustered };
+    setDrawState({ view: r, clustered });
+  }, []);
   // 지도가 움직이는 중 — 핀 물결 레이어는 화면 좌표가 고정이라 움직이기 시작하면 곧바로 숨긴다 (이 화면은 다시 그리지 않는다)
   const movingRef = useRef(false);
   const ripples = useRef<PinRipplesHandle>(null);
@@ -219,17 +226,15 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     // 앱이 옮기던 중에 사용자가 손으로 잡으면 그때부터는 보통 끌기처럼 (도착 표시는 손을 뗄 때)
     if (auto && details?.isGesture) auto.until = 0;
     const now = Date.now();
-    if (now - drawn.current.at < REPICK_MS || !repickWhileMoving(drawn.current.region, r, { autoUntil: auto?.until ?? null, now, isGesture: details?.isGesture })) return;
-    drawn.current = { region: r, at: now };
-    setDrawView(r);
-  }, []);
+    if (now - drawn.current.at < REPICK_MS || !repickWhileMoving(drawn.current.region, r, { autoUntil: auto?.until ?? null, now, isGesture: details?.isGesture, clustered: drawn.current.clustered })) return;
+    drawAt(r, now);
+  }, [drawAt]);
   const onRegionChangeComplete = useCallback((r: Region) => {
     movingRef.current = false;
-    drawn.current = { region: r, at: Date.now() };
     setView(r);
-    setDrawView(r);
+    drawAt(r);
     if (autoMove.current) arrive(autoMove.current.arrive);
-  }, [arrive]);
+  }, [arrive, drawAt]);
   useEffect(() => () => clearTimeout(autoMove.current?.timer), []);
   /**
    * 앱이 카메라를 옮긴다 — 그릴 핀은 지금 고른 범위가 도착 영역을 못 덮을 때만 도착 영역으로 한 번 고르고, 움직이는 동안엔 다시 고르지 않는다.
@@ -237,10 +242,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
    */
   const moveCamera = (m: CameraMove, duration: number, arriveId: string | null = null) => {
     clearTimeout(autoMove.current?.timer);
-    if (needsRepick(drawn.current.region, m.dest)) {
-      drawn.current = { region: m.dest, at: Date.now() };
-      setDrawView(m.dest);
-    }
+    if (needsRepick(drawn.current.region, m.dest, drawn.current.clustered)) drawAt(m.dest);
     autoMove.current = { until: Date.now() + duration + AUTO_MOVE_SLACK_MS, arrive: arriveId, timer: setTimeout(() => arrive(arriveId), duration + AUTO_MOVE_SLACK_MS) };
     if ('region' in m.camera) mapRef.current?.animateToRegion(m.camera.region, duration);
     else mapRef.current?.animateCamera({ center: m.camera.center }, { duration });
@@ -266,7 +268,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     placeholderData: keepPreviousData,
   });
   const centerName = place.data && placeAt ? placeName(place.data, placeAt.level) : null;
-  const clustered = shouldCluster(drawView);
+  const clustered = drawState?.clustered ?? false;
   const clusters = useMemo(() => (clustered && drawView ? clusterPoints(drops, drawView) : []), [clustered, drops, drawView]);
   // 1개짜리 묶음은 수 원 대신 보통 핀으로 — 핀 모드와 같은 DropMarker·같은 키라 확대·축소로 모드가 바뀌어도 그 핀은 다시 만들어지지 않는다
   // 이미 그린 핀은 상한 안에서 조금 더 넓게(KEEP_PAD) 남겨 둔다 — 살짝 끌었다 되돌릴 때 마커를 지웠다 다시 만들지 않게

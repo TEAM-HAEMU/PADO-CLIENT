@@ -58,14 +58,14 @@ export function covers(outer: MapRegion, inner: MapRegion, pad = 0.5) {
 }
 
 /**
- * 지도를 움직이는 중에 그릴 핀·묶음을 다시 골라야 하는가 — drawn은 지금 그려 둔 핀·묶음을 고른 영역.
- * 핀↔묶음이 바뀌거나, 지금 화면이 고른 범위(pad 0.5 — 화면의 2배) 밖으로 나가 빈 곳이 보이기 시작하면 다시.
+ * 지도를 움직이는 중에 그릴 핀·묶음을 다시 골라야 하는가 — drawn은 지금 그려 둔 핀·묶음을 고른 영역, drawnClustered는 그때 묶음이었는가.
+ * 핀↔묶음이 바뀌거나(경계 여유 포함 — shouldCluster), 지금 화면이 고른 범위(pad 0.5 — 화면의 2배) 밖으로 나가 빈 곳이 보이기 시작하면 다시.
  * 화면이 고른 범위 안이면(확대·조금 끌기) 그대로 둔다 — 묶음 칸 크기만 달라진 것도 기다린다.
  * 다시 고를 때마다 마커를 만들고 지우는 값이 커서(특히 Android 마커 스냅샷) 빈 곳이 보일 때만 하고, 멈추면 어차피 다시 고른다.
  */
-export function needsRepick(drawn: MapRegion | null, next: MapRegion) {
+export function needsRepick(drawn: MapRegion | null, next: MapRegion, drawnClustered = shouldCluster(drawn)) {
   if (!drawn) return true;
-  if (shouldCluster(next) !== shouldCluster(drawn)) return true;
+  if (shouldCluster(next, drawnClustered) !== drawnClustered) return true;
   return !covers(drawn, next);
 }
 
@@ -74,6 +74,12 @@ export function needsRepick(drawn: MapRegion | null, next: MapRegion) {
  * (처음 지도 폭 0.012도의 3배쯤 — 핀 하나(55pt)가 500m 가까이 덮어 몇백 m 안의 핀끼리 겹치기 시작하는 줌)
  */
 export const CLUSTER_LNG_DELTA = 0.04;
+/**
+ * 묶음에서 핀으로 돌아오는 폭 — 묶음으로 갈 때(CLUSTER_LNG_DELTA)보다 좁게 여유를 둔다.
+ * 경계 근처에서 조금씩 확대·축소하면 핀 최대 100개 ↔ 묶음 최대 60개를 매번 통째로 지우고 새로 만들었다 → 0.032~0.04 사이에서는 지금 모드를 그대로 둔다
+ * (그 구간에서는 들어온 방향에 따라 핀이거나 묶음)
+ */
+export const UNCLUSTER_LNG_DELTA = 0.032;
 /** 묶음 격자 — 화면 가로를 몇 칸으로 나누는가 (칸 하나 ≈ 화면 폭/5 ≈ 80pt, 가장 큰 묶음 48pt보다 넉넉히) */
 export const CLUSTER_COLUMNS = 5;
 /** 묶음을 눌렀을 때 가장 많이 확대하는 폭 — 처음 지도 폭과 같게 (한 점에 몰린 묶음도 이 줌에선 핀으로 보인다) */
@@ -84,8 +90,8 @@ export const CLUSTER_MIN_ZOOM_DELTA = 0.012;
  */
 export const MAX_CLUSTERS = 60;
 
-/** 핀 대신 묶음을 그릴 줌인가 (영역을 아직 모르면 아니다) */
-export const shouldCluster = (r: MapRegion | null): boolean => !!r && r.longitudeDelta > CLUSTER_LNG_DELTA;
+/** 핀 대신 묶음을 그릴 줌인가 (영역을 아직 모르면 아니다). was: 지금 묶음을 그리고 있는가 — 그러면 UNCLUSTER_LNG_DELTA까지는 묶음을 유지 */
+export const shouldCluster = (r: MapRegion | null, was = false): boolean => !!r && r.longitudeDelta > (was ? UNCLUSTER_LNG_DELTA : CLUSTER_LNG_DELTA);
 
 export interface DropCluster<T extends Coords = Coords> {
   /** 같은 줌·같은 칸이면 같은 키 (지도를 끌어도 묶음 마커가 다시 만들어지지 않게) */

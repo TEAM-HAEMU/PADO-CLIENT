@@ -1,7 +1,7 @@
 /* 지도 핀 고르기 · 축소 시 묶음 · 드랍 목록 키 · 역지오코딩 간격 · 아트 프리패처 */
 import {
   CLUSTER_LNG_DELTA, CLUSTER_MIN_ZOOM_DELTA, clusterCell, clusterLabel, clusterPoints, clusterSize, clusterZoomRegion, covers, createPrefetcher,
-  GEOCODE_EVERY_MS, geocodeDue, idSetKey, inRegion, KEEP_PAD, MAX_CLUSTERS, MAX_PINS, needsRepick, pickPins, shouldCluster, singlePins,
+  GEOCODE_EVERY_MS, geocodeDue, idSetKey, inRegion, KEEP_PAD, MAX_CLUSTERS, MAX_PINS, needsRepick, pickPins, shouldCluster, singlePins, UNCLUSTER_LNG_DELTA,
 } from '@/utils/mapPins';
 
 const here = { latitude: 35.1575, longitude: 129.0604 };
@@ -125,9 +125,20 @@ describe('covers · needsRepick (움직이는 중 다시 고르기)', () => {
   test('핀↔묶음이 바뀌면 덮고 있어도 다시', () => {
     const atEdge = { ...region, longitudeDelta: CLUSTER_LNG_DELTA, latitudeDelta: CLUSTER_LNG_DELTA * 1.5 };
     const past = { ...atEdge, longitudeDelta: CLUSTER_LNG_DELTA * 1.2, latitudeDelta: CLUSTER_LNG_DELTA * 1.8 };
+    const below = { ...atEdge, longitudeDelta: UNCLUSTER_LNG_DELTA * 0.95, latitudeDelta: UNCLUSTER_LNG_DELTA * 1.4 };
     expect(covers(atEdge, past)).toBe(true);
     expect(needsRepick(atEdge, past)).toBe(true);
-    expect(needsRepick(past, atEdge)).toBe(true);
+    expect(needsRepick(past, below)).toBe(true);
+  });
+
+  test('경계 여유 — 묶음에서 0.032~0.04 사이로 확대하면 묶음 그대로, 핀에서 그 사이로 축소하면 핀 그대로', () => {
+    const band = { ...region, longitudeDelta: 0.036, latitudeDelta: 0.054 };
+    const past = { ...band, longitudeDelta: CLUSTER_LNG_DELTA * 1.1, latitudeDelta: 0.066 };
+    expect(needsRepick(past, band)).toBe(false); // 묶음 → 여유 구간: 묶음 유지
+    expect(needsRepick(past, band, true)).toBe(false);
+    expect(needsRepick(band, past, false)).toBe(true); // 핀 → 0.04 넘김: 묶음으로
+    expect(needsRepick(band, { ...band, longitudeDelta: 0.039 }, false)).toBe(false); // 핀 → 여유 구간: 핀 유지
+    expect(needsRepick(band, { ...band, longitudeDelta: 0.031 }, true)).toBe(true); // 묶음 → 0.032 아래: 핀으로
   });
 
   test('묶음 모드에서 칸 크기만 바뀐 확대는 기다린다 (멈추면 다시 묶는다)', () => {
@@ -144,6 +155,13 @@ describe('shouldCluster', () => {
     expect(shouldCluster(region)).toBe(false);
     expect(shouldCluster({ ...region, longitudeDelta: CLUSTER_LNG_DELTA })).toBe(false);
     expect(shouldCluster({ ...region, longitudeDelta: CLUSTER_LNG_DELTA * 1.01 })).toBe(true);
+  });
+  test('지금 묶음이면 UNCLUSTER_LNG_DELTA까지 묶음 유지 (경계 근처에서 조금씩 확대·축소할 때 통째로 바뀌지 않게)', () => {
+    expect(UNCLUSTER_LNG_DELTA).toBeLessThan(CLUSTER_LNG_DELTA);
+    expect(shouldCluster({ ...region, longitudeDelta: 0.036 }, true)).toBe(true);
+    expect(shouldCluster({ ...region, longitudeDelta: 0.036 }, false)).toBe(false);
+    expect(shouldCluster({ ...region, longitudeDelta: UNCLUSTER_LNG_DELTA }, true)).toBe(false);
+    expect(shouldCluster(null, true)).toBe(false);
   });
 });
 
