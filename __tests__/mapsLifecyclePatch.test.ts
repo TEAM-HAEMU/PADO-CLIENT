@@ -44,6 +44,40 @@ describe('react-native-maps Android 지도 생명주기 패치', () => {
 });
 
 /**
+ * Android Google 지도 마커 재사용 패치
+ *  · 고른 핀의 zIndex·거리순이 바뀌면 Fabric이 마커 ~100개를 떼었다(removeFeatureAt) 붙이는데(addFeature),
+ *    그때마다 Google 마커를 지우고 새로 만들어(뷰를 비트맵으로 다시 그리고 지도에 다시 올림) 드랍 하나 고를 때 ~100개를 새로 만들던 것
+ *    → 뗄 때 바로 지우지 않고, 같은 마운트 안에서 다시 붙으면 있던 마커를 그대로 쓴다. 다시 붙지 않았으면 그 작업이 끝난 뒤 지운다
+ */
+describe('react-native-maps Android 마커 재사용 패치', () => {
+  const mapView = src('MapView.java');
+  const between = (from: string, to: string) => {
+    const start = mapView.indexOf(from);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = mapView.indexOf(to, start);
+    expect(end).toBeGreaterThan(start);
+    return mapView.slice(start, end);
+  };
+
+  it('뗄 때 Google 마커를 곧바로 지우지 않고 떼기로만 표시한다 (지도가 이미 없어졌으면 바로 지운다)', () => {
+    const remove = between('public void removeFeatureAt(int index)', '} else if (feature instanceof MapHeatmap)');
+    expect(remove).toMatch(/if \(!destroyed && feature\.getFeature\(\) != null\) \{\s*padoDetachMarker\(\(MapMarker\) feature\);\s*\} else \{\s*feature\.removeFromMap\(markerCollection\);/);
+  });
+
+  it('같은 마운트 안에서 다시 붙는 마커는 addToMap(새 Google 마커)을 건너뛴다', () => {
+    const add = between('public void addFeature(View child, int index)', 'safeAddFeature(index, annotation);');
+    expect(add).toMatch(/if \(!padoDetachedMarkers\.remove\(annotation\) \|\| annotation\.getFeature\(\) == null\) \{\s*annotation\.addToMap\(markerCollection\);\s*\}/);
+  });
+
+  it('다시 붙지 않은 마커는 그 작업이 끝난 뒤(메인 스레드 다음 차례) 지도에서 지운다', () => {
+    const detach = between('private void padoDetachMarker(MapMarker marker)', 'public WritableMap makeClickEventData');
+    expect(detach).toMatch(/padoHandler\.post\(padoFlushDetached\)/);
+    expect(detach).toMatch(/marker\.removeFromMap\(markerCollection\);/);
+    expect(mapView).toMatch(/new Handler\(Looper\.getMainLooper\(\)\)/);
+  });
+});
+
+/**
  * iOS Google 지도 마커 패치 (patches/react-native-maps)
  *  · tracksViewChanges가 켜진 마커를 Google 지도가 매 프레임 다시 찍고(drawViewHierarchyInRect) 텍스처에 올려
  *    새 핀이 많이 생길 때(끌기·걷기·드랍 고르기) 메인 스레드를 크게 잡아먹던 것 → 켜질 때 한 번 + 0.1초마다 한 번 (말풍선만 처음 0.25초 매 프레임)

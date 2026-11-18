@@ -3,6 +3,7 @@
  * props는 원시값만 받고 memo로 감싼다 → GPS가 갱신돼 지도 화면이 다시 렌더돼도 바뀐 핀만 다시 그린다.
  * 마커 스냅샷 추적(tracksViewChanges)은 마커마다 — 처음 그릴 때, 자기 앨범 아트가 로드될 때, 모양이 바뀔 때만 잠깐 켠다
  * (Google 지도는 추적을 끄면 그 순간 모습으로 굳고, 켜 두면 계속 다시 찍어 비싸다. iOS는 패치로 켜질 때 한 번 + 0.1초마다 찍는다 — patches/react-native-maps). 핀 물결 애니메이션은 마커 밖 PinRipples가 그려서, 지도가 멈춰 있으면 추적은 꺼져 있다.
+ * 고른 핀의 zIndex가 바뀌거나 걸어서 거리순이 바뀌면 Fabric이 마커 ~100개를 떼었다 붙인다 — iOS·Android 모두 패치로 같은 마운트 안에서 다시 붙는 마커는 있던 Google 마커를 그대로 쓴다.
  */
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Platform, Text, View } from 'react-native';
