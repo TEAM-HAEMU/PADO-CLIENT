@@ -6,12 +6,14 @@
  *  · 화면이 보이고 미리듣기가 재생 중일 때만 흐른다 — 멈추면 그 자리 그림(정지 프레임)으로 두었다가 다시 재생하면 이어서.
  *    가만히 둔 화면이 초당 60프레임을 계속 그리지 않게 (소개·로그인처럼 재생과 무관한 화면은 always)
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { View, type ViewStyle } from 'react-native';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { scheduleOnUI } from 'react-native-worklets';
 import { useAmbientMotion } from '@/hooks/useAmbientMotion';
 import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg';
+import { LoopView, nativeLoops } from '@/components/anim/LoopView';
+import { waveLoops } from '@/utils/ambientMotion';
 
 const BACK = { w: 486.247, d: 'M102.178 10.5432C89.9941 49.2173 44.3925 73.2827 13.4876 83.7805C5.65364 86.4416 0 93.5872 0 101.861V198.858C0 208.8 8.05887 216.858 18 216.858H468.247C478.188 216.858 486.247 208.8 486.247 198.858V106.865C486.247 96.5089 477.405 88.4959 467.25 86.4622C425.116 78.0238 396.76 34.6159 386.136 9.37629C385.477 7.81203 384.674 6.30037 383.511 5.06449C375.182 -3.78534 366.565 0.718931 362.051 5.34185C361.017 6.40054 360.28 7.73207 359.67 9.08011C324.813 86.072 253.416 93.9217 220.525 88.0216C219.638 87.8625 218.762 87.7608 217.863 87.7032C171.478 84.7314 137.688 34.9557 125.713 8.66848C125.209 7.5616 124.642 6.49275 123.852 5.56785C119.272 0.204355 113.759 0.00614267 109.408 1.38969C105.474 2.64088 103.419 6.60545 102.178 10.5432Z' };
 const FRONT = { w: 504.781, d: 'M113.096 10.5731C99.9716 49.4491 46.7778 73.5579 13.616 83.9579C5.6926 86.4428 0 93.6225 0 101.926V198.858C0 208.8 8.05886 216.858 18 216.858H486.781C496.722 216.858 504.781 208.8 504.781 198.858V106.843C504.781 96.4954 495.959 88.4798 485.795 86.5368C442.629 78.2846 413.578 34.7105 402.707 9.39318C402.031 7.81845 401.208 6.29802 400.021 5.06175C391.529 -3.78376 382.745 0.718738 378.142 5.34082C377.088 6.39893 376.334 7.73596 375.708 9.09175C340.145 86.1112 267.294 93.9292 233.78 88.0128C232.909 87.8591 232.051 87.7613 231.168 87.7065C183.851 84.7682 149.378 34.9793 137.158 8.67963C136.641 7.56559 136.059 6.49061 135.252 5.56444C130.568 0.188268 124.929 0.00530085 120.487 1.40212C116.517 2.65093 114.427 6.62927 113.096 10.5731Z' };
@@ -79,7 +81,38 @@ interface Props {
   always?: boolean;
 }
 
-export function Wave({ style, opacity = 0.4, scale = 1, surge = false, still = false, always = false }: Props) {
+/**
+ * iOS — 같은 움직임을 Core Animation으로 (waveLoops). 재생 중 프로필·플리 등에서 앱 UI 스레드가 매 프레임 파도 위치를 계산하지 않는다.
+ * 멈추면(running 꺼짐) 그 자리에서 서고, 다시 재생하면 이어서. 움직이지 않을 때(still·동작 줄이기)는 처음 그림
+ */
+function WaveNative({ style, opacity = 0.4, scale = 1, surge = false, still = false, always = false }: Props) {
+  const reduced = useReducedMotion();
+  const on = !still && !reduced;
+  const running = useAmbientMotion(always);
+  const back = useMemo(() => waveLoops('back', BACK.w, surge), [surge]);
+  const front = useMemo(() => waveLoops('front', FRONT.w, surge), [surge]);
+  return (
+    <View pointerEvents="none" style={[{ height: (254 + HEAD) * scale, overflow: 'hidden', opacity }, style]}>
+      <View style={{ transform: [{ scale }], transformOrigin: 'left top', width: BACK.w * 3, height: 254 + HEAD }}>
+        {on ? (
+          <>
+            <LoopView loops={back} paused={!running} style={{ position: 'absolute', left: 0, top: HEAD }}><Tiles shape={BACK} id="waveBack" /></LoopView>
+            <LoopView loops={front} paused={!running} style={{ position: 'absolute', left: 87, top: HEAD + 37 }}><Tiles shape={FRONT} id="waveFront" /></LoopView>
+          </>
+        ) : (
+          <>
+            <View style={{ position: 'absolute', left: 0, top: HEAD, transform: [{ translateY: surge ? -18 : -7 }] }}><Tiles shape={BACK} id="waveBack" /></View>
+            <View style={{ position: 'absolute', left: 87, top: HEAD + 37, transform: [{ translateY: 2 }] }}><Tiles shape={FRONT} id="waveFront" /></View>
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+export const Wave = nativeLoops ? WaveNative : WaveAnimated;
+
+function WaveAnimated({ style, opacity = 0.4, scale = 1, surge = false, still = false, always = false }: Props) {
   const reduced = useReducedMotion();
   const on = !still && !reduced;
   // 가려진 화면(native-stack 아래 화면·다른 탭)·백그라운드·재생 안 함이면 멈춘다 — 시트처럼 비쳐 보이는 덮개 아래에선 계속
