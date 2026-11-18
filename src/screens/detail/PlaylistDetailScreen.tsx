@@ -2,13 +2,14 @@
  * 내 플레이리스트 상세 — 재생·셔플·곡 메뉴·곡 추가·이름 변경·삭제 (Figma 'B 4.4 플레이리스트 상세')
  * 곡 앨범(CD)을 누르면 그 자리에서 미리듣기 켜고 끄기, 줄의 나머지를 누르면 곡 자세히 보기. 지금 미리듣기 중인 곡(미니 CD로 듣던 곡 포함)은 줄을 강조하고 CD가 돈다.
  */
-import React from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { FlatList, View } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { playlistApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
+import type { Song } from '@/api/types';
 import { Empty, Icon, IconButton, Press } from '@/components/ui';
 import { AddSongRow, BgWave, DiscRow, PlaylistHero } from '@/components/detail/parts';
 import { usePlaylist } from '@/hooks/api';
@@ -22,12 +23,31 @@ import { formatDuration, formatTotal } from '@/utils/format';
 import { shuffled } from '@/utils/shuffle';
 import { track } from '@/services/analytics';
 
+/**
+ * 곡 한 줄 — memo. 지금 재생 중인지는 행이 직접 구독한다(이 곡인지 여부만) →
+ * 곡이 바뀌어도 화면·헤더·다른 행은 그대로, 이전 곡·새 곡 두 행만 다시 그린다
+ */
+const SongRow = memo(function SongRowItem({ song: s, onOpen, onMenu }: { song: Song; onOpen: (id: string) => void; onMenu: (s: Song) => void }) {
+  const active = usePreviewStore(st => st.key === s.id);
+  return (
+    <DiscRow
+      song={s}
+      title={s.title}
+      artist={s.artist}
+      duration={formatDuration(s.duration)}
+      onPress={() => onOpen(s.id)}
+      onLongPress={() => onMenu(s)}
+      active={active}
+      right={<Press onPress={() => onMenu(s)} hitSlop={10} accessibilityLabel="곡 메뉴"><Icon name="more" size={18} color="#C5C5C5" /></Press>}
+    />
+  );
+});
+
 export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'PlaylistDetail'>) {
   const { playlistId } = route.params;
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const { data: p, error, refetch } = usePlaylist(playlistId);
-  const nowKey = usePreviewStore(st => st.key);
   // 위쪽 몇 곡은 미리듣기 주소를 미리 찾아 둔다 — 처음 누를 때 몇 초 기다리지 않게 (요청 한도를 아끼려 3곡만, 순서대로)
   const firstIds = p?.songs.slice(0, 3).map(x => x.id).join(',');
   React.useEffect(() => { p?.songs.slice(0, 3).forEach(x => { findPreview(x); }); }, [firstIds]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -39,9 +59,23 @@ export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'
     navigation.navigate('AddSongs', { playlistId, existing: p.songs.map(s => s.id) });
   }, [openAdd, p, playlistId, navigation]);
 
+  const open = useCallback((id: string) => navigation.navigate('Player', { songId: id }), [navigation]);
+  const songMenu = useCallback((s: Song) => navigation.navigate('TrackMenu', { playlistId, song: s }), [navigation, playlistId]);
+  const renderItem = useCallback(({ item }: { item: Song }) => <SongRow song={item} onOpen={open} onMenu={songMenu} />, [open, songMenu]);
+  // 헤더(콜라주·제목·버튼)는 플리 응답이 바뀔 때만 새로 만든다 — 재생 곡이 바뀔 때마다 콜라주까지 다시 그리지 않게
+  const header = useMemo(() => {
+    if (!p) return undefined;
+    const total = p.songs.reduce((a, s) => a + (s.duration || 0), 0);
+    const play = (shuffle: boolean) => {
+      p.songs.forEach(x => qc.setQueryData(['song', x.id], x));
+      const ids = p.songs.map(x => x.id);
+      const q = shuffle ? shuffled(ids) : ids;
+      if (q.length) navigation.navigate('Player', { songId: q[0], queue: q, autoplay: true });
+    };
+    return <View style={{ marginBottom: 20 }}><PlaylistHero images={p.songs.map(s => s.albumImagePath)} title={p.name} meta={`${p.songs.length}곡 · ${formatTotal(total)}`} onPlay={() => play(false)} onShuffle={() => play(true)} onService={() => p.songs[0] && navigation.navigate('ServicePicker', { song: p.songs[0] })} /></View>;
+  }, [p, qc, navigation]);
+
   if (!p) return <ScreenState title="플레이리스트" error={error} onRetry={() => refetch()} />;
-  const total = p.songs.reduce((a, s) => a + (s.duration || 0), 0);
-  const open = (id: string) => navigation.navigate('Player', { songId: id });
 
   const rename = () => navigation.navigate('NewPlaylist', { rename: { id: playlistId, name: p.name } });
   const more = () => dialog.menu(p.name, [
@@ -52,13 +86,6 @@ export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'
       { text: '삭제', style: 'destructive', onPress: () => playlistApi.remove(playlistId).then(() => { track('playlist_deleted', { playlist_id: playlistId }); qc.invalidateQueries({ queryKey: ['playlists'] }); navigation.goBack(); }).catch(e => toast(errorMessage(e), 'error')) },
     ]) },
   ]);
-
-  const play = (shuffle: boolean) => {
-    p.songs.forEach(x => qc.setQueryData(['song', x.id], x));
-    const ids = p.songs.map(x => x.id);
-    const q = shuffle ? shuffled(ids) : ids;
-    if (q.length) navigation.navigate('Player', { songId: q[0], queue: q, autoplay: true });
-  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
@@ -71,20 +98,9 @@ export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'
         data={p.songs}
         keyExtractor={s => s.id}
         contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 40, paddingHorizontal: 24, gap: 20 }}
-        ListHeaderComponent={<View style={{ marginBottom: 20 }}><PlaylistHero images={p.songs.map(s => s.albumImagePath)} title={p.name} meta={`${p.songs.length}곡 · ${formatTotal(total)}`} onPlay={() => play(false)} onShuffle={() => play(true)} onService={() => p.songs[0] && navigation.navigate('ServicePicker', { song: p.songs[0] })} /></View>}
+        ListHeaderComponent={header}
         ListEmptyComponent={<Empty icon="playlist" title="아직 담긴 곡이 없어요" desc="아래 곡 추가로 채워보세요." />}
-        renderItem={({ item: s }) => (
-          <DiscRow
-            song={s}
-            title={s.title}
-            artist={s.artist}
-            duration={formatDuration(s.duration)}
-            onPress={() => open(s.id)}
-            onLongPress={() => navigation.navigate('TrackMenu', { playlistId, song: s })}
-            active={nowKey === s.id}
-            right={<Press onPress={() => navigation.navigate('TrackMenu', { playlistId, song: s })} hitSlop={10} accessibilityLabel="곡 메뉴"><Icon name="more" size={18} color="#C5C5C5" /></Press>}
-          />
-        )}
+        renderItem={renderItem}
         ListFooterComponent={<AddSongRow onPress={() => navigation.navigate('AddSongs', { playlistId, existing: p.songs.map(s => s.id) })} />}
       />
     </View>

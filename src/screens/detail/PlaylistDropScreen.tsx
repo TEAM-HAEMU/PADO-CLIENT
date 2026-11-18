@@ -1,8 +1,8 @@
 /** 4.2 플레이리스트 드랍 (다른 사람이 남긴 플리) — Figma 'B 4.2 플레이리스트 드랍' */
-import React from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { FlatList, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isPlaylistDetail } from '@/api/types';
+import { isPlaylistDetail, type PlaylistDropSong } from '@/api/types';
 import { IconButton, Press, T } from '@/components/ui';
 import { Glyph } from '@/components/detail/glyphs';
 import { BgWave, DiscRow, PlaylistHero } from '@/components/detail/parts';
@@ -19,6 +19,16 @@ import { dropPlace } from '@/utils/address';
 import { expiryLabel } from '@/utils/format';
 import { shuffled } from '@/utils/shuffle';
 
+/**
+ * 곡 한 줄 — memo. 지금 재생 중인지는 행이 직접 구독한다(이 곡인지 여부만) →
+ * 곡이 바뀌어도 화면·헤더·다른 행은 그대로, 이전 곡·새 곡 두 행만 다시 그린다
+ */
+const DropSongRow = memo(function DropSongRowItem({ song: s, onOpen }: { song: PlaylistDropSong; onOpen: (songId: string) => void }) {
+  const active = usePreviewStore(st => st.key === s.songId);
+  const song = useMemo(() => ({ id: s.songId, title: s.title, artist: s.artist, albumImagePath: s.albumImagePath }), [s]);
+  return <DiscRow song={song} title={s.title} artist={s.artist} active={active} onPress={() => onOpen(s.songId)} />;
+});
+
 export default function PlaylistDropScreen({ navigation, route }: RootScreen<'PlaylistDrop'>) {
   const { dropId, source } = route.params;
   const insets = useSafeAreaInsets();
@@ -33,7 +43,6 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
     autoStarted.current = true;
     startPreview({ id: first.songId, title: first.title, artist: first.artist, albumImagePath: first.albumImagePath, previewUrl: first.previewUrl, dropId });
   }, [first, dropId]);
-  const playingKey = usePreviewStore(s => s.key);
   const likeCount = useLikeCount(dropId).data;
   const commentCount = useCommentCount(dropId).data;
   const liked = useIsLiked(dropId);
@@ -41,9 +50,23 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
   const authed = useAuth(s => s.status === 'authed');
   const menu = useDropMenu(dropId, drop.data?.userId, '플레이리스트 드랍', drop.data && 'username' in drop.data ? drop.data.username : undefined);
 
+  const open = useCallback((songId: string) => navigation.navigate('Player', { songId, dropId }), [navigation, dropId]);
+  const renderItem = useCallback(({ item }: { item: PlaylistDropSong }) => <DropSongRow song={item} onOpen={open} />, [open]);
+  // 헤더(콜라주·제목·버튼)는 드랍 응답이 바뀔 때만 새로 만든다 — 재생 곡·좋아요 수가 바뀔 때마다 콜라주까지 다시 그리지 않게
+  const header = useMemo(() => d ? (
+    <View style={{ marginBottom: 20 }}>
+      <PlaylistHero
+        images={d.songs.map(s => s.albumImagePath)}
+        title={d.playlistName}
+        meta={`${d.songs.length}곡 · ${dropPlace(d)} · ${expiryLabel(d.expiryDate)}`}
+        onPlay={() => { const q = d.songs.map(s => s.songId); if (q.length) navigation.navigate('Player', { songId: q[0], dropId, queue: q, autoplay: true }); }}
+        onShuffle={() => { const q = shuffled(d.songs.map(s => s.songId)); if (q.length) navigation.navigate('Player', { songId: q[0], dropId, queue: q, autoplay: true }); }}
+      />
+    </View>
+  ) : undefined, [d, dropId, navigation]);
+
   if (!d) return <ScreenState title="플리 드랍" error={drop.error} onRetry={() => drop.refetch()} />;
 
-  const open = (songId: string) => navigation.navigate('Player', { songId, dropId });
   const more = menu.open;
   const count = (n?: number) => (n ? <T style={{ fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, color: '#969696' }}>{n}</T> : null);
 
@@ -77,26 +100,8 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
         data={d.songs}
         keyExtractor={s => s.songId}
         contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 40, paddingHorizontal: 24, gap: 20 }}
-        ListHeaderComponent={
-          <View style={{ marginBottom: 20 }}>
-            <PlaylistHero
-              images={d.songs.map(s => s.albumImagePath)}
-              title={d.playlistName}
-              meta={`${d.songs.length}곡 · ${dropPlace(d)} · ${expiryLabel(d.expiryDate)}`}
-              onPlay={() => { const q = d.songs.map(s => s.songId); if (q.length) navigation.navigate('Player', { songId: q[0], dropId, queue: q, autoplay: true }); }}
-              onShuffle={() => { const q = shuffled(d.songs.map(s => s.songId)); if (q.length) navigation.navigate('Player', { songId: q[0], dropId, queue: q, autoplay: true }); }}
-            />
-          </View>
-        }
-        renderItem={({ item: s }) => (
-          <DiscRow
-            song={{ id: s.songId, title: s.title, artist: s.artist, albumImagePath: s.albumImagePath }}
-            title={s.title}
-            artist={s.artist}
-            active={playingKey === s.songId}
-            onPress={() => open(s.songId)}
-          />
-        )}
+        ListHeaderComponent={header}
+        renderItem={renderItem}
       />
     </View>
   );

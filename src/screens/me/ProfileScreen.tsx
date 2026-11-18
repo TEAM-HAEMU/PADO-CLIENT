@@ -3,7 +3,7 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import { Platform, ScrollView, View, useWindowDimensions } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
 import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
-import { useQueryClient, useQueries } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useQueries, type UseQueryResult } from '@tanstack/react-query';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dropApi } from '@/api/endpoints';
@@ -63,13 +63,9 @@ export default function ProfileScreen() {
   const myLikeCount = useMyLikeCount().data;
   // 탭 숫자는 아래 목록과 같아야 한다 — 서버 개수(/likes/count/user)는 사라진 드랍의 좋아요까지 세어 목록보다 클 수 있어, 목록을 받았으면 목록 길이로
   const likeTotal = likesQ.data ? likes.length : myLikeCount;
-  // 디자인: '받은 좋아요' = 내 드랍들이 받은 좋아요 합계 (드랍별 좋아요 수 캐시를 공유) — 내가 내 드랍에 누른 좋아요는 빼고
-  // 행 오른쪽 숫자(LikeBadge)도 이 결과를 받아 쓴다 — 행마다 따로 구독하면 기본 신선도(30초)로 앱 복귀 때마다 N개를 다시 받는다
-  // 내가 좋아요를 누르면 useToggleLike가 해당 키를 바로 고치고 무효화하므로 5분 신선도여도 내 동작은 바로 보인다
-  const likeCounts = useQueries({ queries: drops.map(d => ({ queryKey: qk.likeCount(d.droppingId), queryFn: () => likeApi.countForDrop(d.droppingId), staleTime: 5 * 60_000, enabled: focused })) });
+  // 내가 내 드랍에 누른 좋아요 수 ('받은 좋아요'에서 뺀다)
   const myDropIds = new Set(drops.map(d => d.droppingId));
   const selfLikes = likes.filter(l => myDropIds.has(l.droppingId)).length;
-  const receivedLikes = Math.max(0, likeCounts.reduce((a, q) => a + (q.data ?? 0), 0) - selfLikes);
   const playlists = useMyPlaylists().data ?? [];
   const unread = useUnreadCount().data ?? 0;
 
@@ -97,11 +93,11 @@ export default function ProfileScreen() {
     return { latitude, longitude, latitudeDelta, longitudeDelta };
   }, [regionKey]);
 
-  const openDrop = (d: DropSummary) => nav.navigate(d.type === 'VOTE' ? 'VoteDrop' : d.type === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: d.droppingId, source: 'profile' });
-  const removeDrop = (d: DropSummary) => dialog.alert('드랍을 삭제할까요?', `'${dropTitle(d)}' 드랍이 지도에서 사라지고 되돌릴 수 없어요.`, [
+  const openDrop = useCallback((d: DropSummary) => nav.navigate(d.type === 'VOTE' ? 'VoteDrop' : d.type === 'PLAYLIST' ? 'PlaylistDrop' : 'PinPreview', { dropId: d.droppingId, source: 'profile' }), [nav]);
+  const removeDrop = useCallback((d: DropSummary) => dialog.alert('드랍을 삭제할까요?', `'${dropTitle(d)}' 드랍이 지도에서 사라지고 되돌릴 수 없어요.`, [
     { text: '취소', style: 'cancel' },
     { text: '삭제', style: 'destructive', onPress: () => dropApi.remove(d.droppingId).then(() => { invalidateAfterDropRemoved(qc, d.droppingId); toast('드랍을 삭제했어요.'); }).catch(e => toast(errorMessage(e), 'error')) },
-  ]);
+  ]), [qc]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -125,15 +121,11 @@ export default function ProfileScreen() {
         </View>
         {/* 숫자 3칸 — 사이에 1×24 세로선 */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 30, paddingHorizontal: 38 }}>
-          {[[drops.length, '드랍'], [receivedLikes, '받은 좋아요'], [playlists.length, '플레이리스트']].map(([n, l], i) => (
-            <React.Fragment key={String(l)}>
-              {i ? <View style={{ width: 1, height: 24, borderRadius: 1, backgroundColor: '#EBEBEB' }} /> : null}
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <T v="headline" style={{ fontSize: 20, lineHeight: 26, letterSpacing: -0.4, color: '#000000' }}>{n}</T>
-                <T v="caption" style={{ color: '#959595', letterSpacing: -0.24 }}>{l}</T>
-              </View>
-            </React.Fragment>
-          ))}
+          <Stat n={drops.length} label="드랍" />
+          <StatDivider />
+          <ReceivedLikesStat drops={drops} selfLikes={selfLikes} enabled={focused} />
+          <StatDivider />
+          <Stat n={playlists.length} label="플레이리스트" />
         </View>
 
         {/* Figma 'tag' 칩 탭 (높이 30) — 고른 탭이 채워진 파랑 */}
@@ -158,16 +150,8 @@ export default function ProfileScreen() {
               </View>
             ) : null}
             <View style={{ paddingHorizontal: 20, gap: 4 }}>
-              {listStatus(myDropsQ, '드랍 기록을 불러오지 못했어요') ?? (drops.length ? drops.map((d, i) => (
-                <Press key={d.droppingId} onPress={() => openDrop(d)} onLongPress={() => removeDrop(d)} trackAs="내 드랍" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
-                  <Art uri={dropArt(d)} size={52} radius={12} />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <T v="bodyStrong" numberOfLines={1} style={ROW_TITLE}>{dropTitle(d)}</T>
-                    <T v="caption" c="ink2" numberOfLines={1}>{d.content || (d.type === 'MUSIC' ? d.artist : dropSub(d))}</T>
-                    <Address text={dropPlace(d)} />
-                  </View>
-                  <LikeBadge n={likeCounts[i]?.data} />
-                </Press>
+              {listStatus(myDropsQ, '드랍 기록을 불러오지 못했어요') ?? (drops.length ? drops.map(d => (
+                <DropRow key={d.droppingId} d={d} onOpen={openDrop} onRemove={removeDrop} />
               )) : <Empty icon="wave" title="아직 남긴 드랍이 없어요" desc="지금 있는 곳에 첫 곡을 남겨보세요." action={<PrimaryButton label="첫 드랍 남기기" icon="plus" onPress={() => nav.navigate('DropType')} style={{ alignSelf: 'stretch', marginTop: 8 }} />} />)}
               {drops.length ? <T v="micro" c="faint" style={{ textAlign: 'center', marginTop: 8 }}>길게 누르면 드랍을 삭제할 수 있어요</T> : null}
             </View>
@@ -214,6 +198,52 @@ function Address({ text }: { text?: string | null }) {
       <T v="tiny" numberOfLines={1} style={{ flex: 1, fontFamily: fonts.medium, color: SUB_INK }}>{text}</T>
     </View>
   );
+}
+
+/** 숫자 한 칸 (숫자 20 + 회색 이름) */
+function Stat({ n, label }: { n: number; label: string }) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center' }}>
+      <T v="headline" style={{ fontSize: 20, lineHeight: 26, letterSpacing: -0.4, color: '#000000' }}>{n}</T>
+      <T v="caption" style={{ color: '#959595', letterSpacing: -0.24 }}>{label}</T>
+    </View>
+  );
+}
+const StatDivider = () => <View style={{ width: 1, height: 24, borderRadius: 1, backgroundColor: '#EBEBEB' }} />;
+
+const LIKE_STALE = 5 * 60_000;
+const sumCounts = (rs: UseQueryResult<number>[]) => rs.reduce((a, q) => a + (q.data ?? 0), 0);
+
+/**
+ * 디자인: '받은 좋아요' = 내 드랍들이 받은 좋아요 합계 (드랍별 좋아요 수 캐시를 공유) — 내가 내 드랍에 누른 좋아요는 빼고.
+ * 드랍별 좋아요 수 요청은 여기서만 건다(행은 캐시만 읽음 — 행마다 요청하면 기본 신선도 30초로 앱 복귀 때마다 N개를 다시 받는다).
+ * 합계만 구독(combine → 숫자)하는 작은 칸으로 따로 둬서, 응답이 하나 올 때마다 프로필 화면 전체(행 N개)가 아니라 이 칸과 그 행의 숫자만 다시 그린다.
+ * 내가 좋아요를 누르면 useToggleLike가 해당 키를 바로 고치고 무효화하므로 5분 신선도여도 내 동작은 바로 보인다
+ */
+function ReceivedLikesStat({ drops, selfLikes, enabled }: { drops: readonly DropSummary[]; selfLikes: number; enabled: boolean }) {
+  const sum = useQueries({ queries: drops.map(d => ({ queryKey: qk.likeCount(d.droppingId), queryFn: () => likeApi.countForDrop(d.droppingId), staleTime: LIKE_STALE, enabled })), combine: sumCounts });
+  return <Stat n={Math.max(0, sum - selfLikes)} label="받은 좋아요" />;
+}
+
+/** 드랍 기록 한 줄 — memo. 좋아요 수는 오른쪽 숫자(LikeBadge)만 구독해 다른 행·화면은 다시 그리지 않는다 */
+const DropRow = memo(function DropRowItem({ d, onOpen, onRemove }: { d: DropSummary; onOpen: (d: DropSummary) => void; onRemove: (d: DropSummary) => void }) {
+  return (
+    <Press onPress={() => onOpen(d)} onLongPress={() => onRemove(d)} trackAs="내 드랍" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
+      <Art uri={dropArt(d)} size={52} radius={12} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <T v="bodyStrong" numberOfLines={1} style={ROW_TITLE}>{dropTitle(d)}</T>
+        <T v="caption" c="ink2" numberOfLines={1}>{d.content || (d.type === 'MUSIC' ? d.artist : dropSub(d))}</T>
+        <Address text={dropPlace(d)} />
+      </View>
+      <DropLikeBadge dropId={d.droppingId} />
+    </Press>
+  );
+});
+
+/** 행의 좋아요 수 — 캐시만 읽는다(enabled: false, 요청은 ReceivedLikesStat이 건다). 응답이 오면 이 숫자만 다시 그린다 */
+function DropLikeBadge({ dropId }: { dropId: string }) {
+  const n = useQuery({ queryKey: qk.likeCount(dropId), queryFn: () => likeApi.countForDrop(dropId), staleTime: LIKE_STALE, enabled: false }).data;
+  return <LikeBadge n={n} />;
 }
 
 /** 드랍별 받은 좋아요 수 (디자인: 행 오른쪽 하트) */
