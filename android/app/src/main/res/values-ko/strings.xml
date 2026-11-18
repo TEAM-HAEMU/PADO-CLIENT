@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 홈 화면에 보이는 앱 이름 (한국어 기기) -->
+    <string name="app_name">파도</string>
+</resources>
