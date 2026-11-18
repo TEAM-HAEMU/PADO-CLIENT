@@ -50,6 +50,12 @@ describe('repickWhileMoving — 앱이 카메라를 옮기는 동안엔 다시 �
     expect(repickWhileMoving(view, far, { autoUntil: 2000, now: 2000 })).toBe(true);
     expect(repickWhileMoving(view, far, { autoUntil: 0, now: 1000 })).toBe(true);
   });
+  test('지금 묶음인지(clustered)를 넘기면 경계 여유를 쓴다', () => {
+    const band = { ...view, longitudeDelta: 0.036, latitudeDelta: 0.054 };
+    const wider = { ...band, longitudeDelta: 0.042, latitudeDelta: 0.063 };
+    expect(repickWhileMoving(wider, band, { autoUntil: null, now: 1000, clustered: true })).toBe(false);
+    expect(repickWhileMoving(band, wider, { autoUntil: null, now: 1000, clustered: false })).toBe(true);
+  });
 });
 
 describe('selectionLook — 핀 크기·말풍선은 카메라가 도착한 뒤에', () => {

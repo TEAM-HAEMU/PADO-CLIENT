@@ -1,3 +1,139 @@
+diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
+index 09278e7..ea282f6 100644
+--- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
++++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
+@@ -99,7 +99,17 @@ public class MapMarker extends MapFeature {
+     private float calloutAnchorY;
+     private boolean calloutAnchorIsSet;
+ 
++    // PADO: 원래는 '바뀐 횟수'를 쌓아 두고 추적기가 0이 될 때까지 40ms마다 한 번씩 찍었다(남은 찍기 횟수로 쓰임) →
++    // 지도에 붙기 전에 설정한 prop 수만큼 새 마커마다 4~5번 더 찍었다. 이제 '다시 찍을 게 있다'(0/1)로만 쓴다 (setUpdated·update)
+     private int updated = 0;
++    // PADO: 지도에 붙인 뒤의 찍기 — 처음 한 번(레이아웃 뒤) + 추적을 켠 채 붙었으면(아트 핀) PADO_FOLLOW_UP_MS 뒤 한 번
++    private static final long PADO_FOLLOW_UP_MS = 150;
++    private static BitmapDescriptor padoPlaceholderIcon;
++    private final Handler padoHandler = new Handler(Looper.getMainLooper());
++    private boolean padoFollowUp = false;
++    private final Runnable padoFollowUpDraw = () -> {
++        if (marker != null) updateMarkerIcon();
++    };
+ 
+     private boolean tracksViewChanges = true;
+     private boolean tracksViewChangesActive = false;
+@@ -311,8 +321,13 @@ public class MapMarker extends MapFeature {
+     }
+ 
+     public void setTracksViewChanges(boolean tracksViewChanges) {
++        boolean wasTracking = this.tracksViewChanges;
++        boolean wasActive = tracksViewChangesActive;
+         this.tracksViewChanges = tracksViewChanges;
+         updateTracksViewChanges();
++        // PADO: JS가 추적을 끌 때는 늘 마지막으로 한 번 찍는다 — 추적기는 바뀐 게 없으면(updated 0) 먼저 빠져서
++        // 위 '한 번 더'(tracksViewChangesActive일 때만)가 안 돈다. 150ms 뒤에도 아트를 아직 못 받았으면 여기서 잡힌다
++        if (wasTracking && !tracksViewChanges && !wasActive && marker != null && hasCustomMarkerView) updateMarkerIcon();
+     }
+ 
+     private void updateTracksViewChanges() {
+@@ -344,16 +359,20 @@ public class MapMarker extends MapFeature {
+             return false;
+         }
+ 
++        updated = 0;
+         updateMarkerIcon();
+-        if (updated > 0) {
+-            updated--;
+-        }
+         return true;
+     }
+ 
+     public void updateMarkerIcon() {
+         if (marker == null) return;
+ 
++        // PADO: 붙은 뒤 처음 제대로 찍을 때(레이아웃이 끝난 뒤) 아트용 한 번을 예약한다 — 마커 안 SVG 이미지는 처음 그릴 때 디스크에서 받기 시작해
++        // 그다음 그릴 때 나온다. 받은 것을 알려 주는 신호(로드 이벤트·invalidate)는 마커 밖으로 오지 않아 시간으로 잡는다
++        if (padoFollowUp && width > 0) {
++            padoFollowUp = false;
++            padoHandler.postDelayed(padoFollowUpDraw, PADO_FOLLOW_UP_MS);
++        }
+         marker.setIcon(getIcon());
+     }
+ 
+@@ -469,6 +488,8 @@ public class MapMarker extends MapFeature {
+         // if children are added, it means we are rendering a custom marker
+         if (!(child instanceof MapCallout)) {
+             hasCustomMarkerView = true;
++            // PADO: 지도에 붙은 뒤에 자식이 들어온 경우에도 아트용 한 번을 예약한다(addToMap 때는 커스텀 뷰인지 몰랐다)
++            if (marker != null && tracksViewChanges) padoFollowUp = true;
+             updateTracksViewChanges();
+             hackToHandleDraweeLifecycle(child);
+         }
+@@ -562,8 +583,16 @@ public class MapMarker extends MapFeature {
+     @Override
+     public void addToMap(Object collection) {
+         MarkerManager.Collection markerCollection = (MarkerManager.Collection) collection;
+-        marker = markerCollection.addMarker(getMarkerOptions());
++        // PADO: 붙기 전에 쌓인 '다시 찍기'는 지우고(붙은 뒤 처음 찍는 그림에 다 들어간다), 추적을 켠 채(아트 핀) 붙으면 아트용 한 번을 예약
++        updated = 0;
++        padoFollowUp = tracksViewChanges && hasCustomMarkerView;
++        MarkerOptions options = getMarkerOptions();
++        marker = markerCollection.addMarker(options);
+         this.markerCollectionRef = new SoftReference<>(markerCollection);
++        if (padoFollowUp && width > 0) {
++            padoFollowUp = false;
++            padoHandler.postDelayed(padoFollowUpDraw, PADO_FOLLOW_UP_MS);
++        }
+         updateTracksViewChanges();
+     }
+ 
+@@ -575,6 +604,8 @@ public class MapMarker extends MapFeature {
+         MarkerManager.Collection markerCollection = (MarkerManager.Collection) collection;
+         markerCollection.remove(marker);
+         marker = null;
++        padoFollowUp = false;
++        padoHandler.removeCallbacks(padoFollowUpDraw);
+         updateTracksViewChanges();
+     }
+ 
+@@ -613,7 +644,14 @@ public class MapMarker extends MapFeature {
+         options.draggable(draggable);
+         options.zIndex(zIndex);
+         options.alpha(opacity);
+-        options.icon(getIcon());
++        if (hasCustomMarkerView && width <= 0) {
++            if (padoPlaceholderIcon == null) {
++                padoPlaceholderIcon = BitmapDescriptorFactory.fromBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888));
++            }
++            options.icon(padoPlaceholderIcon);
++        } else {
++            options.icon(getIcon());
++        }
+         return options;
+     }
+ 
+@@ -636,13 +674,12 @@ public class MapMarker extends MapFeature {
+         } else {
+             marker.setInfoWindowAnchor(0.5f, 0);
+         }
+-        updated += 1;
++        if (!updateIcon) updated = 1;
+     }
+ 
+     public void update(int width, int height) {
+         this.width = width;
+         this.height = height;
+-        updated += 1;
+         updateTracksViewChanges();
+         clearDrawableCache();
+         update(true);
+@@ -810,7 +847,7 @@ public class MapMarker extends MapFeature {
+ 
+     public void setUpdated(boolean updated) {
+         if (updated) {
+-            this.updated += 1;
++            this.updated = 1;
+         } else {
+             this.updated = 0;
+         }
 diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
 index 94288ef..fabb2d2 100644
 --- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
