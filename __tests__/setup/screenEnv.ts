@@ -11,10 +11,17 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('@/components/ui/Wave', () => ({ Wave: () => null }));
 jest.mock('@/services/analytics', () => ({ track: jest.fn(), detailedOnly: () => ({}), currentDropId: () => undefined }));
 
+/** mockHost 요소가 그려진(함수가 불린) 횟수 — 리렌더 수를 세는 테스트용 (이름별) */
+export const renderCounts: Record<string, number> = {};
+export const resetRenderCounts = () => { Object.keys(renderCounts).forEach(k => { delete renderCounts[k]; }); };
+
 /** 이름 그대로의 호스트 요소 (props·children 유지). jest.mock 팩토리 안에서는 require('./setup/screenEnv').mockHost로 */
 export function mockHost(name: string) {
-  // eslint-disable-next-line dot-notation
-  return (props: Record<string, unknown>) => jest.requireActual('react')['createElement'](name, props);
+  return (props: Record<string, unknown>) => {
+    renderCounts[name] = (renderCounts[name] ?? 0) + 1;
+    // eslint-disable-next-line dot-notation
+    return jest.requireActual('react')['createElement'](name, props);
+  };
 }
 
 /** 모듈의 모든 내보내기를 이름 그대로의 호스트 요소로 (예: '@/components/ui') */

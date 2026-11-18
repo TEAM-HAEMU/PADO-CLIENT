@@ -3,7 +3,7 @@
  *  · { playlistId } : 선택한 곡을 POST /playlists/{id}/songs
  *  · { picker }     : 투표 후보·새 플리 곡 고르기 → useDraft.picked로 돌려줌
  */
-import React, { useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, TextInput, View } from 'react-native';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { dropApi, playlistApi } from '@/api/endpoints';
@@ -34,6 +34,27 @@ const DETAIL_STALE = 5 * 60_000;
 const dropGone = (e: unknown) => e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429;
 const asSong = (id: string, title: string, artist: string, art: string | null): Song => ({ id, title, artist, duration: 0, albumImagePath: art, links: { spotify: null, youtubeMusic: null } });
 
+/**
+ * 곡 한 줄 — memo + 원시값(on·inList)·고정 콜백만 받는다.
+ * 검색어를 칠 때마다·한 곡을 고를 때마다 보이는 행 전체가 다시 그려지지 않고, 고르기가 바뀐 행만 다시 그린다
+ */
+const PickRow = memo(function PickRowItem({ song: s, on, inList, onToggle }: { song: Song; on: boolean; inList: boolean; onToggle: (s: Song) => void }) {
+  return (
+    <DiscRow
+      height={67}
+      art={s.albumImagePath}
+      title={s.title}
+      artist={inList ? '이미 담긴 곡' : s.artist}
+      duration={s.duration ? formatDuration(s.duration) : undefined}
+      dim={inList}
+      active={on}
+      onPress={() => onToggle(s)}
+      trackAs="담을 곡 고르기"
+      right={<Glyph name="checkCircle" color={on || inList ? colors.accent : '#DEDEDE'} />}
+    />
+  );
+});
+
 export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSongs'>) {
   const p = route.params;
   const playlistId = 'playlistId' in p ? p.playlistId : null;
@@ -45,7 +66,7 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
   const search = useSongSearch(tab === 'search' ? query : '');
   const [picked, setPicked] = useState<Song[]>([]);
   const [busy, setBusy] = useState(false);
-  const existing = new Set(p.existing);
+  const existing = useMemo(() => new Set(p.existing), [p.existing]);
   const plName = playlistId ? qc.getQueryData<{ name: string }>(['playlist', playlistId])?.name : undefined;
 
   // 주변 드랍 곡 — 재생 반경 밖(잠긴 드랍)의 곡은 보이지 않는다
@@ -85,8 +106,11 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
       return r;
     },
   });
-  const likedSeen = new Set<string>();
-  const liked = likedMusic.map(l => { const id = likedQ.data?.songIds.get(l.droppingId); return id ? asSong(id, l.title ?? '', l.artist ?? '', l.imageUrl) : null; }).filter((s): s is Song => !!s && !likedSeen.has(s.id) && !!likedSeen.add(s.id));
+  // 곡을 고를 때마다 새 Song 객체를 만들면 PickRow memo가 통하지 않아 좋아요 탭 전체가 다시 그려진다.
+  const liked = useMemo(() => {
+    const seen = new Set<string>();
+    return likedMusic.map(l => { const id = likedQ.data?.songIds.get(l.droppingId); return id ? asSong(id, l.title ?? '', l.artist ?? '', l.imageUrl) : null; }).filter((s): s is Song => !!s && !seen.has(s.id) && !!seen.add(s.id));
+  }, [likedMusic, likedQ.data]);
   const likedLoading = likesQ.isLoading || (likedQ.isFetching && !liked.length);
   const likedMore = !!likedQ.data?.remaining && !likedQ.isFetching;
   const likedFailed = likedQ.data?.failed ?? 0;
@@ -105,10 +129,14 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
     : undefined;
 
   const data = tab === 'search' ? search.data ?? [] : tab === 'nearby' ? nearby : liked;
-  const toggle = (s: Song) => {
+  const existingCount = p.existing.length;
+  const toggle = useCallback((s: Song) => {
     if (existing.has(s.id)) return;
-    setPicked(prev => prev.some(x => x.id === s.id) ? prev.filter(x => x.id !== s.id) : prev.length + (playlistId ? 0 : p.existing.length) >= limit ? (toast(`최대 ${limit}곡까지 고를 수 있어요.`), prev) : [...prev, s]);
-  };
+    setPicked(prev => prev.some(x => x.id === s.id) ? prev.filter(x => x.id !== s.id) : prev.length + (playlistId ? 0 : existingCount) >= limit ? (toast(`최대 ${limit}곡까지 고를 수 있어요.`), prev) : [...prev, s]);
+  }, [existing, playlistId, existingCount, limit]);
+  // 고른 곡 ID — 행마다 고른 목록을 훑지 않게 (최대 50곡)
+  const pickedIds = useMemo(() => new Set(picked.map(x => x.id)), [picked]);
+  const renderItem = useCallback(({ item: s }: { item: Song }) => <PickRow song={s} on={pickedIds.has(s.id)} inList={existing.has(s.id)} onToggle={toggle} />, [pickedIds, existing, toggle]);
 
   const submitting = React.useRef(false);
   const done = async () => {
@@ -168,24 +196,7 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
           ) : <Empty title={tab === 'liked' ? '좋아요한 음악 드랍이 없어요' : tab === 'nearby' ? '주변에 음악 드랍이 없어요' : '검색 결과가 없어요'} />}
           ListFooterComponent={likedFooter}
           onEndReached={tab === 'liked' && likedMore ? () => setLikedRound(r => r + 1) : undefined}
-          renderItem={({ item: s }) => {
-            const inList = existing.has(s.id);
-            const on = picked.some(x => x.id === s.id);
-            return (
-              <DiscRow
-                height={67}
-                art={s.albumImagePath}
-                title={s.title}
-                artist={inList ? '이미 담긴 곡' : s.artist}
-                duration={s.duration ? formatDuration(s.duration) : undefined}
-                dim={inList}
-                active={on}
-                onPress={() => toggle(s)}
-                trackAs="담을 곡 고르기"
-                right={<Glyph name="checkCircle" color={on || inList ? colors.accent : '#DEDEDE'} />}
-              />
-            );
-          }}
+          renderItem={renderItem}
         />
         {/* 시안에는 없지만 고른 곡을 담으려면 필요 — 고른 곡이 있을 때만 */}
         {picked.length ? <PrimaryButton label={`완료 · ${picked.length}곡`} onPress={done} loading={busy} /> : null}

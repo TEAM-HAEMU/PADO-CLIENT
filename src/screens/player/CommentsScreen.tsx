@@ -1,5 +1,5 @@
 /** 2.4 댓글 (시트) — 목록·작성(100자)·내 댓글 수정/삭제·타인 댓글 신고 */
-import React, { useState } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, TextInput, View } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
 import { useQueryClient } from '@tanstack/react-query';
@@ -10,6 +10,7 @@ import { Avatar, Empty, Icon, Press, SecondaryButton, T } from '@/components/ui'
 import { Sheet } from '@/components/ui/Sheet';
 import { qk, useComments, useDrop, useMe } from '@/hooks/api';
 import { useBlockUser } from '@/hooks/useBlockUser';
+import { useStableCallback } from '@/hooks/useStableCallback';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
@@ -18,6 +19,24 @@ import { formatRelative } from '@/utils/format';
 import { MoreGlyph, SendGlyph } from '@/components/player/glyphs';
 
 const SEND = '#12214A'; // Figma 보내기 버튼 남색
+
+/** 댓글 한 줄 — memo + 고정 콜백. 입력칸에 글자를 칠 때마다(화면 state) 댓글 행 전체가 다시 그려지지 않게 */
+const CommentRow = memo(function CommentRowItem({ c, mine, onMenu }: { c: Comment; mine: boolean; onMenu: (c: Comment) => void }) {
+  return (
+    <Press onLongPress={() => onMenu(c)} trackAs="댓글" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+      <Avatar uri={c.profileImageUrl} name={c.username} size={34} />
+      <View style={{ flex: 1, gap: 3 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <T v="caption" style={{ fontFamily: fonts.medium, color: '#000000' }}>{c.username}</T>
+          {mine ? <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: colors.primarySoft }}><T v="tiny" c="primary">나</T></View> : null}
+          {c.createdAt ? <T v="tiny" style={{ color: '#BBBBBB' }}>{formatRelative(c.createdAt)}</T> : null}
+        </View>
+        <T v="caption" style={{ lineHeight: 22, color: '#000000' }}>{c.content}</T>
+      </View>
+      <Press onPress={() => onMenu(c)} hitSlop={14} accessibilityLabel="댓글 메뉴"><MoreGlyph /></Press>
+    </Press>
+  );
+});
 
 export default function CommentsScreen({ navigation, route }: RootScreen<'Comments'>) {
   const { dropId } = route.params;
@@ -48,7 +67,7 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
     finally { setBusy(false); }
   };
 
-  const menu = (c: Comment) => {
+  const menu = useStableCallback((c: Comment) => {
     const mine = !!me && c.username === me.username;
     dialog.menu(mine ? '내 댓글' : '댓글', mine ? [
       { text: '취소', style: 'cancel' },
@@ -74,7 +93,9 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
       ...(c.userId ? [{ text: '차단하기', style: 'destructive' as const, icon: 'block' as const, onPress: () => blockUser(c.userId!, { name: c.username, source: 'comment' }) }] : []),
       { text: '취소', style: 'cancel' },
     ]);
-  };
+  });
+  const myName = me?.username;
+  const renderItem = useCallback(({ item: c }: { item: Comment }) => <CommentRow c={c} mine={!!myName && c.username === myName} onMenu={menu} />, [myName, menu]);
 
   return (
     <Sheet dim={0.55} style={{ paddingHorizontal: 0, maxHeight: '78%' }}>
@@ -92,23 +113,7 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
         onContentSizeChange={(_, h) => setContentH(h)}
         contentContainerStyle={{ paddingHorizontal: 24, gap: 20, paddingBottom: 16 }}
         ListEmptyComponent={isLoading ? <ActivityIndicator color={colors.primary} /> : isError ? <Empty icon="alert" title="댓글을 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} /> : <Empty icon="comment" title="아직 댓글이 없어요" desc={`${target} 첫 한마디를 남겨보세요.`} />}
-        renderItem={({ item: c }) => {
-          const mine = !!me && c.username === me.username;
-          return (
-            <Press onLongPress={() => menu(c)} trackAs="댓글" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-              <Avatar uri={c.profileImageUrl} name={c.username} size={34} />
-              <View style={{ flex: 1, gap: 3 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <T v="caption" style={{ fontFamily: fonts.medium, color: '#000000' }}>{c.username}</T>
-                  {mine ? <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: colors.primarySoft }}><T v="tiny" c="primary">나</T></View> : null}
-                  {c.createdAt ? <T v="tiny" style={{ color: '#BBBBBB' }}>{formatRelative(c.createdAt)}</T> : null}
-                </View>
-                <T v="caption" style={{ lineHeight: 22, color: '#000000' }}>{c.content}</T>
-              </View>
-              <Press onPress={() => menu(c)} hitSlop={14} accessibilityLabel="댓글 메뉴"><MoreGlyph /></Press>
-            </Press>
-          );
-        }}
+        renderItem={renderItem}
       />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 24, paddingTop: 12 }}>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 18, paddingRight: 8, height: 38, borderRadius: 99, backgroundColor: '#F7F7F7', borderWidth: editing ? 1 : 0, borderColor: colors.primaryDeep }}>
