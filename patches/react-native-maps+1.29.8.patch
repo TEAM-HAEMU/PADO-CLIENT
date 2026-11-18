@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
-index 94288ef..9a2eeaf 100644
+index 94288ef..fabb2d2 100644
 --- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
 +++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
 @@ -14,6 +14,8 @@ import androidx.lifecycle.DefaultLifecycleObserver;
@@ -146,7 +146,17 @@ index 94288ef..9a2eeaf 100644
          super.onDetachedFromWindow();
          detachLifecycleObserver();
      }
-@@ -1211,7 +1199,10 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+@@ -799,6 +787,9 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+         savedMapState = null;
+         savedFeatures = null;
+         try {
++            // PADO: 떼기로 한 마커는 지도가 살아 있을 때 지운다 (예약된 정리가 destroy된 지도를 건드리지 않게)
++            padoHandler.removeCallbacks(padoFlushDetached);
++            padoFlushDetachedMarkers();
+             if (!paused) {
+                 pauseSafely();
+             }
+@@ -1211,7 +1202,10 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
          // This is where we intercept them and do the appropriate underlying mapview action.
          if (child instanceof MapMarker) {
              MapMarker annotation = (MapMarker) child;
@@ -158,7 +168,7 @@ index 94288ef..9a2eeaf 100644
              safeAddFeature(index, annotation);
  
              // Allow visibility event to be triggered later
-@@ -1325,7 +1316,11 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+@@ -1325,7 +1319,11 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
          }
          if (feature instanceof MapMarker) {
              markerMap.remove(feature.getFeature());
@@ -171,7 +181,7 @@ index 94288ef..9a2eeaf 100644
              safeRemoveFeatureFromAttacherGroup(feature);
          } else if (feature instanceof MapHeatmap) {
              heatmapMap.remove(feature.getFeature());
-@@ -1343,6 +1338,30 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+@@ -1343,6 +1341,30 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
          }
      }
  
@@ -252,7 +262,7 @@ index 82a78e2..7f39fd5 100644
  
  #endif
 diff --git a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
-index d729954..d4230eb 100644
+index d729954..7a817e8 100644
 --- a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
 +++ b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
 @@ -47,6 +47,10 @@ CGRect unionRect(CGRect a, CGRect b) {
