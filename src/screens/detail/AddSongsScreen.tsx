@@ -106,8 +106,11 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
       return r;
     },
   });
-  const likedSeen = new Set<string>();
-  const liked = likedMusic.map(l => { const id = likedQ.data?.songIds.get(l.droppingId); return id ? asSong(id, l.title ?? '', l.artist ?? '', l.imageUrl) : null; }).filter((s): s is Song => !!s && !likedSeen.has(s.id) && !!likedSeen.add(s.id));
+  // 곡을 고를 때마다 새 Song 객체를 만들면 PickRow memo가 통하지 않아 좋아요 탭 전체가 다시 그려진다.
+  const liked = useMemo(() => {
+    const seen = new Set<string>();
+    return likedMusic.map(l => { const id = likedQ.data?.songIds.get(l.droppingId); return id ? asSong(id, l.title ?? '', l.artist ?? '', l.imageUrl) : null; }).filter((s): s is Song => !!s && !seen.has(s.id) && !!seen.add(s.id));
+  }, [likedMusic, likedQ.data]);
   const likedLoading = likesQ.isLoading || (likedQ.isFetching && !liked.length);
   const likedMore = !!likedQ.data?.remaining && !likedQ.isFetching;
   const likedFailed = likedQ.data?.failed ?? 0;
