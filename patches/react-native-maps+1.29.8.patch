@@ -256,7 +256,7 @@ index d729954..d4230eb 100644
 + */
 +static const NSTimeInterval PADO_TRACK_FULL_S = 0.25;
 +static const NSTimeInterval PADO_TRACK_SLOW_S = 0.1;
-+static const NSInteger PADO_TRACK_FULL_ZINDEX = 10;
++static const NSInteger PADO_TRACK_FULL_ZINDEX = 1000; // 프로필 미니 지도 핀(zIndex 최대 30)과 겹치지 않게 크게
 +
 +- (void)padoRemoveFromMap {
 +    if (!_realMarker.map) return;
@@ -294,7 +294,7 @@ index d729954..d4230eb 100644
 +    __weak AIRGoogleMapMarker *weakSelf = self;
 +    NSTimer *timer = [[NSTimer alloc] initWithFireDate:[NSDate dateWithTimeIntervalSinceNow:first] interval:PADO_TRACK_SLOW_S repeats:YES block:^(NSTimer *t) {
 +        AIRGoogleMapMarker *s = weakSelf;
-+        if (!s || !s->_tracksViewChanges) { [t invalidate]; return; }
++        if (!s || !s->_tracksViewChanges || !s->_realMarker.map) { [t invalidate]; return; } // 지도에서 떨어졌으면 멈춘다
 +        [s padoRefreshOnce];
 +    }];
 +    _padoTrackTimer = timer;

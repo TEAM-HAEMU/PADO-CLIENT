@@ -63,10 +63,10 @@ describe('react-native-maps iOS Google 마커 패치', () => {
     expect(setter).not.toMatch(/_realMarker\.tracksViewChanges = tracksViewChanges/);
   });
 
-  it('0.1초 간격으로 찍고, 매 프레임은 말풍선(zIndex 10 이상)의 처음 0.25초만', () => {
+  it('0.1초 간격으로 찍고, 매 프레임은 말풍선(zIndex 1000 이상)의 처음 0.25초만', () => {
     expect(marker).toMatch(/PADO_TRACK_SLOW_S = 0\.1;/);
     expect(marker).toMatch(/PADO_TRACK_FULL_S = 0\.25;/);
-    expect(marker).toMatch(/PADO_TRACK_FULL_ZINDEX = 10;/);
+    expect(marker).toMatch(/PADO_TRACK_FULL_ZINDEX = 1000;/);
   });
 
   it('지도에서 뗄 때 곧바로 Google 마커를 지우지 않고, 같은 마운트 안에서 다시 붙으면 그대로 쓴다', () => {
