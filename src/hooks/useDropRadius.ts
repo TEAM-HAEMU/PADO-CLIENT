@@ -9,6 +9,7 @@ import { create } from 'zustand';
 import { settingsApi } from '@/api/endpoints';
 import type { DropRadius } from '@/api/types';
 import { useLocation } from '@/services/location';
+import { useStoreWhile } from '@/hooks/useStoreWhile';
 import { kv } from '@/store/storage';
 import { DEFAULT_RADIUS, needsCoords, nextAnchor, sanitizeRadius } from '@/utils/dropScope';
 import { readSig, scopeSig, scopeTip, type ScopeSig, type ScopeTipText } from '@/utils/scopeTip';
@@ -63,8 +64,9 @@ async function fetchRadius(at: Coords | null) {
 let anchor: Coords | null = null;
 const anchorOf = (c: Coords | null) => (anchor = nextAnchor(anchor, c));
 
-export function useDropRadius(): DropRadius {
-  const at = useLocation(s => anchorOf(s.coords));
+/** live: false면 기준 좌표가 바뀌어도 지난 값을 그대로 쓴다 (가려진 지도 화면 — useStoreWhile) */
+export function useDropRadius(live = true): DropRadius {
+  const at = useStoreWhile(useLocation, s => anchorOf(s.coords), live);
   const known = cachedRadius();
   // 보기·재생 모두 거리 기준이면 좌표가 결과를 바꾸지 않으니 위치가 바뀌어도 다시 묻지 않는다 (좌표는 있으면 같이 보낸다)
   const regionMode = needsCoords(known);

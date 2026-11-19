@@ -9,7 +9,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { useIsFocused } from '@react-navigation/native';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useShallow } from 'zustand/react/shallow';
+import { shallow } from 'zustand/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dropApi, regionApi } from '@/api/endpoints';
 import type { DropSummary, MusicDropSummary } from '@/api/types';
@@ -22,6 +22,8 @@ import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useDropLock } from '@/hooks/useDropLock';
+import { useScreenVisible } from '@/hooks/useScreenVisible';
+import { useStoreWhile } from '@/hooks/useStoreWhile';
 import { markScopeTipSeen, useDropRadius, useScopeTip } from '@/hooks/useDropRadius';
 import { ScopeTip } from '@/components/map/ScopeTip';
 import { SelectedDropBubble } from '@/components/map/DropBubble';
@@ -96,14 +98,19 @@ let mapLoadTracked = false;
 export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabParamList, 'Map'>) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, requestPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission })));
+  const focused = useIsFocused();
+  // 지도가 보이는가 — 다른 탭이나 위를 덮은 상세 화면 뒤에 있으면 GPS가 갱신돼도 이 화면을 다시 그리지 않는다(정렬·핀 고르기·카메라 따라가기·2분 폴링 모두 쉼).
+  // 위치 감시는 계속 돌고(드랍 만들기·푸시 지역 등이 쓴다), 다시 보이는 렌더에서 최신 위치를 한 번에 읽어 맞춘다.
+  // 투명 시트(핀 미리보기 등)가 위에 떠도 지도는 비쳐 보이므로 그대로 따라간다 (useScreenVisible). 포커스가 있으면 늘 보이는 것으로 친다
+  const visible = useScreenVisible();
+  const live = focused || visible;
+  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, requestPermission } = useStoreWhile(useLocation, s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission }), live, shallow);
   // 위치를 받기 전엔 지난번 위치 근처에 카메라를 둔다 (처음 켤 때 엉뚱한 동네가 먼저 보이지 않게)
   const startHint = useRef(lastKnown()).current; // 한 번만 읽는다 (매번 새 객체면 아래 정렬·자동 재생이 계속 다시 돈다)
   const here = coords ?? startHint ?? FALLBACK;
-  const nearby = useNearbyDrops(coords);
+  const nearby = useNearbyDrops(coords, live);
   const drops = useMemo(() => nearby.data ?? [], [nearby.data]);
   const [watchKey, setWatchKey] = useState(0);
-  const focused = useIsFocused();
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   useEffect(() => { const sub = AppState.addEventListener('change', st => setAppActive(st === 'active')); return () => sub.remove(); }, []);
   // 이 화면은 미리듣기 상태를 구독하지 않는다 — 재생이 시작·멈출 때마다(드랍을 고르는 순간 포함) 지도 화면 전체가 다시 그려지지 않게.
@@ -175,8 +182,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const prefetchDrop = useCallback((id: string) => qc.prefetchQuery({ queryKey: qk.drop(id), queryFn: () => dropApi.get(id), staleTime: 30_000 }), [qc]);
 
   // 재생 반경 밖(내 드랍·좋아요한 드랍 제외)은 잠금 — 핀은 흐리게 곡·커버 없이, 눌러도 안 열리고, 자동 재생에서도 뺀다
-  const lockOf = useDropLock();
-  const radius = useDropRadius();
+  const lockOf = useDropLock(live);
+  const radius = useDropRadius(live);
   const sorted = useMemo<NearbyItem[]>(() => drops.map(d => ({ d, m: distanceM(here, d), lock: lockOf(d) })).sort((a, b) => a.m - b.m), [drops, here, lockOf]);
   // 말풍선 닉네임용 상세도 하단 목록(가까운 NEARBY_LIST개 중 열린 것)만큼 미리 받는다 — 고른 뒤 닉네임이 늦게 와서 말풍선을 다시 만들지 않게
   // (지도 핀은 누르는 순간 받기 시작한다 — 말풍선은 카메라가 도착한 뒤에 뜨므로 그동안 대개 받는다)
@@ -223,7 +230,12 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     // 그사이 고르기를 풀었거나 다른 드랍을 골랐으면 그대로 둔다
     if (id && latestSel.current === id) setArrivedId(id);
   }, []);
+  // 가려진 지도가 보내는 영역 이벤트는 버린다 — 다른 화면이 덮은 동안 네이티브 지도가 엉뚱한 영역(크기가 틀어진 투영)을 보내
+  // 핀을 다시 고르고(마커 전부 다시 그림) 그 좌표로 지역 이름을 물었다 (2026-11-20 QA R-10). 돌아오면 내 위치로 다시 맞추며 새 영역이 온다
+  const liveRef = useRef(live);
+  liveRef.current = live;
   const onRegionChange = useCallback((r: Region, details?: { isGesture?: boolean }) => {
+    if (!liveRef.current) return;
     if (!movingRef.current) { movingRef.current = true; ripples.current?.hide(); }
     const auto = autoMove.current;
     // 앱이 옮기던 중에 사용자가 손으로 잡으면 그때부터는 보통 끌기처럼 (도착 표시는 손을 뗄 때)
@@ -234,9 +246,10 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   }, [drawAt]);
   const onRegionChangeComplete = useCallback((r: Region) => {
     movingRef.current = false;
+    if (autoMove.current) arrive(autoMove.current.arrive);
+    if (!liveRef.current) return;
     setView(r);
     drawAt(r);
-    if (autoMove.current) arrive(autoMove.current.arrive);
   }, [arrive, drawAt]);
   useEffect(() => () => clearTimeout(autoMove.current?.timer), []);
   /**

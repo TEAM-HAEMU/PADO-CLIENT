@@ -1,4 +1,5 @@
 /** React Query 훅 — 화면은 이 훅들만 쓴다 */
+import { useEffect, useRef } from 'react';
 import { keepPreviousData, skipToken, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { commentApi, dropApi, likeApi, notificationApi, playlistApi, safetyApi, songApi, userApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
@@ -28,14 +29,31 @@ export const qk = {
   me: ['me'] as const,
 };
 
+/** 주변 드랍을 다시 받는 간격 — 지도가 보이는 동안 이보다 오래된 목록을 보여 주지 않는다 */
+export const NEARBY_POLL_MS = 120_000;
+/** 다시 보이게 된 순간 목록을 새로 받아야 하는가 — 마지막으로 받은 지 NEARBY_POLL_MS가 지났거나 아직 못 받음 */
+export const nearbyDueOnReturn = (dataUpdatedAt: number, now: number) => !dataUpdatedAt || now - dataUpdatedAt >= NEARBY_POLL_MS;
+
 /**
  * 주변 드랍 — 범위는 서버가 운영자 보기 설정으로 고른다(가까운 순, 최대 500개).
- * 거리 모드는 표시 반경(km), 전국·같은 지역 모드는 넓은 값을 보낸다. 같은 지역 모드는 지역이 바뀌면 다시 받는다
+ * 거리 모드는 표시 반경(km), 전국·같은 지역 모드는 넓은 값을 보낸다. 같은 지역 모드는 지역이 바뀌면 다시 받는다.
+ * live: 지도가 보이는가 — 가려진 동안엔 2분마다 다시 받지 않고(앱이 앞으로 와도), 다시 보이는 순간 목록이 2분보다 오래됐으면 곧바로 한 번 받는다.
+ * (가려진 동안 위치가 다른 칸으로 바뀌었으면 돌아온 렌더에서 키가 바뀌어 어차피 새로 받는다 — 그 요청과 겹치지 않게 cancelRefetch: false)
  */
-export function useNearbyDrops(coords: Coords | null) {
-  const radius = useDropRadius();
+export function useNearbyDrops(coords: Coords | null, live = true) {
+  const radius = useDropRadius(live);
   const km = searchKm(radius);
-  return useQuery({ queryKey: [...qk.nearby(coords), km, radius.mode, radius.regionUnit, radius.region?.code ?? null], enabled: !!coords, queryFn: () => dropApi.nearby(coords!.latitude, coords!.longitude, km), refetchInterval: 120_000, placeholderData: keepPreviousData });
+  const qc = useQueryClient();
+  const queryKey = [...qk.nearby(coords), km, radius.mode, radius.regionUnit, radius.region?.code ?? null];
+  const q = useQuery({ queryKey, enabled: !!coords, queryFn: () => dropApi.nearby(coords!.latitude, coords!.longitude, km), refetchInterval: live ? NEARBY_POLL_MS : false, refetchOnWindowFocus: live, placeholderData: keepPreviousData });
+  const wasLive = useRef(live);
+  useEffect(() => {
+    const back = live && !wasLive.current;
+    wasLive.current = live;
+    // 받은 시각은 캐시에서 읽는다 — 결과의 dataUpdatedAt을 읽으면 같은 목록을 다시 받을 때마다 화면이 다시 그려진다(추적 속성)
+    if (back && coords && nearbyDueOnReturn(qc.getQueryState(queryKey)?.dataUpdatedAt ?? 0, Date.now())) q.refetch({ cancelRefetch: false });
+  }, [live]); // eslint-disable-line react-hooks/exhaustive-deps -- 다시 보이게 된 순간에만
+  return q;
 }
 
 export const useDrop = (id: UUID | undefined) => useQuery({ queryKey: qk.drop(id ?? ''), enabled: !!id, queryFn: () => dropApi.get(id!) });
