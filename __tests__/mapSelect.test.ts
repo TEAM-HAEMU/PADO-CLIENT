@@ -1,7 +1,7 @@
 /* 지도에서 드랍 고르기 — 도착 영역 · 이동 중 다시 고르기 생략 · 도착 뒤 핀 크기·말풍선 · 거리 없는 핀 문구 */
 import type { DropSummary } from '@/api/types';
 import { needsRepick } from '@/utils/mapPins';
-import { alreadyThere, focusMove, pinSubtitle, repickWhileMoving, selectionLook } from '@/utils/mapSelect';
+import { alreadyThere, focusMove, pinSubtitle, regionOfBounds, repickWhileMoving, selectionLook } from '@/utils/mapSelect';
 
 const view = { latitude: 35.1575, longitude: 129.0604, latitudeDelta: 0.018, longitudeDelta: 0.012 };
 const pin = { latitude: 35.17, longitude: 129.07 };
@@ -91,5 +91,25 @@ describe('pinSubtitle — 핀 문구에 거리를 넣지 않는다 (GPS 갱신�
   });
   test('어느 경우에도 거리(m·km)가 없다', () => {
     for (const d of [music, vote, playlist]) for (const locked of [false, true]) expect(pinSubtitle(d, locked)).not.toMatch(/\d+(\.\d+)?\s*(m|km)\b|바로 여기/);
+  });
+});
+
+describe('regionOfBounds — 지도에서 읽은 보이는 범위 → 영역 (가려졌다 돌아올 때 view 맞추기, QA R-10 후속)', () => {
+  it('가운데와 폭을 계산한다', () => {
+    const r = regionOfBounds({ northEast: { latitude: 35.1984, longitude: 128.9098 }, southWest: { latitude: 35.1770, longitude: 128.8978 } });
+    expect(r?.latitude).toBeCloseTo(35.1877);
+    expect(r?.longitude).toBeCloseTo(128.9038);
+    expect(r?.latitudeDelta).toBeCloseTo(0.0214);
+    expect(r?.longitudeDelta).toBeCloseTo(0.012);
+  });
+  it('날짜변경선을 넘으면 경도 폭에 360을 더하고 가운데를 -180~180으로', () => {
+    const r = regionOfBounds({ northEast: { latitude: 10, longitude: -170 }, southWest: { latitude: 0, longitude: 170 } });
+    expect(r?.longitudeDelta).toBeCloseTo(20);
+    expect(Math.abs(r!.longitude)).toBeCloseTo(180);
+  });
+  it('값이 비정상이면 null — 영역을 덮어쓰지 않는다', () => {
+    expect(regionOfBounds(null)).toBeNull();
+    expect(regionOfBounds({ northEast: { latitude: NaN, longitude: 1 }, southWest: { latitude: 0, longitude: 0 } })).toBeNull();
+    expect(regionOfBounds({ northEast: { latitude: 1, longitude: 1 }, southWest: { latitude: 1, longitude: 0 } })).toBeNull();
   });
 });

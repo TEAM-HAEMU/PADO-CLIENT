@@ -42,7 +42,7 @@ import type { TabParamList } from '@/navigation/types';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { formatAddress } from '@/utils/address';
 import type { RipplePin } from '@/utils/ambientMotion';
-import { alreadyThere, AUTO_MOVE_SLACK_MS, dropSub, focusMove, pinSubtitle, repickWhileMoving, selectionLook, type CameraMove } from '@/utils/mapSelect';
+import { alreadyThere, AUTO_MOVE_SLACK_MS, regionOfBounds, dropSub, focusMove, pinSubtitle, repickWhileMoving, selectionLook, type CameraMove } from '@/utils/mapSelect';
 import { clusterPoints, clusterZoomRegion, geocodeDue, idSetKey, needsRepick, pickPins, shouldCluster, singlePins, type GeocodeMark } from '@/utils/mapPins';
 
 export { dropSub };
@@ -250,6 +250,16 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     drawAt(r);
   }, [arrive, drawAt]);
   useEffect(() => () => clearTimeout(autoMove.current?.timer), []);
+  // 지도에서 지금 보이는 영역을 직접 읽어 view·그릴 핀을 맞춘다 — 가려진 동안 버린 영역 이벤트를 메우는 용도 (보일 때만)
+  const syncView = useCallback(() => {
+    if (!liveRef.current) return;
+    mapRef.current?.getMapBoundaries().then(b => {
+      const r = regionOfBounds(b);
+      if (!r || !liveRef.current || movingRef.current) return;
+      setView(r);
+      drawAt(r);
+    }).catch(() => {});
+  }, [drawAt]);
   /**
    * 앱이 카메라를 옮긴다 — 그릴 핀은 지금 고른 범위가 도착 영역을 못 덮을 때만 도착 영역으로 한 번 고르고, 움직이는 동안엔 다시 고르지 않는다.
    * (움직이는 중 200ms마다 다시 고르면 마커를 만들고 지우느라 이동이 끊긴다.) arriveId를 주면 도착한 뒤 그 드랍을 크게 그리고 말풍선을 띄운다
@@ -257,7 +267,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const moveCamera = (m: CameraMove, duration: number, arriveId: string | null = null) => {
     clearTimeout(autoMove.current?.timer);
     if (needsRepick(drawn.current.region, m.dest, drawn.current.clustered)) drawAt(m.dest);
-    autoMove.current = { until: Date.now() + duration + AUTO_MOVE_SLACK_MS, arrive: arriveId, timer: setTimeout(() => arrive(arriveId), duration + AUTO_MOVE_SLACK_MS) };
+    const move: NonNullable<typeof autoMove.current> = {
+      until: Date.now() + duration + AUTO_MOVE_SLACK_MS,
+      arrive: arriveId,
+      // 이동이 끝났다는 신호가 끝내 안 오면(이미 그 자리라 카메라가 움직이지 않음 등) 지도에서 지금 영역을 직접 읽어 맞춘다
+      timer: setTimeout(() => { if (autoMove.current === move) syncView(); arrive(arriveId); }, duration + AUTO_MOVE_SLACK_MS),
+    };
+    autoMove.current = move;
     if ('region' in m.camera) mapRef.current?.animateToRegion(m.camera.region, duration);
     else mapRef.current?.animateCamera({ center: m.camera.center }, { duration });
   };
@@ -440,6 +456,16 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   };
   // Android는 지도가 준비되기 전에 부른 카메라 이동을 무시한다 → 준비된 뒤에 처음 위치로 옮긴다
   const [mapReady, setMapReady] = useState(false);
+  // 가려졌다가 다시 보이면 지금 영역으로 한 번 맞춘다 — 가려진 채 마운트된 지도(드랍 완료 화면 아래)는 첫 영역 이벤트를 버려 view가 비어 있고,
+  // 돌아와 내 위치로 옮겨도 이미 그 자리면 카메라가 움직이지 않아 새 이벤트가 오지 않는다 (화면이 창에 붙을 틈을 두고 읽는다)
+  const wasLive = useRef(live);
+  useEffect(() => {
+    const back = live && !wasLive.current;
+    wasLive.current = live;
+    if (!back || !mapReady) return;
+    const t = setTimeout(syncView, 400);
+    return () => clearTimeout(t);
+  }, [live, mapReady, syncView]);
   useEffect(() => {
     if (!coords || !mapReady) return;
     if (!centered.current) {

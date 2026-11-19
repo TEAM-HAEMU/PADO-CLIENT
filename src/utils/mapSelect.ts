@@ -29,6 +29,24 @@ export function alreadyThere(view: MapRegion | null, target: Coords) {
   return Math.abs(view.latitude - target.latitude) <= view.latitudeDelta * 0.002 && Math.abs(view.longitude - target.longitude) <= view.longitudeDelta * 0.002;
 }
 
+/**
+ * 지도가 알려 준 보이는 범위(getMapBoundaries) → 영역. 값이 비정상이면(숫자가 아님·폭 0) null.
+ * 날짜변경선을 넘는 범위면 경도 폭에 360을 더한다 (네이티브 영역 계산과 같은 규칙)
+ */
+export function regionOfBounds(b: { northEast: Coords; southWest: Coords } | null | undefined): MapRegion | null {
+  if (!b) return null;
+  const { northEast: ne, southWest: sw } = b;
+  const nums = [ne.latitude, ne.longitude, sw.latitude, sw.longitude];
+  if (!nums.every(Number.isFinite)) return null;
+  const latitudeDelta = ne.latitude - sw.latitude;
+  const wraps = ne.longitude < sw.longitude;
+  const longitudeDelta = ne.longitude - sw.longitude + (wraps ? 360 : 0);
+  if (!(latitudeDelta > 0) || !(longitudeDelta > 0)) return null;
+  let longitude = (ne.longitude + sw.longitude + (wraps ? 360 : 0)) / 2;
+  if (longitude > 180) longitude -= 360;
+  return { latitude: (ne.latitude + sw.latitude) / 2, longitude, latitudeDelta, longitudeDelta };
+}
+
 /** 앱이 카메라를 옮길 때 이동 시간 뒤로 더 기다리는 여유 — 이 안에 이동이 끝났다는 신호가 오지 않아도 도착한 것으로 본다 */
 export const AUTO_MOVE_SLACK_MS = 300;
 
