@@ -96,7 +96,7 @@ let mapLoadTracked = false;
 export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabParamList, 'Map'>) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, requestPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission })));
+  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, askPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, askPermission: s.askPermission })));
   // 위치를 받기 전엔 지난번 위치 근처에 카메라를 둔다 (처음 켤 때 엉뚱한 동네가 먼저 보이지 않게)
   const startHint = useRef(lastKnown()).current; // 한 번만 읽는다 (매번 새 객체면 아래 정렬·자동 재생이 계속 다시 돈다)
   const here = coords ?? startHint ?? FALLBACK;
@@ -138,10 +138,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       if (Platform.OS === 'android') return Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS').catch(() => Linking.openSettings());
       return Linking.openSettings();
     }
-    const p = await refreshPermission();
-    if (p === 'granted') return setWatchKey(k => k + 1);
-    if ((await requestPermission()) === 'granted') return setWatchKey(k => k + 1);
-    Linking.openSettings();
+    // 권한 꺼짐 — 다시 물을 수 있으면 요청 창, iOS 거부·Android '다시 묻지 않음'이면 설정 앱 (허용되면 감시를 다시)
+    await askPermission();
   };
   const locationHelp =
     fix === 'locating' ? '지금 있는 곳을 찾고 있어요…'
