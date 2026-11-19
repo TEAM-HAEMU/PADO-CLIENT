@@ -103,6 +103,27 @@ describe('react-native-maps iOS Google 마커 패치', () => {
     expect(marker).toMatch(/PADO_TRACK_FULL_ZINDEX = 1000;/);
   });
 
+  /**
+   * 추적 중 0.1초마다 무조건 찍으면 확대·축소 때 묶음 숫자가 바뀐 묶음마다 3~4번, 묶음→핀 때 새 핀마다 5~6번씩 더 찍었다
+   * (찍을 때마다 drawViewHierarchy + Google 지도가 그림을 색 변환해 텍스처 아틀라스에 올림 — 메인 스레드) → 모습이 바뀌었을 때만 찍고, 바뀐 뒤 한 번 더
+   */
+  it('추적 중에는 모습(크기·글자·이미지)이 바뀌었을 때만 다시 찍고, 바뀐 뒤 한 번 더 찍어 굳힌다', () => {
+    const tracking = marker.slice(marker.indexOf('- (void)padoApplyTracking'), marker.indexOf('- (void)dealloc'));
+    expect(tracking).toMatch(/\[s padoRefreshIfChanged\];/);
+    expect(tracking).not.toMatch(/\[s padoRefreshOnce\];/);
+    expect(tracking).toMatch(/else \[self padoRefreshIfChanged\];/);
+    const hash = marker.slice(marker.indexOf('static void padoHashView'), marker.indexOf('- (NSUInteger)padoSignature'));
+    expect(hash).toMatch(/v\.frame/);
+    expect(hash).toMatch(/v\.layer\.contents/);
+    expect(hash).toMatch(/\(\(UIImageView \*\)v\)\.image/);
+    expect(hash).toMatch(/attributedText/);
+    const ifChanged = marker.slice(marker.indexOf('- (void)padoRefreshIfChanged'), marker.indexOf('- (void)padoRefreshOnce'));
+    expect(ifChanged).toMatch(/\[self padoSignature\] != _padoSnapSig/);
+    expect(ifChanged).toMatch(/if \(_padoSettled\) return;/);
+    const once = marker.slice(marker.indexOf('- (void)padoRefreshOnce'), marker.indexOf('- (void)padoApplyTracking'));
+    expect(once).toMatch(/_padoSnapSig = \[self padoSignature\];\s*_padoSettled = NO;/);
+  });
+
   it('지도에서 뗄 때 곧바로 Google 마커를 지우지 않고, 같은 마운트 안에서 다시 붙으면 그대로 쓴다', () => {
     const remove = map.slice(map.indexOf('- (void)removeReactSubview:'), map.indexOf('[self.markers removeObject:marker]'));
     expect(remove).toMatch(/\[marker padoRemoveFromMap\]/);
@@ -146,6 +167,59 @@ describe('react-native-maps 확대·축소 깜빡임 패치', () => {
     expect(remove).toMatch(/dispatch_after/);
     const insert = iosMarker.slice(iosMarker.indexOf('- (void) didInsertInMap:'), iosMarker.indexOf('- (void)iconViewInsertSubview:'));
     expect(insert).toMatch(/padoLastInsertAt = CACurrentMediaTime\(\);/);
-    expect(insert).toMatch(/\[self layoutSubviews\];\s*\[_realMarker setIconView:_iconView\];/);
+    expect(insert).toMatch(/\[self layoutSubviews\];\s*if \(!_padoKey\) \[_realMarker setIconView:_iconView\];/);
+  });
+});
+
+/**
+ * iOS 그림 모드 (identifier 'pado:<모습 키>' — 지도 홈 핀·묶음)
+ *  · Google 지도 iOS는 iconView 마커를 다시 찍을 때마다 그 마커를 1~2프레임 그리지 않아, 확대·축소·이동 중 핀·묶음이 0.05~0.1초씩 깜빡였다
+ *    → 마커 뷰를 패치가 직접 UIImage로 그려 키별로 캐시하고 GMSMarker.icon으로 쓴다. 묶음은 지름·숫자로 바로 그린다
+ *  · 그림이 없으면 지도에 붙이지 않는다(빈 아이콘이 화면에 나가지 않음) — 생기면 Google 지도 등장 페이드로 붙이고, 지울 때는 레이어 opacity 애니메이션 뒤 뗀다
+ *  · 보이는 마커의 그림이 바뀌면 같은 자리에 새 마커를 붙여 겹쳐 바꾼다(그림만 갈아 끼우면 1~2프레임 비었다)
+ */
+describe('react-native-maps iOS 그림 모드 패치', () => {
+  const marker = fs.readFileSync(path.resolve('node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m'), 'utf8');
+  const slice = (from: string, to: string) => {
+    const start = marker.indexOf(from);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = marker.indexOf(to, start + from.length);
+    expect(end).toBeGreaterThan(start);
+    return marker.slice(start, end);
+  };
+
+  it("identifier가 'pado:'로 시작하면 그 뒤를 모습 키로 쓴다", () => {
+    const set = slice('- (void)setIdentifier:', '- (NSString *)identifier');
+    expect(set).toMatch(/hasPrefix:PADO_KEY_PREFIX/);
+    expect(marker).toMatch(/PADO_KEY_PREFIX = @"pado:"/);
+  });
+
+  it('그림 모드는 iconView를 Google 지도에 넘기지 않고, 그림이 생기기 전에는 지도에 붙이지 않는다', () => {
+    const insert = slice('- (void) didInsertInMap:', '- (void)iconViewInsertSubview:');
+    expect(insert).toMatch(/if \(!_padoKey\) \[_realMarker setIconView:_iconView\];/);
+    expect(insert).toMatch(/if \(padoCached\) \[self padoShowIcon:padoCached\];\s*else if \(!_padoKey\) \[_realMarker setMap:map\];/);
+    const show = slice('- (void)padoShowIcon:', '- (void)padoApplyTracking');
+    expect(show).toMatch(/_realMarker\.appearAnimation = kGMSMarkerAnimationFadeIn;/);
+    expect(show).toMatch(/_realMarker\.map = _padoPendingMap;/);
+  });
+
+  it('보이는 마커의 그림이 바뀌면 새 마커를 겹쳐 붙이고 옛 마커는 페이드아웃 뒤 뗀다', () => {
+    const show = slice('- (void)padoShowIcon:', '- (void)padoApplyTracking');
+    expect(show).toMatch(/padoFadeOut\(old\);/);
+    expect(show).toMatch(/\[self didInsertInMap:\(AIRGoogleMap \*\)old\.map\];/);
+    expect(marker).toMatch(/animationWithKeyPath:kGMSMarkerLayerOpacity/);
+  });
+
+  it('핀 그림은 아트까지 다 들어왔고 0.1초 간격 두 번이 똑같을 때만 캐시하고, 묶음은 지름·숫자로 바로 그린다', () => {
+    const update = slice('- (void)padoUpdateIcon {', '- (void)padoShowIcon:');
+    expect(update).toMatch(/padoImagesLoaded\(_iconView\)/);
+    expect(update).toMatch(/padoSameImage\(_padoLastRender, img\)/);
+    expect(marker).toMatch(/static UIImage \*padoClusterImage\(NSString \*key\)/);
+    expect(marker).toMatch(/\[key hasPrefix:@"c\|"\]/);
+  });
+
+  it('지울 때 그림 모드 마커는 곧바로 떼지 않고 페이드아웃한다', () => {
+    const remove = slice('- (void)padoRemoveFromMap', '- (NSUInteger)padoSignature');
+    expect(remove).toMatch(/padoFadeOut\(old\);/);
   });
 });

@@ -2,7 +2,7 @@
  * 지도 마커 — 드랍 핀 하나 · 많이 축소했을 때의 묶음 · 내 위치.
  * props는 원시값만 받고 memo로 감싼다 → GPS가 갱신돼 지도 화면이 다시 렌더돼도 바뀐 핀만 다시 그린다.
  * 마커 스냅샷 추적(tracksViewChanges)은 마커마다 — 처음 그릴 때, 자기 앨범 아트가 로드될 때, 모양이 바뀔 때만 잠깐 켠다
- * (Google 지도는 추적을 끄면 그 순간 모습으로 굳고, 켜 두면 계속 다시 찍어 비싸다. iOS는 패치로 켜질 때 한 번 + 0.1초마다 찍는다 —
+ * (Google 지도는 추적을 끄면 그 순간 모습으로 굳고, 켜 두면 계속 다시 찍어 비싸다. iOS는 패치로 켜질 때 한 번 + 추적 중 0.1초마다 모습(크기·글자·이미지)이 바뀌었을 때만 찍는다 —
  * Android는 패치로 레이아웃이 끝난 뒤 한 번 + 추적을 켠 채 붙었으면 150ms 뒤 한 번, 그 뒤로는 바뀐 게 있을 때만 찍는다 — patches/react-native-maps).
  * 핀 물결 애니메이션은 마커 밖 PinRipples가 그려서, 지도가 멈춰 있으면 추적은 꺼져 있다.
  * 고른 핀의 zIndex가 바뀌거나 걸어서 거리순이 바뀌면 Fabric이 마커 ~100개를 떼었다 붙인다 — iOS·Android 모두 패치로 같은 마운트 안에서 다시 붙는 마커는 있던 Google 마커를 그대로 쓴다.
@@ -39,7 +39,7 @@ const ANCHOR = {
 const ME_ANCHOR = { x: 0.5, y: 0.5 };
 /**
  * 처음 스냅샷 추적 시간(ms). 축소·확대로 핀·묶음 수십 개가 한꺼번에 생길 때 그 뒤 몇 초씩 계속 다시 찍지 않게 짧게.
- *  · iOS(추적 중 0.1초마다 찍음): 잠긴 핀·묶음은 그림이 없어 첫 모습만 — 0.3초. 아트 핀은 디스크의 52pt 그림을 디코딩해 그릴 동안 — 0.5초.
+ *  · iOS(추적 중 0.1초마다 바뀐 게 있으면 찍음 — 바뀐 뒤 한 번 더): 잠긴 핀·묶음은 그림이 없어 첫 모습만 — 0.3초. 아트 핀은 디스크의 52pt 그림을 디코딩해 그릴 동안 — 0.5초.
  *    늦게 도착한 아트는 이미지 onLoadEnd → trackFor(TRACK.image)로 받는다.
  *  · Android: 잠긴 핀·묶음은 추적을 켜지 않는다 — 붙은 뒤 한 번 찍은 그림으로 끝(패치). 아트 핀은 추적을 켠 채 붙어 150ms 뒤 한 번 더 찍는다
  *    (마커 안 SVG 이미지는 처음 그릴 때 디스크에서 받기 시작해 그다음 그릴 때 나온다. 로드 이벤트는 JS로 오지 않는다 — image는 쓰이지 않아 0)
@@ -67,6 +67,14 @@ export function useTracking(initialMs: number) {
   }, [initialMs]);
   return [on, trackFor] as const;
 }
+
+/**
+ * iOS 마커 그림 키 — 모습이 같으면 같은 키 (종류·잠김·크게·아트 주소·플리 곡 수). 'pado:'로 시작하면 iOS 지도 패치가
+ * 마커 뷰를 직접 그림으로 그려 키별로 캐시하고 GMSMarker.icon으로 쓴다 — 그림이 준비될 때까지 투명, 준비되면 페이드인, 지울 때 페이드아웃.
+ * (Google 지도 iOS는 iconView 마커를 다시 찍을 때마다 그 마커를 1~2프레임 그리지 않아 핀·묶음이 깜빡였다.) Android는 identifier를 이벤트 id로만 쓴다.
+ */
+export const pinIconKey = (type: DropType, locked: boolean, active: boolean, url: string | null | undefined, count?: number) =>
+  `pado:p|${type}|${locked ? 1 : 0}|${active ? 1 : 0}|${url ?? ''}|${type === 'PLAYLIST' && !locked ? count ?? '' : ''}`;
 
 interface DropMarkerProps {
   id: string;
@@ -117,6 +125,7 @@ export const DropMarker = memo(function DropMarkerItem({ id, latitude, longitude
   return (
     <Marker
       key={epoch}
+      identifier={pinIconKey(type, locked, active, url, count)}
       coordinate={coordinate}
       anchor={active ? ANCHOR.active : ANCHOR.normal}
       tracksViewChanges={tracking}
@@ -152,10 +161,10 @@ export const ClusterMarker = memo(function ClusterMarkerItem({ id, latitude, lon
   const coordinate = useMemo(() => ({ latitude, longitude }), [latitude, longitude]);
   const size = clusterSize(count);
   return (
-    <Marker coordinate={coordinate} anchor={CLUSTER_ANCHOR} tracksViewChanges={tracking} zIndex={2} onPress={press}>
+    <Marker identifier={`pado:c|${size}|${clusterLabel(count)}`} coordinate={coordinate} anchor={CLUSTER_ANCHOR} tracksViewChanges={tracking} zIndex={2} onPress={press}>
       {/* Android는 숫자가 바뀌면 안쪽 뷰를 새로 붙여 그 자리에서 다시 찍는다 — 묶음 키가 줌 단계와 무관해져(clusterPoints) 같은 마커가 위치·숫자만 바뀌는 일이 잦은데,
           크기가 그대로인 채 글자만 바뀌면 다시 찍을 계기가 없을 수 있어 추적을 끌 때(TRACK.change)까지 옛 숫자가 남지 않게.
-          iOS는 하지 않는다 — 안쪽 뷰를 바꾸면 다음 런루프에 다시 찍기 전까지 빈 마커로 찍혀 깜빡였다. iOS는 추적(0.1초마다 찍기)으로 숫자를 잡는다 */}
+          iOS는 하지 않는다 — 안쪽 뷰를 바꾸면 다음 런루프에 다시 찍기 전까지 빈 마커로 찍혀 깜빡였다. iOS는 이 뷰를 찍지 않는다 — identifier(지름·숫자)로 지도 패치가 묶음 그림을 직접 그려 캐시해 쓴다(그림 모드, pinIconKey 설명) */}
       <View key={Platform.OS === 'android' ? count : undefined} style={{ padding: CLUSTER_PAD }} accessible accessibilityRole="button" accessibilityLabel={`드랍 ${count}개, 눌러서 펼치기`}>
         <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 3, borderColor: colors.page, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: dropShadow.shadowColor, shadowOpacity: 0.18, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 3 }}>
           <Text allowFontScaling={false} style={{ fontFamily: fonts.bold, fontSize: 13, lineHeight: 16, color: colors.page }}>{clusterLabel(count)}</Text>

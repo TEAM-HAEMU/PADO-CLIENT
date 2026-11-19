@@ -99,6 +99,7 @@ export function DropPin({ type, art, active, title, subtitle, count, onImageLoad
  * 지도 마커 안 앨범 아트 (4장 이상이면 2×2 콜라주).
  * Android 마커는 뷰를 비트맵으로 찍어 쓰는데, 일반 Image는 화면에 붙지 않은 마커 안에서 끝내 그려지지 않아 빈 칸으로 굳는다
  * → Android는 자기 캔버스에 직접 그리는 SVG 이미지로 그린다 (모서리는 clipPath)
+ * 아트를 아직 못 받은 동안은 흰 칸 대신 연한 회색(card2) 자리 — 처음 보는 핀은 받는 동안(실서버 조건 시뮬레이터 약 0.3초, 느린 망이면 더) 비어 보인다
  */
 /** MarkerArt가 그릴 칸 — 4장 이상이면 2×2, 아니면 첫 장 하나. url은 실제로 받는 주소(칸 크기에 맞춘 판본) */
 export function markerArtTiles(images: readonly (string | null | undefined)[], size: number) {
@@ -115,12 +116,13 @@ export function MarkerArt({ images, size, radius, onLoad }: { images: (string | 
     return (
       <Svg width={size} height={size}>
         <Defs><ClipPath id="art"><Rect width={size} height={size} rx={radius} ry={radius} /></ClipPath></Defs>
+        <Rect width={size} height={size} rx={radius} ry={radius} fill={colors.card2} />
         {tiles.map((u, i) => <SvgImage key={i} href={{ uri: artUrl(u, h)! }} {...at(i)} width={h} height={h} preserveAspectRatio="xMidYMid slice" clipPath="url(#art)" onLoad={onLoad} />)}
       </Svg>
     );
   }
   return (
-    <View style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap' }}>
+    <View style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap', backgroundColor: colors.card2 }}>
       {tiles.map((u, i) => <Image key={i} source={{ uri: artUrl(u, h)! }} onLoadEnd={onLoad} style={{ width: h, height: h, borderRadius: tiles.length === 4 ? 0 : radius }} />)}
     </View>
   );
