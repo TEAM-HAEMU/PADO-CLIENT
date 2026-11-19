@@ -435,10 +435,10 @@ index 82a78e2..7f39fd5 100644
  
  #endif
 diff --git a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
-index d729954..47ce8e3 100644
+index d729954..1e4b35c 100644
 --- a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
 +++ b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
-@@ -17,6 +17,171 @@
+@@ -17,6 +17,173 @@
  #import "AIRGoogleMapCallout.h"
  #import "AIRDummyView.h"
  
@@ -584,10 +584,12 @@ index d729954..47ce8e3 100644
 +    format.opaque = NO;
 +    format.preferredRange = UIGraphicsImageRendererFormatRangeStandard; // 8비트 sRGB — 지도가 텍스처로 올릴 때 색 변환을 덜 한다
 +    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:size format:format];
-+    return [renderer imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
-+        // Google 지도가 iconView를 찍는 것과 같은 방법 (창 안 화면 밖 자리에 붙어 있어야 글자·이미지가 나온다 — renderInContext는 빠뜨렸다)
-+        if (![view drawViewHierarchyInRect:view.bounds afterScreenUpdates:NO]) [view.layer renderInContext:ctx.CGContext];
++    __block BOOL drawn = NO;
++    UIImage *img = [renderer imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
++        // Google 지도가 iconView를 찍는 것과 같은 방법 (창 안 화면 밖 자리에 붙어 있어야 글자·이미지가 나온다)
++        drawn = [view drawViewHierarchyInRect:view.bounds afterScreenUpdates:NO];
 +    }];
++    return drawn ? img : nil; // 실패하면(창 밖 등) 쓰지 않는다 — renderInContext로 대신 그리면 아트·글자가 빠졌다
 +}
 +
 +/*
@@ -610,7 +612,7 @@ index d729954..47ce8e3 100644
  CGRect unionRect(CGRect a, CGRect b) {
      return CGRectMake(
                        MIN(a.origin.x, b.origin.x),
-@@ -47,6 +212,24 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -47,6 +214,24 @@ CGRect unionRect(CGRect a, CGRect b) {
      NSString* _identifier;
      NSString* _title;
      NSString* _subtitle;
@@ -635,7 +637,7 @@ index d729954..47ce8e3 100644
  
  }
  
-@@ -93,14 +276,27 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -93,14 +278,27 @@ CGRect unionRect(CGRect a, CGRect b) {
  
  - (void) didInsertInMap:(AIRGoogleMap *) map
  {
@@ -665,7 +667,7 @@ index d729954..47ce8e3 100644
      }
      if (_rotation != 0){
          [_realMarker setRotation:_rotation];
-@@ -145,17 +341,35 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -145,17 +343,35 @@ CGRect unionRect(CGRect a, CGRect b) {
      if (_zIndex){
          [_realMarker setZIndex:_zIndex];
      }
@@ -703,7 +705,7 @@ index d729954..47ce8e3 100644
  }
  
  - (void)insertReactSubview:(id<RCTComponent>)subview atIndex:(NSInteger)atIndex {
-@@ -305,6 +519,14 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -305,6 +521,14 @@ CGRect unionRect(CGRect a, CGRect b) {
  - (void)setIdentifier:(NSString *)identifier {
      _realMarker.identifier = identifier;
      _identifier = identifier;
@@ -718,7 +720,7 @@ index d729954..47ce8e3 100644
  }
  
  - (NSString *)identifier {
-@@ -340,7 +562,7 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -340,7 +564,7 @@ CGRect unionRect(CGRect a, CGRect b) {
  
  - (void)setOpacity:(double)opacity
  {
@@ -727,7 +729,7 @@ index d729954..47ce8e3 100644
      _opacity = opacity;
  }
  
-@@ -501,7 +723,7 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -501,7 +725,7 @@ CGRect unionRect(CGRect a, CGRect b) {
  }
  
  - (void)setTappable:(BOOL)tappable {
@@ -736,7 +738,7 @@ index d729954..47ce8e3 100644
      _tappable = tappable;
  }
  
-@@ -519,12 +741,250 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -519,12 +743,252 @@ CGRect unionRect(CGRect a, CGRect b) {
  }
  
  - (void)setTracksViewChanges:(BOOL)tracksViewChanges {
@@ -906,6 +908,8 @@ index d729954..47ce8e3 100644
 +    if (!onMap) return;
 +    UIView *host = padoIconHost(onMap);
 +    if (_iconView.superview != host) { [host addSubview:_iconView]; [self layoutSubviews]; [self padoUpdateIconAfterCommit]; return; } // 창에 붙어 한 번 그려진 뒤에 그린다
++    // 지도가 창에 없으면(다른 화면이 덮은 동안 등) 그리지 않고 기다린다 — 창 밖에서 그리면 아트·글자가 빠진 그림이 나와 그대로 캐시됐다
++    if (!_iconView.window) return;
 +    [self layoutSubviews];
 +    BOOL complete = padoImagesLoaded(_iconView);
 +    // 아트를 오래 못 받으면 받는 중 모습으로라도 보인다 (이미 보이는 그림이 있으면 그대로 둔다)

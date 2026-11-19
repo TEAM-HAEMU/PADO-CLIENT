@@ -218,6 +218,21 @@ describe('react-native-maps iOS 그림 모드 패치', () => {
     expect(marker).toMatch(/\[key hasPrefix:@"c\|"\]/);
   });
 
+  /**
+   * 회귀(#40 첫 판): 지도가 창에 없을 때(앱 시작 직후 다른 화면이 덮은 동안) 그리면 drawViewHierarchy가 실패해 아트·글자가 빠진 그림이 나왔고,
+   * 아트가 다 들어왔다고 보고 그 그림을 캐시해 핀이 끝까지 흰·회색 자리로 남았다 → 창에 붙어 있을 때만 그리고, 실패한 그림은 쓰지 않는다
+   */
+  it('마커 뷰가 창에 없으면 그리지 않고, drawViewHierarchy가 실패한 그림은 쓰지 않는다', () => {
+    const update = slice('- (void)padoUpdateIcon {', '- (void)padoShowIcon:');
+    const guard = update.indexOf('if (!_iconView.window) return;');
+    expect(guard).toBeGreaterThan(0);
+    expect(guard).toBeLessThan(update.indexOf('padoRenderView(_iconView)'));
+    const render = slice('static UIImage *padoRenderView(UIView *view) {', '\n}\n');
+    expect(render).toMatch(/drawn = \[view drawViewHierarchyInRect:view\.bounds afterScreenUpdates:NO\];/);
+    expect(render).toMatch(/return drawn \? img : nil;/);
+    expect(render).not.toMatch(/\[view\.layer renderInContext/);
+  });
+
   it('지울 때 그림 모드 마커는 곧바로 떼지 않고 페이드아웃한다', () => {
     const remove = slice('- (void)padoRemoveFromMap', '- (NSUInteger)padoSignature');
     expect(remove).toMatch(/padoFadeOut\(old\);/);
