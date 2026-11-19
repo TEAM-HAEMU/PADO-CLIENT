@@ -4,7 +4,7 @@
 import { api, request } from './client';
 import type {
   AppNotification, BlockedUser, Comment, CreateDropBody, DropDetail, DropSummary, LikedDrop, MyProfile,
-  PlaylistDetail, PlaylistSummary, PushPlatform, PushSettings, RegisterBody, ReportReason, ReportTarget, SocialLoginBody, SocialLoginResponse, SocialProvider,
+  PlaylistDetail, PlaylistSummary, PushPlatform, PushSettings, PushSettingsResponse, RegisterBody, ReportReason, ReportTarget, SocialLoginBody, SocialLoginResponse, SocialProvider,
   SocialSignupBody, Song, Term, TokenPair, UpdateProfileBody, UserAgreement, UUID,
 } from './types';
 import { env } from '@/config';
@@ -113,9 +113,9 @@ export const pushApi = {
   registerToken: (token: string, platform: PushPlatform, appVersion: string) => api.put('/push/tokens', { token, platform, appVersion }),
   /** 로그아웃 직전 — 없어도 204. accessToken: 로그아웃 순간에 잡아 둔 로그인 토큰 (그 사이 비워져도 이 토큰으로) */
   deleteToken: (token: string, accessToken?: string) => request('DELETE', '/push/tokens', { body: { token }, accessToken }),
-  settings: () => api.get<PushSettings>('/push/settings'),
+  settings: () => api.get<PushSettingsResponse>('/push/settings'),
   /** 일부만 보내도 된다. 바뀐 전체 값이 돌아온다 */
-  updateSettings: (patch: Partial<PushSettings>) => api.put<PushSettings>('/push/settings', patch),
+  updateSettings: (patch: Partial<PushSettings>) => api.put<PushSettingsResponse>('/push/settings', patch),
   /** 주변 새 드랍 — 서버가 행정동 코드만 남기고 좌표는 버린다 (nearby가 꺼져 있으면 저장 안 함) */
   region: (latitude: number, longitude: number) => api.put('/push/region', { latitude: Number(latitude.toFixed(4)), longitude: Number(longitude.toFixed(4)) }),
 };

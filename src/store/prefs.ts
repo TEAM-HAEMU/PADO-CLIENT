@@ -47,7 +47,7 @@ interface Prefs {
 }
 
 /** 알림 설정 기본값 — 서버 기본값과 같게 (로그아웃하면 이 값으로 되돌린다) */
-export const NOTIFY_DEFAULTS: PushSettings = { like: true, comment: true, nearby: false, notice: true };
+export const NOTIFY_DEFAULTS: PushSettings = { like: true, comment: true, nearby: false, notice: true, marketing: false };
 
 const saved = kv.get<Partial<Prefs> & SavedAnalyticsPrefs>('prefs', {});
 
@@ -68,7 +68,7 @@ export const usePrefs = create<Prefs>((set, get) => {
     service: saved.service ?? null,
     rememberService: saved.rememberService ?? true,
     autoplayNearby: saved.autoplayNearby ?? true,
-    // 서버 기본값과 같게 (공지는 예전 저장값에 없음)
+    // 서버 기본값과 같게 (공지·혜택·소식은 예전 저장값에 없음)
     notify: { ...NOTIFY_DEFAULTS, ...saved.notify },
     locationPrompted: saved.locationPrompted ?? false,
     pushPromptPending: saved.pushPromptPending ?? false,

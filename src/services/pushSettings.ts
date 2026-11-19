@@ -4,17 +4,21 @@
  *  - 같은 토글을 빠르게 여러 번 누르면 마지막 요청의 결과만 반영한다 (늦게 온 이전 응답·실패가 새 값을 덮지 않게)
  *  - 서버 응답(전체 값)은 요청 중인 토글을 빼고 맞춘다
  *  - 주변 새 드랍을 켜면 서버가 켜짐을 저장한 뒤에 지금 위치를 보낸다 (꺼져 있을 때 보낸 위치는 서버가 버림)
+ *  - 혜택·소식(marketing): 바꾼 뒤 서버 응답의 marketingUpdatedAt으로 처리 결과를 알린다 (화면이 utils/marketingConsent 문구로 토스트)
  */
 import { pushApi } from '@/api/endpoints';
-import type { PushSettings } from '@/api/types';
+import { errorMessage } from '@/api/errors';
+import type { PushSettings, PushSettingsResponse } from '@/api/types';
 import { usePrefs } from '@/store/prefs';
+import { toast } from '@/store/toast';
+import { marketingResultText } from '@/utils/marketingConsent';
 
 export type PushSettingKey = keyof PushSettings;
-const KEYS: PushSettingKey[] = ['like', 'comment', 'nearby', 'notice'];
+const KEYS: PushSettingKey[] = ['like', 'comment', 'nearby', 'notice', 'marketing'];
 
 /** 토글마다 마지막 요청 번호 — 요청 중이면 서버 응답으로 덮지 않는다 */
-const seq: Record<PushSettingKey, number> = { like: 0, comment: 0, nearby: 0, notice: 0 };
-const pending: Record<PushSettingKey, number> = { like: 0, comment: 0, nearby: 0, notice: 0 };
+const seq: Record<PushSettingKey, number> = { like: 0, comment: 0, nearby: 0, notice: 0, marketing: 0 };
+const pending: Record<PushSettingKey, number> = { like: 0, comment: 0, nearby: 0, notice: 0, marketing: 0 };
 /** 연달아 누르는 동안 서버가 마지막으로 확인한 값 — 마지막 요청이 실패하면 이 값으로 되돌린다 */
 const confirmed: Partial<Record<PushSettingKey, boolean>> = {};
 
@@ -40,15 +44,19 @@ export async function loadPushSettings(): Promise<PushSettings> {
   return usePrefs.getState().notify;
 }
 
-/** 토글 하나 바꾸기. 실패하면 그 토글을 되돌리고 오류를 던진다 (화면이 토스트) — 더 새 요청이 있으면 조용히 끝남 */
-export async function changePushSetting(key: PushSettingKey, value: boolean): Promise<void> {
+/**
+ * 토글 하나 바꾸기. 실패하면 그 토글을 되돌리고 오류를 던진다 (화면이 토스트).
+ * 이 요청이 마지막 요청으로 저장되면 서버 응답(전체 값 + marketingUpdatedAt)을 돌려준다.
+ * 이미 같은 값이었거나 더 새 요청이 있으면 undefined (그 요청이 마무리한다 — 처리 결과도 그쪽이 알린다)
+ */
+export async function changePushSetting(key: PushSettingKey, value: boolean): Promise<PushSettingsResponse | undefined> {
   const prev = usePrefs.getState().notify[key];
-  if (prev === value && pending[key] === 0) return;
+  if (prev === value && pending[key] === 0) return undefined;
   const my = ++seq[key];
   if (pending[key] === 0) confirmed[key] = prev;
   pending[key]++;
   usePrefs.getState().setNotify(key, value);
-  let res: PushSettings | undefined;
+  let res: PushSettingsResponse | undefined;
   let error: unknown;
   try {
     res = await pushApi.updateSettings({ [key]: value });
@@ -58,7 +66,7 @@ export async function changePushSetting(key: PushSettingKey, value: boolean): Pr
   } finally {
     pending[key]--;
   }
-  if (my !== seq[key]) return; // 그사이 같은 토글을 또 눌렀다 — 그 요청이 마무리한다
+  if (my !== seq[key]) return undefined; // 그사이 같은 토글을 또 눌렀다 — 그 요청이 마무리한다
   if (error) {
     usePrefs.getState().applyNotify({ [key]: confirmed[key] ?? prev });
     throw error;
@@ -67,4 +75,29 @@ export async function changePushSetting(key: PushSettingKey, value: boolean): Pr
   if (res && typeof res[key] === 'boolean') usePrefs.getState().applyNotify({ [key]: res[key] });
   applyServer(res);
   if (key === 'nearby' && (res?.nearby ?? value) === value) onNearbyChanged?.(value);
+  return res ?? { ...usePrefs.getState().notify };
+}
+
+const NOT_READY = '지금은 바꿀 수 없어요. 잠시 뒤 다시 해 주세요.';
+
+/**
+ * 혜택·소식(광고성) 알림 동의·철회 — 설정 › 알림 토글과 가입 직후 알림 안내의 체크가 함께 쓴다.
+ * 저장되면 서버의 marketingUpdatedAt 날짜로 처리 결과를 토스트로 알린다 (법이 요구하는 처리 결과 통지). 실패하면 되돌리고 오류 토스트
+ */
+export async function changeMarketingConsent(value: boolean): Promise<boolean> {
+  try {
+    const res = await changePushSetting('marketing', value);
+    if (!res) return true;
+    // 서버가 아직 이 값을 모르면(배포 전) 저장되지 않은 것 — 동의했다고 알리지 않고 되돌린다
+    if (typeof res.marketing !== 'boolean') {
+      usePrefs.getState().applyNotify({ marketing: false });
+      toast(NOT_READY, 'error');
+      return false;
+    }
+    toast(marketingResultText(res.marketing, res.marketingUpdatedAt), 'success');
+    return true;
+  } catch (e) {
+    toast(errorMessage(e), 'error');
+    return false;
+  }
 }

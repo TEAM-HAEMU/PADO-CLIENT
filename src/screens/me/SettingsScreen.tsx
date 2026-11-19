@@ -20,7 +20,7 @@ import { SERVICES } from '@/services/musicLinks';
 import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
 import { openNotificationSettings, usePush } from '@/services/push';
-import { changePushSetting, loadPushSettings, type PushSettingKey } from '@/services/pushSettings';
+import { changeMarketingConsent, changePushSetting, loadPushSettings, type PushSettingKey } from '@/services/pushSettings';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 
@@ -65,6 +65,8 @@ const PlayRow = ({ glyph, title, sub, right, onPress, last }: { glyph: MeGlyphNa
     {right}
   </Press>
 );
+/** 혜택·소식 알림 설명 — 계약 문구 그대로 (handoff/push-marketing-contract.md) */
+const MARKETING_SUB = '이벤트·새 기능 소식을 보내요. 밤 9시~아침 8시엔 보내지 않아요.';
 /** Figma 약관·로그아웃 바탕색 (연보라) */
 const LAVENDER = '#6F94FF';
 
@@ -159,7 +161,9 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
           <Row glyph="like" tint={colors.like} title="좋아요" sub="내 드랍을 누가 좋아하면" right={<Toggle label="좋아요 알림" value={prefs.notify.like} onChange={v => setPush('like', v)} />} />
           <Row glyph="comment" tint="#8DF2CB" title="댓글" sub="내 드랍에 댓글이 달리면" right={<Toggle label="댓글 알림" value={prefs.notify.comment} onChange={v => setPush('comment', v)} />} />
           <Row glyph="nearby" tint="#4BD0FF" title="주변 새 드랍" sub="마지막으로 앱을 쓴 동네에 새 드랍이 생기면" right={<Toggle label="주변 새 드랍 알림" value={prefs.notify.nearby} onChange={v => setPush('nearby', v)} />} />
-          <Row glyph="bell" tint={LAVENDER} glyphColor={LAVENDER} title="공지" sub="서비스 안내와 새 소식" right={<Toggle label="공지 알림" value={prefs.notify.notice} onChange={v => setPush('notice', v)} />} />
+          <Row glyph="bell" tint={LAVENDER} glyphColor={LAVENDER} title="공지" sub="서비스 안내" right={<Toggle label="공지 알림" value={prefs.notify.notice} onChange={v => setPush('notice', v)} />} />
+          {/* 혜택·소식(광고성) — 선택, 기본 꺼짐. 바꾸면 서버가 저장한 날짜로 처리 결과를 알린다 (정보통신망법 처리 결과 통지) */}
+          <Row glyph="bell" tint={colors.warning} glyphColor={colors.warning} title="혜택·소식" sub={MARKETING_SUB} right={<Toggle label="혜택·소식 알림" value={prefs.notify.marketing} onChange={v => { changeMarketingConsent(v); }} />} />
           <Row glyph="mail" tint={colors.warning} title="마케팅 정보 수신" sub="이벤트·새 기능 소식" last right={<Toggle label="마케팅 정보 수신" value={marketing} onChange={setMarketing} />} />
         </Group>
 

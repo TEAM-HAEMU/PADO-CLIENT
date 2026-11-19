@@ -79,7 +79,7 @@ test('토큰 재발급은 같은 사용자 — 사용자 정보를 다시 부르
 
 test('로그아웃하면 알림 설정을 기본값으로 되돌린다 (다음 사용자에게 이전 값이 보이지 않게)', async () => {
   setBeforeSignOut(jest.fn(async () => undefined));
-  usePrefs.getState().applyNotify({ like: false, comment: false, nearby: true, notice: false });
+  usePrefs.getState().applyNotify({ like: false, comment: false, nearby: true, notice: false, marketing: true });
   await useAuth.getState().signOut();
-  expect(usePrefs.getState().notify).toEqual({ like: true, comment: true, nearby: false, notice: true });
+  expect(usePrefs.getState().notify).toEqual({ like: true, comment: true, nearby: false, notice: true, marketing: false });
 });

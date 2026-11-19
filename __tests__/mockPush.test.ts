@@ -18,11 +18,21 @@ test('로그인이 필요하다', () => {
 });
 
 test('설정: 기본값 → 일부만 바꿔도 전체 값을 돌려준다, 잘못된 값은 400 S1', () => {
-  expect(json(call('GET', '/push/settings'))).toEqual({ like: true, comment: true, nearby: false, notice: true });
-  expect(json(call('PUT', '/push/settings', { notice: false }))).toEqual({ like: true, comment: true, nearby: false, notice: false });
+  expect(json(call('GET', '/push/settings'))).toEqual({ like: true, comment: true, nearby: false, notice: true, marketing: false, marketingUpdatedAt: null });
+  expect(json(call('PUT', '/push/settings', { notice: false }))).toEqual({ like: true, comment: true, nearby: false, notice: false, marketing: false, marketingUpdatedAt: null });
   const bad = call('PUT', '/push/settings', { like: 'yes' });
   expect(bad?.status).toBe(400);
   expect(json(bad).code).toBe('S1');
+});
+
+test('혜택·소식: 값이 실제로 바뀔 때만 marketingUpdatedAt을 바꾼다', () => {
+  const on = json(call('PUT', '/push/settings', { marketing: true }));
+  expect(on.marketing).toBe(true);
+  expect(typeof on.marketingUpdatedAt).toBe('string');
+  const again = json(call('PUT', '/push/settings', { marketing: true, like: false }));
+  expect(again.marketingUpdatedAt).toBe(on.marketingUpdatedAt);
+  expect(call('PUT', '/push/settings', { marketing: 'y' })?.status).toBe(400);
+  expect(json(call('PUT', '/push/settings', { marketing: false })).marketing).toBe(false);
 });
 
 test('토큰 등록·삭제 (없어도 204), 검증', () => {

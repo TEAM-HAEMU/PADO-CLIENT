@@ -327,10 +327,19 @@ export interface AppNotification {
 
 // ── 푸시 알림 (FCM)
 export type PushPlatform = 'IOS' | 'ANDROID';
-/** 설정 › 알림 — 서버가 보내기 전에 거른다. 행이 없으면 서버 기본값(like·comment·notice 켜짐, nearby 꺼짐) */
-export interface PushSettings { like: boolean; comment: boolean; nearby: boolean; notice: boolean }
+/**
+ * 설정 › 알림 — 서버가 보내기 전에 거른다. 행이 없으면 서버 기본값(like·comment·notice 켜짐, nearby·marketing 꺼짐).
+ * marketing: 혜택·소식(광고성) 알림 수신 동의 — 선택, 기본 꺼짐 (handoff/push-marketing-contract.md)
+ */
+export interface PushSettings { like: boolean; comment: boolean; nearby: boolean; notice: boolean; marketing: boolean }
+/** GET·PUT /push/settings 응답 — marketingUpdatedAt: 혜택·소식 알림에 마지막으로 동의·철회한 시각 (ISO, 없으면 null). 응답에만 */
+export type PushSettingsResponse = PushSettings & { marketingUpdatedAt?: string | null };
 /** 푸시 data (값은 모두 문자열 — FCM 규칙). 앱이 열 화면을 정하는 데 쓴다 */
 export type PushType = 'comment' | 'like' | 'nearby' | 'notice';
+/** 운영자 발송(notice) 종류 — NOTICE 운영 공지 · AD 혜택·소식(광고성) */
+export type PushNoticeKind = 'NOTICE' | 'AD';
+/** 운영자 발송(notice)을 눌렀을 때 열 곳. DROP_OR_INBOX는 옛 기록·옛 앱 호환 (드랍이 있으면 드랍, 없으면 알림 화면) */
+export type PushNoticeTarget = 'DROP' | 'CREATE_DROP' | 'MAP' | 'MY_PLAYLISTS' | 'MY' | 'DROP_OR_INBOX';
 
 // ── 플레이리스트
 export interface PlaylistSummary {
