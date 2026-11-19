@@ -435,10 +435,10 @@ index 82a78e2..7f39fd5 100644
  
  #endif
 diff --git a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
-index d729954..79cc6b7 100644
+index d729954..1e4b35c 100644
 --- a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
 +++ b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
-@@ -17,6 +17,15 @@
+@@ -17,6 +17,173 @@
  #import "AIRGoogleMapCallout.h"
  #import "AIRDummyView.h"
  
@@ -449,12 +449,170 @@ index d729954..79cc6b7 100644
 + * 새로 붙은 마커가 없으면(그냥 지움) 전처럼 마운트 바로 뒤에 뗀다.
 + */
 +static const NSTimeInterval PADO_HANDOVER_S = 0.35;
++
++#import <objc/runtime.h>
++/*
++ * PADO 그림 모드 — identifier가 'pado:<키>'인 마커 (지도 홈 핀·묶음).
++ * Google 지도 iOS는 iconView 마커를 다시 찍을 때(tracksViewChanges 켬→끔) 그 마커를 1~2프레임 그리지 않았다
++ * (목 600개 시뮬레이터 녹화: 묶음 숫자가 바뀌거나 새 핀이 아트를 받는 동안 0.1초마다 마커가 깜빡임 — 사용자 실기기 '핀·묶음이 0.05~0.1초 사라짐').
++ * → 마커 뷰를 패치가 직접 UIImage로 그려 GMSMarker.icon으로 쓴다 (iconView를 Google 지도에 넘기지 않는다).
++ *  · 키(<키>)는 모습이 같으면 같다 — 핀은 종류·잠김·크게·아트 주소·곡 수, 묶음은 숫자. 다 그려진(앨범 아트가 들어온) 그림만 키별로 캐시한다.
++ *    같은 키의 마커가 다시 붙으면(묶음↔핀 전환·지도를 되돌림) 캐시 그림을 곧바로 쓴다. 같은 그림(CGImage)이면 지도가 텍스처도 다시 올리지 않는다.
++ *  · 그림이 아직 없으면 마커를 투명·안 눌림으로 붙여 두고, 처음 그림이 생기면 PADO_FADE_S 동안 페이드인한다 — 빈 아이콘은 화면에 나가지 않는다.
++ *    아트를 PADO_PLACEHOLDER_S 넘게 못 받으면 받는 중 모습(회색 자리)으로 보이고, 아트가 오면 바꾼다.
++ *  · 이미 보이는 마커의 키가 바뀌면(묶음 숫자·고른 핀) 새 그림이 준비될 때까지 지금 그림을 그대로 둔다.
++ *  · 지울 때는 페이드아웃 뒤 뗀다. 같은 마운트에서 새 마커가 붙었으면(묶음↔핀) PADO_HANDOVER_S 동안 겹쳐 두었다가 사라진다.
++ * 말풍선(zIndex 1000↑)·내 위치·프로필 미니 지도처럼 identifier가 없는 마커는 예전 iconView 방식 그대로.
++ */
++static const NSTimeInterval PADO_FADE_S = 0.18;
++static const NSTimeInterval PADO_PLACEHOLDER_S = 1.0;
++static NSString *const PADO_KEY_PREFIX = @"pado:";
++
++static NSCache<NSString *, UIImage *> *padoIconCache(void) {
++    static NSCache *cache;
++    static dispatch_once_t once;
++    dispatch_once(&once, ^{
++        cache = [NSCache new];
++        cache.totalCostLimit = 48 * 1024 * 1024; // 핀 그림 하나 약 0.27MB(@3x) — 화면 두세 개 분량
++    });
++    return cache;
++}
++
++/** 아래 모든 이미지 뷰에 그림이 들어왔는가 (앨범 아트를 받는 중이면 NO) */
++static BOOL padoImagesLoaded(UIView *v) {
++    if ([v isKindOfClass:[UIImageView class]] && !((UIImageView *)v).image) return NO;
++    for (UIView *s in v.subviews) if (!padoImagesLoaded(s)) return NO;
++    return YES;
++}
++
++/** 그리기 전에 레이아웃·글자(drawRect) 등 밀린 그리기를 지금 한다 — 화면 밖 뷰라 저절로 그려지지 않는다 */
++static void padoDisplayNow(CALayer *layer) {
++    [layer layoutIfNeeded];
++    [layer displayIfNeeded];
++    for (CALayer *s in layer.sublayers) padoDisplayNow(s);
++}
++
++/**
++ * 그림 모드 마커 뷰를 붙여 두는 화면 밖 자리 (지도 뷰 안, 화면 밖 좌표·안 눌림·접근성 숨김).
++ * 창에 붙지 않은 뷰는 글자·이미지가 그려지지 않아(숫자 없는 묶음·아트 없는 흰 핀으로 그려졌다) 창 안 화면 밖에 둔다 — Google 지도도 iconView를 그렇게 그린다.
++ */
++static UIView *padoIconHost(UIView *map) {
++    static char kHost;
++    UIView *host = objc_getAssociatedObject(map, &kHost);
++    if (!host) {
++        host = [[UIView alloc] initWithFrame:CGRectMake(-20000, -20000, 1, 1)];
++        host.userInteractionEnabled = NO;
++        host.clipsToBounds = NO;
++        host.accessibilityElementsHidden = YES;
++        host.isAccessibilityElement = NO;
++        [map addSubview:host];
++        objc_setAssociatedObject(map, &kHost, host, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++    }
++    return host;
++}
++
++/** 두 그림이 (거의) 같은가 */
++static BOOL padoSameImage(UIImage *a, UIImage *b) {
++    if (a == b) return YES;
++    CGImageRef ca = a.CGImage, cb = b.CGImage;
++    if (!ca || !cb || CGImageGetWidth(ca) != CGImageGetWidth(cb) || CGImageGetHeight(ca) != CGImageGetHeight(cb)) return NO;
++    CFDataRef da = CGDataProviderCopyData(CGImageGetDataProvider(ca)), db = CGDataProviderCopyData(CGImageGetDataProvider(cb));
++    BOOL same = NO;
++    if (da && db && CFDataGetLength(da) == CFDataGetLength(db)) {
++        // 거의 같으면(바이트 0.5% 미만이 조금씩 다름 — 안티에일리어싱 등) 같은 그림으로 본다. 보이는 마커를 겹쳐 바꾸면 잠깐 흐려 보이므로
++        const UInt8 *pa = CFDataGetBytePtr(da), *pb = CFDataGetBytePtr(db);
++        CFIndex n = CFDataGetLength(da), diff = 0, limit = n / 200;
++        for (CFIndex i = 0; i < n && diff <= limit; i++) if (abs((int)pa[i] - (int)pb[i]) > 8) diff++;
++        same = diff <= limit;
++    }
++    if (da) CFRelease(da);
++    if (db) CFRelease(db);
++    return same;
++}
++
++/**
++ * 묶음 그림은 RN 뷰를 찍지 않고 여기서 바로 그린다 — 키 'c|<지름>|<숫자 글자>' (ClusterMarker와 같은 모양:
++ * 하늘색 #2B9CFF 원 + 흰 테두리 3 + 그림자 #12214A 0.18·반경 5·아래 2 + 흰 Pretendard-Bold 13, 둘레 여백 6).
++ * 숫자가 처음 나오는 묶음도 마운트하자마자 그림이 있어, 확대·축소 중 숫자가 바뀌어도 기다리지 않는다.
++ */
++static UIImage *padoClusterImage(NSString *key) {
++    NSArray<NSString *> *parts = [key componentsSeparatedByString:@"|"];
++    if (parts.count < 3) return nil;
++    CGFloat d = parts[1].doubleValue;
++    if (d < 1) return nil;
++    NSString *label = [[parts subarrayWithRange:NSMakeRange(2, parts.count - 2)] componentsJoinedByString:@"|"];
++    const CGFloat pad = 6, border = 3, side = d + pad * 2;
++    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
++    format.opaque = NO;
++    format.preferredRange = UIGraphicsImageRendererFormatRangeStandard;
++    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(side, side) format:format];
++    return [renderer imageWithActions:^(UIGraphicsImageRendererContext *rc) {
++        CGContextRef ctx = rc.CGContext;
++        CGRect circle = CGRectMake(pad, pad, d, d);
++        CGContextSaveGState(ctx);
++        CGContextSetShadowWithColor(ctx, CGSizeMake(0, 2), 5, [UIColor colorWithRed:0x12 / 255.0 green:0x21 / 255.0 blue:0x4A / 255.0 alpha:0.18].CGColor);
++        [[UIColor whiteColor] setFill];
++        CGContextFillEllipseInRect(ctx, circle);
++        CGContextRestoreGState(ctx);
++        [[UIColor colorWithRed:0x2B / 255.0 green:0x9C / 255.0 blue:0xFF / 255.0 alpha:1] setFill];
++        CGContextFillEllipseInRect(ctx, CGRectInset(circle, border, border));
++        UIFont *font = [UIFont fontWithName:@"Pretendard-Bold" size:13] ?: [UIFont boldSystemFontOfSize:13];
++        NSDictionary *attrs = @{NSFontAttributeName: font, NSForegroundColorAttributeName: [UIColor whiteColor]};
++        CGSize ts = [label sizeWithAttributes:attrs];
++        [label drawAtPoint:CGPointMake(pad + (d - ts.width) / 2, pad + (d - ts.height) / 2) withAttributes:attrs];
++    }];
++}
++
++/** 키의 캐시 그림 — 묶음(c|…)은 없으면 바로 그려 넣는다 */
++static UIImage *padoCachedIcon(NSString *key) {
++    if (!key) return nil;
++    UIImage *img = [padoIconCache() objectForKey:key];
++    if (img || ![key hasPrefix:@"c|"]) return img;
++    img = padoClusterImage(key);
++    if (img) {
++        CGImageRef cg = img.CGImage;
++        [padoIconCache() setObject:img forKey:key cost:cg ? CGImageGetBytesPerRow(cg) * CGImageGetHeight(cg) : 0];
++    }
++    return img;
++}
++
++static UIImage *padoRenderView(UIView *view) {
++    CGSize size = view.bounds.size;
++    if (size.width < 1 || size.height < 1) return nil;
++    padoDisplayNow(view.layer);
++    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
++    format.opaque = NO;
++    format.preferredRange = UIGraphicsImageRendererFormatRangeStandard; // 8비트 sRGB — 지도가 텍스처로 올릴 때 색 변환을 덜 한다
++    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:size format:format];
++    __block BOOL drawn = NO;
++    UIImage *img = [renderer imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
++        // Google 지도가 iconView를 찍는 것과 같은 방법 (창 안 화면 밖 자리에 붙어 있어야 글자·이미지가 나온다)
++        drawn = [view drawViewHierarchyInRect:view.bounds afterScreenUpdates:NO];
++    }];
++    return drawn ? img : nil; // 실패하면(창 밖 등) 쓰지 않는다 — renderInContext로 대신 그리면 아트·글자가 빠졌다
++}
++
++/*
++ * 나타날 때는 Google 지도의 등장 페이드(kGMSMarkerAnimationFadeIn — 그림이 생긴 뒤에 지도에 붙인다),
++ * 사라질 때는 마커 레이어의 opacity 애니메이션(GMSMarkerLayer가 지원) 뒤 뗀다.
++ * marker.opacity를 매 프레임 직접 바꾸면 지도가 그 마커를 다시 올리느라 1~2프레임 통째로 그리지 않았다.
++ */
++static void padoFadeOut(GMSMarker *marker) {
++    CABasicAnimation *a = [CABasicAnimation animationWithKeyPath:kGMSMarkerLayerOpacity];
++    a.fromValue = @(marker.layer.opacity);
++    a.toValue = @0;
++    a.duration = PADO_FADE_S;
++    a.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
++    a.fillMode = kCAFillModeForwards;
++    a.removedOnCompletion = NO;
++    [marker.layer addAnimation:a forKey:@"padoFadeOut"];
++}
 +static CFTimeInterval padoLastInsertAt = 0;
 +
  CGRect unionRect(CGRect a, CGRect b) {
      return CGRectMake(
                        MIN(a.origin.x, b.origin.x),
-@@ -47,6 +56,10 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -47,6 +214,24 @@ CGRect unionRect(CGRect a, CGRect b) {
      NSString* _identifier;
      NSString* _title;
      NSString* _subtitle;
@@ -462,10 +620,24 @@ index d729954..79cc6b7 100644
 +    NSTimer *_padoTrackTimer;
 +    // PADO: 지도에서 떼기로 했지만 아직 실제로 떼지 않음 (padoRemoveFromMap)
 +    BOOL _padoRemovePending;
++    // PADO: 마지막으로 찍은 모습의 서명 (padoSignature) — 같으면 다시 찍지 않는다
++    NSUInteger _padoSnapSig;
++    // PADO: 서명이 바뀐 뒤 한 번 더 찍었는가 — 바뀐 직후 찍은 그림은 글자가 아직 옛 모습일 수 있다 (padoRefreshIfChanged)
++    BOOL _padoSettled;
++    // PADO 그림 모드 (padoUpdateIcon): 키, 지금 보이는 그림(nil이면 아직 투명), 그린 모습의 서명, 붙은 때
++    NSString *_padoKey;
++    UIImage *_padoIcon;
++    UIImage *_padoLastRender; // 캐시하기 전 견줄 바로 앞 그림
++    BOOL _padoStable; // 이 키의 그림을 캐시했다(굳음)
++    __weak GMSMapView *_padoPendingMap; // 그림이 생기면 붙일 지도
++    NSUInteger _padoIconSig;
++    CFTimeInterval _padoInsertedAt;
++    NSTimer *_padoIconTimer;
++    BOOL _padoPlaceholder; // 지금 그림이 아트 없이 그린 받는 중 모습
  
  }
  
-@@ -93,13 +106,24 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -93,14 +278,27 @@ CGRect unionRect(CGRect a, CGRect b) {
  
  - (void) didInsertInMap:(AIRGoogleMap *) map
  {
@@ -474,11 +646,13 @@ index d729954..79cc6b7 100644
 +    // 그때마다 Google 마커를 새로 만들면 마커 그림을 전부 다시 찍고 텍스처에 다시 올려 지도가 수백 ms 멈췄다 → 있던 마커를 그대로 쓴다
 +    if (_padoRemovePending && _realMarker && _realMarker.map == map) {
 +        _padoRemovePending = NO;
++        if (_padoKey && _padoIcon) { [_realMarker.layer removeAnimationForKey:@"padoFadeOut"]; _realMarker.tappable = _tappable; } // PADO: 사라지던 중이면 되돌린다
 +        return;
 +    }
 +    if (_padoRemovePending) _realMarker.map = nil; // 다른 지도에 붙음 — 옛 마커는 지금 뗀다
 +    _padoRemovePending = NO;
      _realMarker = [AIRGMSMarker new];
++    _padoSnapSig = 0; // PADO: 새 마커 — 아직 찍은 모습 없음
      _realMarker.fakeMarker = self;
 -    _realMarker.tracksViewChanges = _tracksViewChanges;
 +    _realMarker.tracksViewChanges = NO; // PADO: 추적은 맨 끝 padoApplyTracking이 건다
@@ -486,21 +660,35 @@ index d729954..79cc6b7 100644
  
      [_realMarker setPosition:_coordinates];
      if (_iconView){
+-        [_realMarker setIconView:_iconView];
 +        // PADO: 자식 뷰가 이미 자리를 잡았으면 아이콘 크기를 지금 맞춘다 — 0x0으로 붙어 다음 런루프까지 빈 마커로 있지 않게
 +        [self layoutSubviews];
-         [_realMarker setIconView:_iconView];
++        if (!_padoKey) [_realMarker setIconView:_iconView]; // PADO 그림 모드는 iconView를 넘기지 않는다 (padoUpdateIcon)
      }
      if (_rotation != 0){
-@@ -146,6 +170,8 @@ CGRect unionRect(CGRect a, CGRect b) {
+         [_realMarker setRotation:_rotation];
+@@ -145,17 +343,35 @@ CGRect unionRect(CGRect a, CGRect b) {
+     if (_zIndex){
          [_realMarker setZIndex:_zIndex];
      }
-     [_realMarker setMap:map];
+-    [_realMarker setMap:map];
++    _padoIcon = nil;
++    _padoInsertedAt = CACurrentMediaTime();
++    // PADO 그림 모드: 그림이 있어야 지도에 붙인다 (캐시에 있으면 지금, 없으면 그림이 생길 때 — padoShowIcon). 빈 아이콘이 화면에 나가지 않는다
++    _padoPendingMap = _padoKey ? map : nil;
++    UIImage *padoCached = padoCachedIcon(_padoKey);
++    if (padoCached) [self padoShowIcon:padoCached];
++    else if (!_padoKey) [_realMarker setMap:map];
 +    padoLastInsertAt = CACurrentMediaTime();
 +    [self padoApplyTracking];
  }
  
  - (void)iconViewInsertSubview:(UIView*)subview atIndex:(NSInteger)atIndex {
-@@ -156,6 +182,15 @@ CGRect unionRect(CGRect a, CGRect b) {
+     if (!_iconView){
+         _iconView = [[UIView alloc] init];
+     }
+-    if (!_realMarker.iconView) {
++    if (!_realMarker.iconView && !_padoKey) {
          _realMarker.iconView = _iconView;
      }
      [_iconView insertSubview:subview atIndex:atIndex];
@@ -511,12 +699,46 @@ index d729954..79cc6b7 100644
 +        AIRGoogleMapMarker *strongSelf = weakSelf;
 +        if (!strongSelf) return;
 +        [strongSelf layoutSubviews];
-+        [strongSelf redraw];
++        if (strongSelf->_padoKey) [strongSelf padoUpdateIconAfterCommit];
++        else [strongSelf padoRefreshIfChanged]; // PADO: 붙을 때 이미 찍은 모습 그대로면 건너뛴다
 +    });
  }
  
  - (void)insertReactSubview:(id<RCTComponent>)subview atIndex:(NSInteger)atIndex {
-@@ -519,12 +554,82 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -305,6 +521,14 @@ CGRect unionRect(CGRect a, CGRect b) {
+ - (void)setIdentifier:(NSString *)identifier {
+     _realMarker.identifier = identifier;
+     _identifier = identifier;
++    // PADO 그림 모드: 'pado:<모습 키>' — 키가 바뀌면(숫자·고른 핀) 새 그림을 준비한다. 준비될 때까지 지금 그림은 그대로
++    NSString *key = [identifier hasPrefix:PADO_KEY_PREFIX] ? [identifier substringFromIndex:PADO_KEY_PREFIX.length] : nil;
++    if ((key == nil) == (_padoKey == nil) && (!key || [key isEqualToString:_padoKey])) return;
++    _padoKey = key;
++    _padoIconSig = 0;
++    _padoStable = NO;
++    _padoLastRender = nil;
++    if (_realMarker && key) [self padoApplyTracking];
+ }
+ 
+ - (NSString *)identifier {
+@@ -340,7 +564,7 @@ CGRect unionRect(CGRect a, CGRect b) {
+ 
+ - (void)setOpacity:(double)opacity
+ {
+-    _realMarker.opacity = opacity;
++    if (!_padoKey || _padoIcon) _realMarker.opacity = opacity; // PADO 그림 모드: 그림이 생길 때까지 투명
+     _opacity = opacity;
+ }
+ 
+@@ -501,7 +725,7 @@ CGRect unionRect(CGRect a, CGRect b) {
+ }
+ 
+ - (void)setTappable:(BOOL)tappable {
+-    _realMarker.tappable = tappable;
++    if (!_padoKey || _padoIcon) _realMarker.tappable = tappable;
+     _tappable = tappable;
+ }
+ 
+@@ -519,12 +743,252 @@ CGRect unionRect(CGRect a, CGRect b) {
  }
  
  - (void)setTracksViewChanges:(BOOL)tracksViewChanges {
@@ -534,7 +756,7 @@ index d729954..79cc6b7 100644
 +/*
 + * PADO: Google 지도 iOS는 tracksViewChanges가 켜진 마커의 뷰를 매 프레임 그림으로 다시 찍고(drawViewHierarchyInRect)
 + * 그 그림을 텍스처 아틀라스에 새로 올린다(색 변환 포함). 새 핀이 수십 개 생길 때(끌기·축소·걷기·드랍 고르기) 메인 스레드를 크게 잡아먹었다.
-+ * → 켜지면 곧바로 한 번 찍고, 켜져 있는 동안 PADO_TRACK_SLOW_S마다 한 번씩 찍는다 (앨범 아트가 늦게 도착해도 그 간격 안에 반영).
++ * → 켜지면 곧바로 한 번 찍고, 켜져 있는 동안 PADO_TRACK_SLOW_S마다 모습이 바뀌었는지 보고 바뀌었을 때만 찍는다 (앨범 아트가 늦게 도착해도 그 간격 안에 반영 — padoRefreshIfChanged).
 + *   마커마다 첫 간격을 조금씩 어긋나게 해서, 한꺼번에 생긴 마커들이 같은 프레임에 몰려 찍히지 않게 한다. 꺼질 때 마지막 모습을 한 번 더 찍는다.
 + *   zIndex가 PADO_TRACK_FULL_ZINDEX 이상인 마커(말풍선 — 안에서 짧게 페이드한다)만 처음 PADO_TRACK_FULL_S 동안 매 프레임 찍는다.
 + */
@@ -543,7 +765,10 @@ index d729954..79cc6b7 100644
 +static const NSInteger PADO_TRACK_FULL_ZINDEX = 1000; // 프로필 미니 지도 핀(zIndex 최대 30)과 겹치지 않게 크게
 +
 +- (void)padoRemoveFromMap {
-+    if (!_realMarker.map) return;
++    if (!_realMarker.map) {
++        if (_padoPendingMap) { _padoPendingMap = nil; [_iconView removeFromSuperview]; } // PADO 그림 모드: 그림을 기다리던(아직 안 붙은) 마커
++        return;
++    }
 +    _padoRemovePending = YES;
 +    // 마운트(한 번의 메인 스레드 작업)가 끝난 뒤에도 다시 붙지 않았으면 그때 뗀다 — 그 마운트에서 새 마커가 붙었으면 PADO_HANDOVER_S 뒤에
 +    dispatch_async(dispatch_get_main_queue(), ^{
@@ -552,12 +777,40 @@ index d729954..79cc6b7 100644
 +        self->_padoTrackTimer = nil;
 +        GMSMarker *old = self->_realMarker;
 +        BOOL handover = CACurrentMediaTime() - padoLastInsertAt < 0.1;
-+        if (!handover) {
++        if (!handover && !(self->_padoKey && self->_padoIcon)) {
 +            self->_padoRemovePending = NO;
 +            old.map = nil;
 +            return;
 +        }
++        if (!handover) {
++            // PADO 그림 모드: 그냥 지울 때는 곧바로 페이드아웃 뒤 뗀다
++            old.tappable = NO;
++            padoFadeOut(old);
++            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(PADO_FADE_S * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                if (!self->_padoRemovePending || self->_realMarker != old) return;
++                self->_padoRemovePending = NO;
++                old.map = nil;
++                [self->_iconView removeFromSuperview];
++            });
++            return;
++        }
 +        old.tappable = NO; // 남겨 둔 동안 눌리지 않게 (컴포넌트는 이미 지워졌다)
++        if (self->_padoKey) {
++            // PADO 그림 모드: 아직 투명이면 곧바로, 보이던 것은 새 마커가 들어오는 동안 겹쳐 두었다가 페이드아웃
++            NSTimeInterval wait = self->_padoIcon ? MAX(0, PADO_HANDOVER_S - PADO_FADE_S) : 0;
++            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(wait * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                if (!self->_padoRemovePending || self->_realMarker != old) return;
++                if (!self->_padoIcon) { self->_padoRemovePending = NO; old.map = nil; [self->_iconView removeFromSuperview]; return; }
++                padoFadeOut(old);
++                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(PADO_FADE_S * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                    if (!self->_padoRemovePending || self->_realMarker != old) return;
++                    self->_padoRemovePending = NO;
++                    old.map = nil;
++                    if (self->_padoKey) [self->_iconView removeFromSuperview];
++                });
++            });
++            return;
++        }
 +        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(PADO_HANDOVER_S * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
 +            if (!self->_padoRemovePending || self->_realMarker != old) return; // 그사이 다시 붙음
 +            self->_padoRemovePending = NO;
@@ -566,20 +819,157 @@ index d729954..79cc6b7 100644
 +    });
 +}
 +
++/*
++ * PADO: 마커 모습의 서명 — 아이콘 뷰 아래 모든 뷰의 자리·크기·숨김·투명도, 레이어 내용(글자·SVG를 그린 그림)과 이미지, 테두리·배경색.
++ * 추적 중 0.1초마다 찍던 것을 이게 바뀐 때만 찍는다. 확대·축소로 묶음 수십 개의 숫자가 0.2초마다 바뀌면 묶음마다 0.3초 추적이 켜져
++ * 숫자가 그대로인 채 3~4번씩 더 찍었고, 묶음→핀으로 바뀌면 핀 100개를 0.5초 동안 5~6번씩 찍었다
++ * (찍을 때마다 drawViewHierarchy + Google 지도가 그 그림을 색 변환해 텍스처 아틀라스에 올림 — 메인 스레드).
++ * 앨범 아트가 늦게 와도 이미지가 바뀌면 서명이 바뀌어 다음 0.1초에 찍힌다. 바뀐 뒤에는 한 번 더 찍어 굳힌다(padoRefreshIfChanged).
++ */
++static void padoHashView(NSUInteger *h, UIView *v) {
++    CGRect f = v.frame;
++    NSUInteger parts[] = {
++        (NSUInteger)lround(f.origin.x * 4), (NSUInteger)lround(f.origin.y * 4), (NSUInteger)lround(f.size.width * 4), (NSUInteger)lround(f.size.height * 4),
++        (NSUInteger)v.hidden, (NSUInteger)lround(v.alpha * 255),
++        (NSUInteger)(__bridge void *)v.layer.contents, (NSUInteger)(__bridge void *)v.backgroundColor, (NSUInteger)v.layer.borderColor,
++        [v isKindOfClass:[UIImageView class]] ? (NSUInteger)(__bridge void *)((UIImageView *)v).image : 0,
++        v.subviews.count,
++        [v respondsToSelector:@selector(attributedText)] ? [((UILabel *)v).attributedText.string hash] : 0,
++    };
++    for (size_t i = 0; i < sizeof(parts) / sizeof(parts[0]); i++) *h = *h * 1000003 ^ parts[i];
++    for (UIView *s in v.subviews) padoHashView(h, s);
++}
++
++- (NSUInteger)padoSignature {
++    NSUInteger h = 17;
++    if (_iconView) padoHashView(&h, _iconView);
++    return h;
++}
++
++- (void)padoRefreshIfChanged {
++    if (!_realMarker.iconView) return;
++    if (_realMarker.tracksViewChanges) return; // 매 프레임 찍는 중 (말풍선)
++    if ([self padoSignature] != _padoSnapSig) { [self padoRefreshOnce]; return; }
++    // 바뀐 직후 찍은 그림은 글자(숫자)가 아직 옛 모습일 수 있어서(화면 밖 뷰는 찍을 때 그려진다) 서명이 그대로여도 한 번 더 찍고 끝낸다
++    if (_padoSettled) return;
++    [self padoRefreshOnce];
++    _padoSettled = YES;
++}
++
 +- (void)padoRefreshOnce {
 +    if (!_realMarker.iconView) return;
++    _padoSnapSig = [self padoSignature];
++    _padoSettled = NO;
 +    // 문서: NO → YES로 바뀌면 다음 프레임에 반드시 다시 그린다
 +    _realMarker.tracksViewChanges = YES;
 +    _realMarker.tracksViewChanges = NO;
++}
++
++
++#pragma mark - PADO 그림 모드
++
++/** 추적 중이거나 아직 그림이 없으면 0.1초마다 padoUpdateIcon (아트가 늦게 와도·숫자가 바뀌어도 그 간격 안에 반영) */
++- (void)padoScheduleIcon {
++    if (_padoIconTimer) return;
++    __weak AIRGoogleMapMarker *weakSelf = self;
++    NSTimer *timer = [NSTimer timerWithTimeInterval:PADO_TRACK_SLOW_S repeats:YES block:^(NSTimer *t) {
++        AIRGoogleMapMarker *s = weakSelf;
++        if (!s || !s->_padoKey || !(s->_realMarker.map || s->_padoPendingMap) || s->_padoRemovePending) { [t invalidate]; if (s) s->_padoIconTimer = nil; return; }
++        [s padoUpdateIcon];
++        if (!s->_tracksViewChanges && s->_padoIcon && !s->_padoPlaceholder && s->_padoStable) { [t invalidate]; s->_padoIconTimer = nil; }
++    }];
++    _padoIconTimer = timer;
++    [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
++}
++
++/**
++ * 마운트 중(속성·자식이 아직 다 바뀌지 않았을 수 있음)에는 캐시 그림만 쓰고, 새로 그리기는 마운트가 끝난 다음 차례에
++ * (그때 그리면 옛 숫자·옛 크기를 새 키로 캐시할 수 있다)
++ */
++- (void)padoUpdateIconSoon {
++    UIImage *cached = padoCachedIcon(_padoKey);
++    if (cached) { _padoPlaceholder = NO; _padoStable = YES; [self padoShowIcon:cached]; return; }
++    [self padoUpdateIconAfterCommit];
++}
++
++/** 마운트한 내용이 화면(밖 자리)에 한 번 그려진 뒤에 그린다 — 바로 다음 차례에 그리면 글자가 아직 옛 숫자일 수 있다 */
++- (void)padoUpdateIconAfterCommit {
++    __weak AIRGoogleMapMarker *weakSelf = self;
++    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.03 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [weakSelf padoUpdateIcon]; });
++}
++
++/** 키의 그림을 정한다 — 캐시에 있으면 그것, 없으면 마커 뷰를 그려(아트까지 다 들어왔을 때만) 캐시하고 쓴다 */
++- (void)padoUpdateIcon {
++    if (!_realMarker || !_padoKey || _padoRemovePending) return;
++    UIImage *cached = padoCachedIcon(_padoKey);
++    if (cached) { _padoPlaceholder = NO; _padoStable = YES; [self padoShowIcon:cached]; return; }
++    if (!_iconView || _iconView.subviews.count == 0) return;
++    GMSMapView *onMap = _realMarker.map ?: _padoPendingMap;
++    if (!onMap) return;
++    UIView *host = padoIconHost(onMap);
++    if (_iconView.superview != host) { [host addSubview:_iconView]; [self layoutSubviews]; [self padoUpdateIconAfterCommit]; return; } // 창에 붙어 한 번 그려진 뒤에 그린다
++    // 지도가 창에 없으면(다른 화면이 덮은 동안 등) 그리지 않고 기다린다 — 창 밖에서 그리면 아트·글자가 빠진 그림이 나와 그대로 캐시됐다
++    if (!_iconView.window) return;
++    [self layoutSubviews];
++    BOOL complete = padoImagesLoaded(_iconView);
++    // 아트를 오래 못 받으면 받는 중 모습으로라도 보인다 (이미 보이는 그림이 있으면 그대로 둔다)
++    BOOL placeholderTime = !_padoIcon && CACurrentMediaTime() - _padoInsertedAt > PADO_PLACEHOLDER_S;
++    if (!complete && !placeholderTime) return;
++    NSUInteger sig = [self padoSignature];
++    if (sig == _padoIconSig && _padoIcon && (_padoStable || !complete)) return;
++    UIImage *img = padoRenderView(_iconView);
++    if (!img) return;
++    _padoIconSig = sig;
++    // PADO-RENDERED
++    _padoPlaceholder = !complete;
++    if (!complete) { _padoLastRender = nil; [self padoShowIcon:img]; return; }
++    // 같은 모습을 0.1초 간격으로 두 번 그려 똑같을 때만 캐시한다 — 막 바뀐 직후 그린 그림은 글자·크기가 아직 옛 모습일 수 있다
++    // (화면 밖 자리의 뷰가 실제로 다시 그려지기 전에 찍힘). 다르면 새 그림으로 바꾸고 다음 차례에 다시 견준다
++    if (_padoLastRender && padoSameImage(_padoLastRender, img)) {
++        UIImage *keep = (_padoIcon && padoSameImage(_padoIcon, img)) ? _padoIcon : img; // 보이는 그림과 같으면 그 그림(CGImage)을 캐시 — 지도 텍스처를 다시 올리지 않게
++        CGImageRef cg = keep.CGImage;
++        [padoIconCache() setObject:keep forKey:_padoKey cost:cg ? CGImageGetBytesPerRow(cg) * CGImageGetHeight(cg) : 0];
++        _padoStable = YES;
++        _padoLastRender = nil;
++        [self padoShowIcon:keep];
++        return;
++    }
++    _padoLastRender = img;
++    if (!_padoIcon || !padoSameImage(_padoIcon, img)) [self padoShowIcon:img];
++}
++
++- (void)padoShowIcon:(UIImage *)img {
++    if (_realMarker.iconView) _realMarker.iconView = nil;
++    if (_padoIcon == img) return;
++    if (_padoIcon && _realMarker.map && !_padoRemovePending) {
++        // 보이는 마커의 그림이 바뀜(묶음 숫자·고른 핀): 같은 자리에 새 Google 마커를 붙여 새 그림으로 페이드인하고, 옛 마커는 페이드아웃 뒤 뗀다.
++        // 한 마커의 그림만 갈아 끼우면 Google 지도가 새 그림을 텍스처로 올리는 1~2프레임 동안 그 마커를 그리지 않아 깜빡였다
++        GMSMarker *old = _realMarker;
++        old.tappable = NO;
++        padoFadeOut(old);
++        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(PADO_FADE_S * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ old.map = nil; });
++        [self didInsertInMap:(AIRGoogleMap *)old.map]; // 새 마커 — 아래에서 이 그림으로 붙여 페이드인 (캐시에 있으면 이미 붙었다)
++        [self padoShowIcon:img];
++        return;
++    }
++    if (_realMarker.icon != img) _realMarker.icon = img;
++    if (_padoIcon) { _padoIcon = img; return; }
++    _padoIcon = img;
++    if (!_realMarker.map && _padoPendingMap) {
++        _realMarker.appearAnimation = kGMSMarkerAnimationFadeIn;
++        _realMarker.map = _padoPendingMap;
++    }
++    _padoPendingMap = nil;
 +}
 +
 +- (void)padoApplyTracking {
 +    [_padoTrackTimer invalidate];
 +    _padoTrackTimer = nil;
 +    if (!_realMarker) return;
++    if (_padoKey) { [self padoUpdateIconSoon]; [self padoScheduleIcon]; return; }
 +    if (!_tracksViewChanges) {
 +        if (_realMarker.tracksViewChanges) _realMarker.tracksViewChanges = NO; // 이번 프레임 모습으로 굳는다
-+        else [self padoRefreshOnce];
++        else [self padoRefreshIfChanged]; // PADO: 마지막으로 찍은 뒤 바뀐 게 있을 때만
 +        return;
 +    }
 +    BOOL full = _zIndex >= PADO_TRACK_FULL_ZINDEX;
@@ -590,7 +980,7 @@ index d729954..79cc6b7 100644
 +    NSTimer *timer = [[NSTimer alloc] initWithFireDate:[NSDate dateWithTimeIntervalSinceNow:first] interval:PADO_TRACK_SLOW_S repeats:YES block:^(NSTimer *t) {
 +        AIRGoogleMapMarker *s = weakSelf;
 +        if (!s || !s->_tracksViewChanges || !s->_realMarker.map) { [t invalidate]; return; } // 지도에서 떨어졌으면 멈춘다
-+        [s padoRefreshOnce];
++        [s padoRefreshIfChanged];
 +    }];
 +    _padoTrackTimer = timer;
 +    [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
@@ -598,6 +988,8 @@ index d729954..79cc6b7 100644
 +
 +- (void)dealloc {
 +    [_padoTrackTimer invalidate];
++    [_padoIconTimer invalidate];
++    if (_padoKey) [_iconView removeFromSuperview]; // PADO 그림 모드: 화면 밖 자리에서 뺀다
  }
  
  - (void)setTracksInfoWindowChanges:(BOOL)tracksInfoWindowChanges {
