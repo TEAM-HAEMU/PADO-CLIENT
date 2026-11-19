@@ -16,7 +16,8 @@ import { useComments, useDrop, useDropPlace, useLikeCount, useSong, useToggleLik
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
 import { listenFull, listenLabel } from '@/services/listen';
-import { startPreview, usePreview, usePreviewProgress, usePreviewStore } from '@/services/preview';
+import { usePreview, usePreviewProgress, usePreviewStore } from '@/services/preview';
+import { jumpTo, playQueue, resetQueueFails, usePlayQueue } from '@/services/playQueue';
 import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
@@ -24,8 +25,7 @@ import { colors, fonts } from '@/theme/tokens';
 import { formatDuration } from '@/utils/format';
 
 const SUB = '#BAB7B7'; // Figma 아티스트·시간 글자색
-/** 전체 재생 대기열에서 연속으로 이만큼 못 틀면 다음 곡으로 넘기지 않고 멈춘다 */
-const QUEUE_MAX_FAILS = 3;
+const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>) {
   const insets = useSafeAreaInsets();
@@ -51,57 +51,22 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
 
   // 화면을 닫아도 듣던 곡은 계속 (다른 곡을 틀 때만 바뀜 — 지도 미니 디스크·잠금화면에서 제어)
 
-  // 전체 재생/셔플: 열리면 미리듣기 시작, 끝나면(또는 미리듣기가 없거나 이 곡을 틀지 못하면) 다음 곡으로
-  // 틀지 못함 = 미리듣기 조회 불가(iTunes 막힘·오프라인)·재생 오류(주소 만료 등). 알림 뒤 다음 곡으로 넘기되,
-  // 연속으로 QUEUE_MAX_FAILS곡을 못 틀면(망이 끊김 등) 대기열 전체에 토스트를 뿌리며 넘기지 않게 멈춘다
+  // 전체 재생/셔플은 대기열 서비스(services/playQueue)가 진행한다 — 이 화면을 닫아도 다음 곡으로 계속 (예전엔 화면이 넘겨서 닫으면 멈췄다).
+  // 화면은 대기열을 시작하고, 대기열이 지금 트는 곡을 따라 보여 준다
+  React.useEffect(() => { if (queue) playQueue(queue, songId, dropId); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const queueCurrent = usePlayQueue(st => (queue && sameIds(st.ids, queue) ? st.current : null));
+  React.useEffect(() => {
+    if (queueCurrent && queueCurrent !== songId) navigation.setParams({ songId: queueCurrent });
+  }, [queueCurrent]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 곡 하나 자동 재생(autoplay, 대기열 없음): 열리면 미리듣기 시작
   const startedFor = React.useRef<string | null>(null);
-  const mounted = React.useRef(true);
-  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  const failStreak = React.useRef(0);
-  const skipTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  React.useEffect(() => () => clearTimeout(skipTimer.current), []);
-  /** 이 곡(from)을 못 틀었거나 미리듣기가 없을 때 잠시 뒤 다음 곡으로 — 그 사이 다른 곡으로 넘어갔으면 무시 */
-  const skipFrom = (from: string, failed: boolean) => {
-    const next = queue && queue[queue.indexOf(from) + 1];
-    if (!next || !mounted.current) return;
-    if (failed && ++failStreak.current >= QUEUE_MAX_FAILS) return;
-    clearTimeout(skipTimer.current);
-    skipTimer.current = setTimeout(() => { if (mounted.current && latestSong.current === from) navigation.setParams({ songId: next }); }, 1200);
-  };
-  const latestSong = React.useRef(songId);
-  latestSong.current = songId;
   React.useEffect(() => {
-    // 다음 곡을 불러오는 동안엔 이전 곡이 자리만 지키고 있으므로 기다린다
-    if (!(autoplay || queue) || startedFor.current === songId || preview.loading || songQ.isPlaceholderData || !song || song.id !== songId) return;
+    if (!autoplay || queue || startedFor.current === songId || preview.loading || !song || song.id !== songId) return;
     startedFor.current = songId;
-    if (!preview.available) return skipFrom(songId, false); // 미리듣기가 없는 곡
-    if (preview.playing) return;
-    if (!queue) { preview.toggle(); return; }
-    // 대기열은 결과를 알아야 다음 곡으로 넘길 수 있어 startPreview로 (이미 올라 있는 곡이면 이어서 재생)
-    const from = songId;
-    startPreview(song).catch(() => 'unavailable' as const).then(r => {
-      if (!mounted.current || latestSong.current !== from) return;
-      if (r === 'none' || r === 'adult') skipFrom(from, false);
-      else if (r === 'unavailable') { toast('지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.', 'error'); skipFrom(from, true); }
-    });
+    if (preview.available && !preview.playing) preview.toggle();
   }, [songId, song?.id, preview.loading, preview.available]); // eslint-disable-line react-hooks/exhaustive-deps
-  const endedKey = usePreviewStore(st => st.endedKey);
   const loaded = usePreviewStore(st => st.key === songId);
-  const endedAtMount = React.useRef(usePreviewStore.getState().endedKey);
-  React.useEffect(() => {
-    if (endedKey === endedAtMount.current) return; // 이 화면에 오기 전에 끝난 곡은 무시
-    endedAtMount.current = null;
-    if (endedKey !== songId) return;
-    failStreak.current = 0;
-    if (nextId) navigation.setParams({ songId: nextId });
-  }, [endedKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 대기열 곡이 재생 중 오류를 내면(토스트는 플레이어가 띄운다) 다음 곡으로
-  const lastError = usePreviewStore(st => st.lastError);
-  const errorAtMount = React.useRef(usePreviewStore.getState().lastError);
-  React.useEffect(() => {
-    if (!lastError || lastError === errorAtMount.current || lastError.key !== songId) return;
-    skipFrom(songId, true);
-  }, [lastError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!song) return <ScreenState error={songQ.error} onRetry={() => songQ.refetch()} />;
 
@@ -116,11 +81,11 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const onMain = () => {
     if (resolving) return;
     startedFor.current = songId;
-    failStreak.current = 0; // 사용자가 직접 누르면 연속 실패로 멈춘 대기열도 다시 이어진다
+    resetQueueFails(); // 사용자가 직접 누르면 연속 실패로 멈춘 대기열도 다시 이어진다
     return preview.available || loaded ? preview.toggle() : listen();
   };
   // 대기열 이전·다음 곡을 직접 고름 — 연속 실패로 멈춘 대기열도 다시 이어진다
-  const pickQueued = (id: string) => { failStreak.current = 0; navigation.setParams({ songId: id }); };
+  const pickQueued = (id: string) => { jumpTo(id); navigation.setParams({ songId: id }); };
   const like = () => (authed ? toggleLike.toggle() : toast('로그인이 필요해요.'));
   const hole = disc * 0.153; // Figma 가운데 흰 구멍 53.5 / 349
   const halo = disc * 0.249; // 반투명 링 87 / 349
