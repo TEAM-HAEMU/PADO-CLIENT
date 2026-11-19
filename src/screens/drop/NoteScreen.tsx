@@ -153,11 +153,14 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
         </View>
       </ScrollView>
       {/* 키보드가 떠 있으면 위치 문구는 접어 입력칸 자리를 남긴다 (버튼만) */}
-      <View onLayout={e => { footerH.current = e.nativeEvent.layout.height; }} style={{ gap: 12, paddingHorizontal: 24, paddingTop: 12, paddingBottom: keyboard ? 12 : insets.bottom + 26 }}>
+      <View onLayout={e => { footerH.current = e.nativeEvent.layout.height; }} style={{ gap: keyboard ? 0 : 12, paddingHorizontal: 24, paddingTop: 12, paddingBottom: keyboard ? 12 : insets.bottom + 26 }}>
         {/* 스크롤 끝이 버튼 영역에 잘려 보이지 않게 — 아래로 더 있다는 표시 겸 흐리게 이어 준다 (키보드가 뜨면 입력칸 글자 수를 가리지 않게 숨김) */}
-        <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0)', colors.page]} style={{ position: 'absolute', left: 0, right: 0, top: -28, height: 28, display: keyboard ? 'none' : 'flex' }} />
-        {/* 뷰를 빼고 넣지 않고 display로 숨긴다 — 키보드 애니메이션 중 뷰 트리를 바꾸면 Reanimated 레이아웃 애니메이션 쪽 단언에 걸렸다(디버그) */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, display: keyboard ? 'none' : 'flex' }}>
+        <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0)', colors.page]} style={{ position: 'absolute', left: 0, right: 0, top: -28, height: 28, opacity: keyboard ? 0 : 1 }} />
+        {/*
+          뷰를 빼거나(조건부 렌더) display:none으로 숨기지 않고 높이 0·투명으로 접는다 — 키보드가 뜰 때 뷰 트리가 바뀌면(삽입·제거)
+          Reanimated 레이아웃 애니메이션 프록시가 'Indices are wrong in Remove mutation' 단언으로 앱을 멈췄다(디버그 빌드)
+        */}
+        <View collapsable={false} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, height: keyboard ? 0 : undefined, opacity: keyboard ? 0 : 1, overflow: 'hidden' }}>
           <PinGlyph height={13} />
           <T v="captionStrong" c="ink2" numberOfLines={1} style={{ fontFamily: fonts.regular }}>지금 서 있는 {address || label || '이곳'}에 남겨져요</T>
         </View>
