@@ -29,8 +29,10 @@ describe('Android MainActivity 재생성 (B-07)', () => {
     expect(activity).not.toMatch(/super\.onCreate\(savedInstanceState\)/);
   });
 
-  it('글꼴 크기·언어 변경은 Activity를 다시 만들지 않고 그 자리에서 받는다 (화면·재생 상태 유지)', () => {
-    expect(configChanges()).toEqual(expect.arrayContaining(['fontScale', 'locale', 'layoutDirection']));
+  it('글꼴 크기·언어·화면 배율 변경은 Activity를 다시 만들어 받는다 (그 자리에서 받으면 RN 글자가 옛 크기로 남거나 사라짐)', () => {
+    // RN 0.87 Fabric은 이미 잰 글자(ParagraphShadowNode)를 새 배율·언어로 다시 재지 않는다 — QA B-07 재확인: '반경 5km'의 '5km'가 사라짐
+    const changes = configChanges();
+    for (const c of ['fontScale', 'locale', 'layoutDirection', 'density']) expect(changes).not.toContain(c);
   });
 
   it('기존에 받던 변경(다크 모드·회전·화면 크기 등)도 그대로 받는다', () => {
