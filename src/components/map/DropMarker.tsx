@@ -153,7 +153,10 @@ export const ClusterMarker = memo(function ClusterMarkerItem({ id, latitude, lon
   const size = clusterSize(count);
   return (
     <Marker coordinate={coordinate} anchor={CLUSTER_ANCHOR} tracksViewChanges={tracking} zIndex={2} onPress={press}>
-      <View style={{ padding: CLUSTER_PAD }} accessible accessibilityRole="button" accessibilityLabel={`드랍 ${count}개, 눌러서 펼치기`}>
+      {/* Android는 숫자가 바뀌면 안쪽 뷰를 새로 붙여 그 자리에서 다시 찍는다 — 묶음 키가 줌 단계와 무관해져(clusterPoints) 같은 마커가 위치·숫자만 바뀌는 일이 잦은데,
+          크기가 그대로인 채 글자만 바뀌면 다시 찍을 계기가 없을 수 있어 추적을 끌 때(TRACK.change)까지 옛 숫자가 남지 않게.
+          iOS는 하지 않는다 — 안쪽 뷰를 바꾸면 다음 런루프에 다시 찍기 전까지 빈 마커로 찍혀 깜빡였다. iOS는 추적(0.1초마다 찍기)으로 숫자를 잡는다 */}
+      <View key={Platform.OS === 'android' ? count : undefined} style={{ padding: CLUSTER_PAD }} accessible accessibilityRole="button" accessibilityLabel={`드랍 ${count}개, 눌러서 펼치기`}>
         <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 3, borderColor: colors.page, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: dropShadow.shadowColor, shadowOpacity: 0.18, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 3 }}>
           <Text allowFontScaling={false} style={{ fontFamily: fonts.bold, fontSize: 13, lineHeight: 16, color: colors.page }}>{clusterLabel(count)}</Text>
         </View>
