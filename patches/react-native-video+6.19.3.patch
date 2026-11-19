@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index 623d90c..c1b7044 100644
+index 623d90c..10942aa 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 @@ -1452,6 +1452,9 @@ public class ReactExoplayerView extends FrameLayout implements
@@ -12,3 +12,19 @@ index 623d90c..c1b7044 100644
      }
  
      private void updateResumePosition() {
+@@ -1525,6 +1528,15 @@ public class ReactExoplayerView extends FrameLayout implements
+                 case Player.STATE_READY:
+                     text += "ready";
+                     hasVideoEnded = false;
++                    // PADO: 주소만 바꿔 다음 곡을 틀면(곡이 끝난 뒤 이어 틀기) playWhenReady가 그대로라 setPlayWhenReady를 거치지 않는다
++                    // → 포커스를 요청하지 않은 채 재생된다. 재생 준비가 됐는데 포커스가 없으면 여기서 요청하고, 못 받으면(통화 중 등) 멈추고 JS에 알린다
++                    if (playWhenReady && !hasAudioFocus && !disableFocus) {
++                        hasAudioFocus = requestAudioFocus();
++                        if (!hasAudioFocus) {
++                            player.setPlayWhenReady(false);
++                            eventEmitter.onAudioFocusChanged.invoke(false);
++                        }
++                    }
+                     eventEmitter.onReadyForDisplay.invoke();
+                     onBuffering(false);
+                     clearProgressMessageHandler(); // ensure there is no other message

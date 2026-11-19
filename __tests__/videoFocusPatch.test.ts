@@ -1,7 +1,7 @@
 /**
  * react-native-video Android 패치(patches/react-native-video+*.patch)가 적용돼 있는지 확인한다 (QA B-06 재확인).
- * 패치가 빠지면 곡이 끝나 포커스를 놓은 뒤(onStopPlayback) hasAudioFocus가 true로 남아, 같은 플레이어로 다음 곡을 틀 때
- * requestAudioFocus()가 요청을 건너뛴다 → 포커스 없이 재생돼 두 번째 전화부터는 멈추지 않는다.
+ * 패치가 빠지면 곡이 끝나 포커스를 놓은 뒤(onStopPlayback) hasAudioFocus가 true로 남고, 같은 플레이어로 주소만 바꿔 다음 곡을 틀면
+ * setPlayWhenReady를 거치지 않아 포커스를 다시 요청하지 않는다 → 포커스 없이 재생돼 두 번째 전화부터는 멈추지 않는다.
  */
 // 앱 tsconfig에는 Node 타입이 없어 쓰는 것만 적는다 (jest는 프로젝트 루트에서 돈다 — mapsLifecyclePatch.test.ts와 같은 방식)
 const fs = require('fs') as { readFileSync: (p: string, enc: 'utf8') => string };
@@ -35,6 +35,13 @@ describe('react-native-video Android 오디오 포커스 패치', () => {
   it('곡이 끝나면(STATE_ENDED) onStopPlayback으로 포커스를 놓는다 (다음 곡은 같은 플레이어로 이어 틀어 포커스를 다시 요청해야 한다)', () => {
     const ended = view.slice(view.indexOf('case Player.STATE_ENDED:'), view.indexOf('default:', view.indexOf('case Player.STATE_ENDED:')));
     expect(ended).toMatch(/onStopPlayback\(\);/);
+  });
+
+  it('재생 준비(STATE_READY)가 됐는데 포커스가 없으면 요청하고, 못 받으면 멈추고 JS에 알린다 (주소만 바꿔 다음 곡을 틀 때)', () => {
+    const ready = view.slice(view.indexOf('case Player.STATE_READY:'), view.indexOf('case Player.STATE_ENDED:'));
+    expect(ready).toMatch(/if \(playWhenReady && !hasAudioFocus && !disableFocus\)/);
+    expect(ready).toMatch(/hasAudioFocus = requestAudioFocus\(\);/);
+    expect(ready).toMatch(/player\.setPlayWhenReady\(false\);\s*eventEmitter\.onAudioFocusChanged\.invoke\(false\);/);
   });
 
   it('패치한 버전으로 고정돼 있다 (package.json·lock 루트)', () => {
