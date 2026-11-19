@@ -6,12 +6,17 @@ jest.mock('@/api/endpoints', () => ({ dropApi: { nearby: jest.fn(async () => [])
 jest.mock('@/hooks/useDropRadius', () => ({ useDropRadius: () => ({ mode: 'DISTANCE', displayMeters: 5000, playMeters: 500, regionUnit: null, region: null, playMode: 'DISTANCE' }) }));
 jest.mock('@/store/auth', () => ({ useAuth: { getState: () => ({ status: 'authed' }) } }));
 jest.mock('@/store/toast', () => ({ toast: jest.fn() }));
+// 포커스·보임 값을 테스트가 정한다
+const mockNav = { focused: false, visible: true };
+jest.mock('@react-navigation/native', () => ({ useIsFocused: () => mockNav.focused }));
+jest.mock('@/hooks/useScreenVisible', () => ({ useScreenVisible: () => mockNav.visible }));
 import { create } from 'zustand';
 import { shallow } from 'zustand/shallow';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { dropApi } from '@/api/endpoints';
 import { NEARBY_POLL_MS, nearbyDueOnReturn, useNearbyDrops } from '@/hooks/api';
 import { useStoreWhile } from '@/hooks/useStoreWhile';
+import { mapLive, useMapLive } from '@/hooks/useMapLive';
 const React = require('react') as typeof import('react');
 const TestRenderer = require('react-test-renderer') as typeof import('react-test-renderer');
 const { act } = TestRenderer;
@@ -117,4 +122,30 @@ describe('useNearbyDrops — 가려진 동안 폴링 쉬기, 돌아오면 한 �
     expect(nearbyDueOnReturn(1_000, 1_000 + NEARBY_POLL_MS - 1)).toBe(false);
     expect(nearbyDueOnReturn(1_000, 1_000 + NEARBY_POLL_MS)).toBe(true);
   });
+});
+
+describe('mapLive — 지도가 보이는가', () => {
+  it('포커스가 있으면 보인다', () => expect(mapLive(true, false, true)).toBe(true));
+  it('투명 시트 아래(포커스 없음·비쳐 보임)는 한 번 포커스를 가진 뒤면 보인다', () => expect(mapLive(false, true, true)).toBe(true));
+  it('처음부터 다른 화면 아래에 마운트됐으면(드랍 완료 화면 아래) 보이지 않는다', () => expect(mapLive(false, true, false)).toBe(false));
+  it('다른 탭·불투명 화면 뒤면 보이지 않는다', () => expect(mapLive(false, false, true)).toBe(false));
+});
+
+it('useMapLive — 완료 화면 아래에 새로 마운트된 지도는 포커스를 받기 전까지 쉬고, 그 뒤 시트 아래에선 계속 보인다', () => {
+  let live: boolean | undefined;
+  const Probe = () => { live = useMapLive().live; return null; };
+  let r!: import('react-test-renderer').ReactTestRenderer;
+  mockNav.focused = false; mockNav.visible = true; // 처음부터 다른 화면 아래 (덮였다는 신호를 못 받아 visible은 true)
+  act(() => { r = TestRenderer.create(React.createElement(Probe)); });
+  expect(live).toBe(false);
+  mockNav.focused = true; // 완료 화면을 닫고 지도로
+  act(() => r.update(React.createElement(Probe)));
+  expect(live).toBe(true);
+  mockNav.focused = false; // 핀 미리보기 시트가 위에 (비쳐 보임)
+  act(() => r.update(React.createElement(Probe)));
+  expect(live).toBe(true);
+  mockNav.visible = false; // 다른 탭
+  act(() => r.update(React.createElement(Probe)));
+  expect(live).toBe(false);
+  act(() => r.unmount());
 });

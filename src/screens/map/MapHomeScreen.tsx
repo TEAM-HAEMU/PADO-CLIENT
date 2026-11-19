@@ -7,7 +7,6 @@ import { AppState, Linking, Platform, ScrollView, View } from 'react-native';
 import MapView, { Polygon, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import { useIsFocused } from '@react-navigation/native';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { shallow } from 'zustand/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +21,7 @@ import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useDropLock } from '@/hooks/useDropLock';
-import { useScreenVisible } from '@/hooks/useScreenVisible';
+import { useMapLive } from '@/hooks/useMapLive';
 import { useStoreWhile } from '@/hooks/useStoreWhile';
 import { markScopeTipSeen, useDropRadius, useScopeTip } from '@/hooks/useDropRadius';
 import { ScopeTip } from '@/components/map/ScopeTip';
@@ -98,12 +97,10 @@ let mapLoadTracked = false;
 export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabParamList, 'Map'>) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const focused = useIsFocused();
-  // 지도가 보이는가 — 다른 탭이나 위를 덮은 상세 화면 뒤에 있으면 GPS가 갱신돼도 이 화면을 다시 그리지 않는다(정렬·핀 고르기·카메라 따라가기·2분 폴링 모두 쉼).
+  // 지도가 보이는가 (useMapLive) — 다른 탭이나 위를 덮은 상세 화면 뒤에 있으면 GPS가 갱신돼도 이 화면을 다시 그리지 않는다(정렬·핀 고르기·카메라 따라가기·2분 폴링·영역 이벤트 모두 쉼).
   // 위치 감시는 계속 돌고(드랍 만들기·푸시 지역 등이 쓴다), 다시 보이는 렌더에서 최신 위치를 한 번에 읽어 맞춘다.
-  // 투명 시트(핀 미리보기 등)가 위에 떠도 지도는 비쳐 보이므로 그대로 따라간다 (useScreenVisible). 포커스가 있으면 늘 보이는 것으로 친다
-  const visible = useScreenVisible();
-  const live = focused || visible;
+  // 투명 시트(핀 미리보기 등)가 위에 떠도 지도는 비쳐 보이므로 그대로 따라간다
+  const { focused, live } = useMapLive();
   const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, requestPermission } = useStoreWhile(useLocation, s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission }), live, shallow);
   // 위치를 받기 전엔 지난번 위치 근처에 카메라를 둔다 (처음 켤 때 엉뚱한 동네가 먼저 보이지 않게)
   const startHint = useRef(lastKnown()).current; // 한 번만 읽는다 (매번 새 객체면 아래 정렬·자동 재생이 계속 다시 돈다)
@@ -230,8 +227,9 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     // 그사이 고르기를 풀었거나 다른 드랍을 골랐으면 그대로 둔다
     if (id && latestSel.current === id) setArrivedId(id);
   }, []);
-  // 가려진 지도가 보내는 영역 이벤트는 버린다 — 다른 화면이 덮은 동안 네이티브 지도가 엉뚱한 영역(크기가 틀어진 투영)을 보내
-  // 핀을 다시 고르고(마커 전부 다시 그림) 그 좌표로 지역 이름을 물었다 (2026-11-20 QA R-10). 돌아오면 내 위치로 다시 맞추며 새 영역이 온다
+  // 가려진 지도가 보내는 영역 이벤트는 버린다 (2026-11-20 QA R-10). 드랍을 남기면 완료 화면 아래에 지도가 새로 마운트되는데,
+  // 창에 붙기 전의 iOS Google 지도는 첫 카메라(initialRegion)를 아직 받지 못한 기본 카메라(대서양 쪽, 줌 4)로 '멈춤' 이벤트를 보낸다.
+  // 그 영역으로 핀을 다시 고르고(핀이 전부 빠짐) 그 좌표로 지역 이름을 물었다. 돌아오면 내 위치로 다시 맞추며 새 영역이 온다
   const liveRef = useRef(live);
   liveRef.current = live;
   const onRegionChange = useCallback((r: Region, details?: { isGesture?: boolean }) => {
