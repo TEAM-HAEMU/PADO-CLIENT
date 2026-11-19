@@ -9,7 +9,8 @@ const mockStart = jest.fn();
 const mockToast = jest.fn();
 const mockFind = jest.fn(async (s: { id: string }) => ({ previewUrl: `https://p/${s.id}.m4a` }));
 jest.mock('@/store/toast', () => ({ toast: (...a: unknown[]) => mockToast(...a) }));
-jest.mock('@/api/endpoints', () => ({ songApi: { get: jest.fn(async (id: string) => ({ id, title: id, artist: '가수', albumImagePath: null })) } }));
+const mockGetSong = jest.fn(async (id: string) => ({ id, title: id, artist: '가수', albumImagePath: null }));
+jest.mock('@/api/endpoints', () => ({ songApi: { get: (id: string) => mockGetSong(id) } }));
 jest.mock('@/services/previewSource', () => ({ findPreview: (s: { id: string }) => mockFind(s) }));
 jest.mock('@/services/preview', () => {
   // 진짜 zustand 스토어 — 대기열 서비스가 key·endedKey·lastError 변화를 구독한다
@@ -185,4 +186,65 @@ test('같은 대기열·같은 곡으로 다시 열면(재생 화면 재진입) 
   expect(started()).toEqual(['s1']);
   clearQueue();
   expect(usePlayQueue.getState().current).toBeNull();
+});
+
+/* QA 리뷰 반영 (#52 1-2) — 대기열이 끝나는 규칙 */
+describe('대기열을 놓는 때', () => {
+  const st = () => usePreviewStore.getState() as unknown as { key: string | null; upNext: { key: string } | null };
+
+  test('stop()으로 플레이어가 내려가면 대기열도 놓고, 미리 넣은 upNext도 거둔다', async () => {
+    playQueue(Q, 's1');
+    await flush();
+    expect(st().upNext?.key).toBe('s2');
+    usePreviewStore.setState({ key: null, endedKey: null, upNext: null } as never); // stop()과 같은 상태 변화
+    await flush();
+    expect(usePlayQueue.getState()).toMatchObject({ ids: [], current: null });
+    await flush(QUEUE_SKIP_MS * 3);
+    expect(started()).toEqual(['s1']);
+  });
+
+  test('건너뛰기를 기다리는 중에 대기열을 놓으면(로그아웃) 타이머가 다음 곡을 틀지 않는다', async () => {
+    mockOutcome = id => (id === 's1' ? 'unavailable' : 'ok');
+    playQueue(Q, 's1');
+    await flush();
+    clearQueue(); // 로그아웃 — store/auth signOut이 부른다
+    await flush(QUEUE_SKIP_MS * 2);
+    expect(started()).toEqual(['s1']);
+  });
+
+  test('곡 정보를 받는 중에 대기열을 놓으면 늦게 온 결과로 틀지 않는다', async () => {
+    let release!: () => void;
+    mockGetSong.mockImplementationOnce((id: string) => new Promise(res => { release = () => res({ id, title: id, artist: '가수', albumImagePath: null }); }));
+    playQueue(Q, 's1');
+    await flush();
+    expect(started()).toEqual([]);
+    clearQueue();
+    release();
+    await flush(QUEUE_SKIP_MS);
+    expect(started()).toEqual([]);
+    expect(usePlayQueue.getState().current).toBeNull();
+  });
+
+  test('대기열 안의 곡을 목록에서 직접 틀면 대기열을 놓는다 — 그 곡이 끝나도, 나중에 다른 곡을 따로 틀어도 이어 가지 않는다', async () => {
+    playQueue(Q, 's1');
+    await flush();
+    usePreviewStore.setState({ key: 's3', endedKey: null, upNext: null } as never); // 행에서 3번을 누름 (대기열이 튼 곡 아님)
+    await flush();
+    expect(usePlayQueue.getState()).toMatchObject({ ids: [], current: null });
+    end(); // 3번 끝
+    await flush(QUEUE_SKIP_MS);
+    usePreviewStore.setState({ key: 's1', endedKey: null } as never); // 나중에 1번을 따로
+    end();
+    await flush(QUEUE_SKIP_MS);
+    expect(started()).toEqual(['s1']);
+  });
+
+  test('일시정지·재개처럼 곡이 바뀌지 않으면 대기열은 그대로', async () => {
+    playQueue(Q, 's1');
+    await flush();
+    usePreviewStore.setState({ paused: true } as never);
+    usePreviewStore.setState({ paused: false } as never);
+    await flush();
+    expect(usePlayQueue.getState().current).toBe('s1');
+  });
 });

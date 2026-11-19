@@ -72,3 +72,23 @@ test('B-04: 플레이어를 닫은 뒤 곡이 끝나도 다음 곡으로 넘어�
   await flush();
   expect(mockStart.mock.calls.map(c => c[0])).toEqual(['s1', 's2', 's3']);
 });
+
+test('QA 리뷰 #52 1-3: 3번까지 들은 뒤 같은 순서의 전체 재생을 다시 누르면 화면도 1번 — 지난번 곡(3번)으로 넘기지 않는다', async () => {
+  let r!: import('react-test-renderer').ReactTestRenderer;
+  const open = () => act(() => { r = TestRenderer.create(React.createElement(PlayerScreen as never, { navigation, route: { params: { songId: 's1', queue: QUEUE, autoplay: true } } })); });
+  open();
+  await flush();
+  await end();
+  await flush();
+  await end();
+  await flush();
+  expect(usePlayQueue.getState().current).toBe('s3');
+  act(() => r.unmount());
+  navigation.setParams.mockClear();
+  open(); // 다시 전체 재생 (같은 순서)
+  await flush();
+  expect(usePlayQueue.getState().current).toBe('s1');
+  expect(navigation.setParams).not.toHaveBeenCalledWith({ songId: 's3' });
+  expect(mockStart.mock.calls.map(c => c[0]).slice(-1)).toEqual(['s1']);
+  act(() => r.unmount());
+});

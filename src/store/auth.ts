@@ -8,6 +8,7 @@ import type { TokenPair } from '@/api/types';
 import { queryClient } from '@/hooks/queryClient';
 import { kv } from './storage';
 import { usePreviewStore } from '@/services/preview';
+import { clearQueue } from '@/services/playQueue';
 import { signOutProviders } from '@/services/socialAuth';
 import { SESSION_EXPIRED_MESSAGE } from '@/api/errors';
 import { useDraft } from './draft';
@@ -84,6 +85,8 @@ export const useAuth = create<AuthState>((set, get) => ({
     // 다음 사용자에게 이전 사용자의 흔적이 남지 않게 (알림 설정도 — 다음 사용자의 설정을 못 받으면 기본값으로 보이게)
     usePrefs.getState().applyNotify(NOTIFY_DEFAULTS);
     queryClient.clear();
+    // 전체 재생 대기열도 — 건너뛰기 대기·곡 조회 중이면 stop만으로는 대기열이 모르고, 로그아웃한 뒤에 다음 곡이 나왔다
+    clearQueue();
     usePreviewStore.getState().stop();
     useDraft.getState().reset();
     signOutProviders();

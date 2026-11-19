@@ -55,8 +55,12 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   // 화면은 대기열을 시작하고, 대기열이 지금 트는 곡을 따라 보여 준다
   React.useEffect(() => { if (queue) playQueue(queue, songId, dropId); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const queueCurrent = usePlayQueue(st => (queue && sameIds(st.ids, queue) ? st.current : null));
+  // 따라갈 곡은 렌더 때 값이 아니라 스토어의 지금 값으로 — 같은 순서의 전체 재생을 다시 누르면 마운트 렌더엔 지난번 곡(예: 3번)이 남아 있고,
+  // 바로 위 effect가 1번으로 다시 시작한 뒤라 렌더 값으로 넘기면 화면은 3번·소리는 1번이 됐다 (QA 리뷰 반영)
   React.useEffect(() => {
-    if (queueCurrent && queueCurrent !== songId) navigation.setParams({ songId: queueCurrent });
+    if (!queue) return;
+    const st = usePlayQueue.getState();
+    if (sameIds(st.ids, queue) && st.current && st.current !== songId) navigation.setParams({ songId: st.current });
   }, [queueCurrent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 곡 하나 자동 재생(autoplay, 대기열 없음): 열리면 미리듣기 시작

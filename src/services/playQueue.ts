@@ -6,7 +6,12 @@
  *   (백그라운드에서 소리가 끊기지 않게 — 끊기면 iOS가 앱을 재워 다음 곡을 못 튼다)
  * - upNext를 못 채웠으면 끝난 뒤(endedKey) 다음 곡을 직접 튼다
  * - 미리듣기가 없는 곡은 건너뛰고, 조회 불가·재생 오류는 알린 뒤 넘긴다. 연속 QUEUE_MAX_FAILS곡을 못 틀면 멈춘다(망이 끊김 등)
- * - 사용자가 대기열 밖의 곡을 틀면(주변 곡·다른 드랍) 대기열을 놓는다
+ * - 대기열이 끝나는 때 (QA 리뷰 반영):
+ *   · 대기열이 틀지 않은 곡이 재생되면 — 대기열 밖의 곡이든, 대기열 안의 곡을 사용자가 목록에서 직접 눌렀든 — 대기열을 놓는다.
+ *     '전체 재생'만 대기열을 시작한다. 한 곡을 고른 건 그 곡만 듣겠다는 뜻이라, 몰래 그다음 곡으로 이어 가지 않는다.
+ *   · 플레이어가 멈춤(stop — 미니 디스크 정지·주변 자동 재생의 다음·로그아웃·필수 업데이트)으로 내려가면 놓는다.
+ *     곡이 이미 내려가 있던 때(건너뛰기 대기·곡 조회 중)의 stop은 스토어에서 구분할 수 없어, 로그아웃·필수 업데이트는 clearQueue를 직접 부른다.
+ *   · 놓은 뒤에 늦게 끝난 조회·타이머는 current가 비어 있어 아무것도 틀지 않는다.
  * preview.tsx는 고치지 않는다 — 스토어의 공개 동작(startPreview·setUpNext·endedKey·lastError)만 쓴다
  */
 import { create } from 'zustand';
@@ -118,7 +123,7 @@ let unsub: (() => void) | null = null;
 function ensureSubscribed() {
   if (unsub) return;
   unsub = usePreviewStore.subscribe((s, prev) => {
-    const { current, ids } = usePlayQueue.getState();
+    const { current } = usePlayQueue.getState();
     if (!current) return;
     // 끝까지 나옴 — upNext로 이미 다음 곡이 이어졌으면 따라가고, 아니면 직접 튼다
     if (s.endedKey !== prev.endedKey && s.endedKey === current) {
@@ -137,8 +142,11 @@ function ensureSubscribed() {
     }
     // 재생 중 오류(주소 만료 등 — 토스트는 플레이어가 띄운다) → 다음 곡으로
     if (s.lastError !== prev.lastError && s.lastError?.key === current) return skipFrom(current, true);
-    // 대기열 밖의 곡을 틀었다 — 대기열을 놓는다
-    if (s.key !== prev.key && s.key && !ids.includes(s.key)) clearQueue();
+    if (s.key === prev.key) return;
+    // 대기열이 튼 곡이 아니다(대기열 밖의 곡, 또는 대기열 안의 곡을 목록에서 직접 누름) — 대기열을 놓는다
+    if (s.key && s.key !== current) return clearQueue();
+    // 끝·오류가 아닌데 플레이어가 내려갔다 = stop() — 대기열도 놓는다
+    if (!s.key && prev.key && s.endedKey !== prev.key && s.lastError === prev.lastError) clearQueue();
   });
 }
 

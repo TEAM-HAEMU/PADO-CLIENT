@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PrimaryButton, T } from '@/components/ui';
 import { markPromptShown, openAppUpdate } from '@/services/appUpdate';
 import { usePreviewStore } from '@/services/preview';
+import { clearQueue } from '@/services/playQueue';
 import { colors } from '@/theme/tokens';
 
 const otter = require('@/assets/otter/otter.webp');
@@ -17,6 +18,7 @@ export default function UpdateRequiredScreen() {
   useEffect(() => {
     markPromptShown('required');
     // 앱을 쓸 수 없는 동안 재생을 멈춘다 (멈출 방법이 없어지므로)
+    clearQueue(); // 대기열이 건너뛰기 대기 중이면 업데이트 화면 뒤에서 다음 곡을 틀지 않게
     usePreviewStore.getState().stop();
   }, []);
   return (
