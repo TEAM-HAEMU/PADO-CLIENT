@@ -9,7 +9,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 import { errorMessage } from '@/api/errors';
-import { isMusicDetail, isPlaylistDetail, isVoteDetail } from '@/api/types';
+import { isMusicDetail } from '@/api/types';
 import { Avatar, Loading, Press, T } from '@/components/ui';
 import { ServiceGlyph } from '@/components/ui/Brand';
 import { Sheet } from '@/components/ui/Sheet';
@@ -17,6 +17,7 @@ import { PreviewCredit } from '@/components/music/PreviewRow';
 import { CommentGlyph, HeartGlyph, MoreGlyph, PinGlyph, PlayCircleGlyph } from '@/components/player/glyphs';
 import { useCommentCount, useDrop, useDropPlace, useLikeCount, useSong, useToggleLike, useIsLiked } from '@/hooks/api';
 import type { RootScreen } from '@/navigation/types';
+import { useDropScreen } from '@/navigation/dropScreen';
 import { useAuth } from '@/store/auth';
 import type { ServiceId } from '@/store/prefs';
 import { toast } from '@/store/toast';
@@ -69,14 +70,12 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   // 투표·플리 드랍은 넘겨받은 화면이 센다
   useDropOpenedEvent(dropId, 'MUSIC', music, source);
 
-  React.useEffect(() => {
-    if (!d) return;
-    if (isVoteDetail(d)) navigation.replace('VoteDrop', { dropId, source });
-    else if (isPlaylistDetail(d)) navigation.replace('PlaylistDrop', { dropId, source });
-  }, [d, dropId, navigation, source]);
+  // 투표·플리 드랍이면 그 상세로 넘기고, 어느 모양도 아니면 '찾을 수 없어요'
+  const shape = useDropScreen('PinPreview', navigation, dropId, d, source);
+  const failed = drop.error ?? shape.error;
 
   if (!music) {
-    return <Sheet><View style={{ height: 320 }}>{drop.isError ? <T v="body" c="ink2" style={{ textAlign: 'center', marginTop: 60 }}>{errorMessage(drop.error)}</T> : <Loading />}</View></Sheet>;
+    return <Sheet><View style={{ height: 320 }}>{failed ? <T v="body" c="ink2" style={{ textAlign: 'center', marginTop: 60 }}>{errorMessage(failed)}</T> : <Loading />}</View></Sheet>;
   }
 
   // 알약 크기 — Figma 316×421, 시트 전체가 화면 위 지도 머리(동 이름)를 가리지 않게 줄인다
