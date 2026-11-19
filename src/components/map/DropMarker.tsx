@@ -71,7 +71,7 @@ export function useTracking(initialMs: number) {
 /**
  * iOS 마커 그림 키 — 모습이 같으면 같은 키 (종류·잠김·크게·아트 주소·플리 곡 수). 'pado:'로 시작하면 iOS 지도 패치가
  * 마커 뷰를 직접 그림으로 그려 키별로 캐시하고 GMSMarker.icon으로 쓴다 — 그림이 준비될 때까지 투명, 준비되면 페이드인, 지울 때 페이드아웃.
- * (Google 지도 iOS는 iconView 마커를 다시 찍을 때마다 그 마커를 1~2프레임 그리지 않아 핀·묶음이 깜빡였다.) Android는 identifier를 이벤트 id로만 쓴다.
+ * (Google 지도 iOS는 iconView 마커를 다시 찍을 때마다 그 마커를 1~2프레임 그리지 않아 핀·묶음이 깜빡였다.) Android도 같은 키로 지도 패치가 그림(Bitmap)을 캐시해 다시 찍지 않고, 준비되면 페이드인·바뀌거나 지울 때 페이드아웃한다(묶음은 바로 그린다).
  */
 export const pinIconKey = (type: DropType, locked: boolean, active: boolean, url: string | null | undefined, count?: number) =>
   `pado:p|${type}|${locked ? 1 : 0}|${active ? 1 : 0}|${url ?? ''}|${type === 'PLAYLIST' && !locked ? count ?? '' : ''}`;
@@ -164,7 +164,7 @@ export const ClusterMarker = memo(function ClusterMarkerItem({ id, latitude, lon
     <Marker identifier={`pado:c|${size}|${clusterLabel(count)}`} coordinate={coordinate} anchor={CLUSTER_ANCHOR} tracksViewChanges={tracking} zIndex={2} onPress={press}>
       {/* Android는 숫자가 바뀌면 안쪽 뷰를 새로 붙여 그 자리에서 다시 찍는다 — 묶음 키가 줌 단계와 무관해져(clusterPoints) 같은 마커가 위치·숫자만 바뀌는 일이 잦은데,
           크기가 그대로인 채 글자만 바뀌면 다시 찍을 계기가 없을 수 있어 추적을 끌 때(TRACK.change)까지 옛 숫자가 남지 않게.
-          iOS는 하지 않는다 — 안쪽 뷰를 바꾸면 다음 런루프에 다시 찍기 전까지 빈 마커로 찍혀 깜빡였다. iOS는 이 뷰를 찍지 않는다 — identifier(지름·숫자)로 지도 패치가 묶음 그림을 직접 그려 캐시해 쓴다(그림 모드, pinIconKey 설명) */}
+          iOS는 하지 않는다 — 안쪽 뷰를 바꾸면 다음 런루프에 다시 찍기 전까지 빈 마커로 찍혀 깜빡였다. iOS·Android 모두 이 뷰를 찍지 않는다 — identifier(지름·숫자)로 지도 패치가 묶음 그림을 직접 그려 캐시해 쓴다(그림 모드, pinIconKey 설명). 위 Android 안쪽 뷰 다시 붙이기는 그림 모드에선 영향이 없다 */}
       <View key={Platform.OS === 'android' ? count : undefined} style={{ padding: CLUSTER_PAD }} accessible accessibilityRole="button" accessibilityLabel={`드랍 ${count}개, 눌러서 펼치기`}>
         <View style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 3, borderColor: colors.page, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: dropShadow.shadowColor, shadowOpacity: 0.18, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 3 }}>
           <Text allowFontScaling={false} style={{ fontFamily: fonts.bold, fontSize: 13, lineHeight: 16, color: colors.page }}>{clusterLabel(count)}</Text>
