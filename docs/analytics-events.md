@@ -40,11 +40,16 @@
 
 ## 서버 집계 (`POST /events`)
 
-아래 다섯 이벤트는 Amplitude와 별도로 서버에도 합계만 보낸다. 분석을 끈 사람은 보내지 않는다.
-이름과 `droppingId`만 보내고 로그인 토큰은 붙이지 않는다. 10초 모아서, 50개가 차면 바로, 앱이 백그라운드로 갈 때 보낸다.
+아래 여섯 이벤트는 Amplitude와 별도로 서버에도 합계만 보낸다. 분석을 끈 사람은 보내지 않는다.
+이름과 `droppingId`(Amplitude `drop_id`), `push_opened`면 `noticeId`(Amplitude `notice_id`, 운영자 발송 알림일 때만)만 보내고 로그인 토큰은 붙이지 않는다.
+10초 모아서, 50개가 차면 바로, 앱이 백그라운드로 갈 때 보낸다.
 네트워크 오류·5xx는 다음에 다시, 404(서버 배포 전)·4xx는 버린다.
 
-`app_opened`, `drop_opened`, `preview_started`, `drop_locked_tap`, `share_opened`
+`app_opened`, `drop_opened`, `preview_started`, `drop_locked_tap`, `share_opened`, `push_opened`
+
+- 서버는 일별 합계와 함께 시간별 합계(`event_hourly_counts`, 드랍 ID 없음)도 센다. 어드민의 알림 효과(보낸 뒤 24시간 vs 지난주 같은 시간)가 이 값을 쓴다
+- `push_opened` + `noticeId`면 서버가 그 알림의 누른 수(`push_notices.open_count`)를 1 올린다. 누가 눌렀는지는 저장하지 않는다
+- `noticeId`는 UUID일 때만 보낸다 (잘못된 값으로 묶음 전체가 400으로 버려지지 않게)
 
 ## 이벤트
 
@@ -61,7 +66,7 @@
 | `tap` | `Press`로 만든 모든 버튼 | `label`, `kind`(`press`·`long_press`) | |
 | `session_start` / `session_end` | Amplitude 세션 (5분) | | |
 | `api_error` | API가 2xx가 아님 | `method`, `path`(ID는 `:id`), `status`, `code` | |
-| `setting_changed` | 설정 변경 | `key`, `value` | |
+| `setting_changed` | 설정 변경 | `key`, `value`. 알림 토글은 `notify_like`·`notify_comment`·`notify_nearby`·`notify_notice`·`notify_marketing`(혜택·소식 — 설정 토글과 가입 직후 알림 안내의 체크) | |
 
 `tap.label`: `trackAs` → 접근성 라벨 → testID → 버튼 글자 순. 숫자는 `#`으로 바뀐다 (`좋아요 #개`).
 닉네임·곡명·플리 이름이 들어가는 버튼은 `trackAs`로 고정 라벨을 준다 (`내 드랍`, `곡 행`, `알림 항목` 등).
@@ -125,7 +130,7 @@
 |---|---|---|
 | `notification_opened` | 알림 항목 누름 | `event`(알림 종류), `unread`, `has_drop` |
 | `push_permission_result` | 알림(OS) 권한 요청 결과 | `result`(`granted`·`denied`·`unknown`), `was`(요청 전 상태), `source`(`onboarding` 가입 직후 안내·`prompt` 기존 사용자 새 버전 안내·`settings` 설정 › 알림) |
-| `push_opened` | 푸시 알림을 눌러 앱을 엶 (꺼져 있을 때·백그라운드·앞에 있을 때 모두) | `type`(`comment`·`like`·`nearby`·`notice`, 모르는 값은 그대로), `has_drop`(드랍을 열었는지 — 아니면 알림 화면) |
+| `push_opened` | 푸시 알림을 눌러 앱을 엶 (꺼져 있을 때·백그라운드·앞에 있을 때 모두). 서버 집계 대상 | `type`(`comment`·`like`·`nearby`·`notice`, 모르는 값은 그대로), `has_drop`(드랍을 열었는지), 운영자 발송(`notice`)만: `kind`(`NOTICE` 운영 공지·`AD` 혜택·소식), `target`(`DROP`·`CREATE_DROP`·`MAP`·`MY_PLAYLISTS`·`MY`·`DROP_OR_INBOX`, 옛 서버면 없음), `notice_id` |
 | `playlist_created` / `playlist_deleted` / `playlist_songs_added` / `playlist_song_removed` | 플리 | `playlist_id`, `count`, `source` 등 |
 | `report_submitted` | 신고 | `target_type`, `reason`, `has_detail`, `block` |
 | `user_blocked` / `user_unblocked` | 차단 | `source` |

@@ -107,6 +107,17 @@ Retention Analysis
    - Event Segmentation, A: `app_update_prompt_shown` where `kind = optional`, B: `app_update_dismissed`
    - Formula `UNIQUES(B) / UNIQUES(A)`
 
+## 6-2. 알림 누름
+
+알림별 누른 수와 보낸 뒤 24시간 이용 비교는 어드민(알림 보내기 › 보낸 기록)이 서버 합계로 보여 준다. Amplitude에서는 종류별 흐름만 본다.
+
+1. 운영자 발송 누름 — 종류·열 곳별
+   - Event Segmentation: `push_opened` where `type = notice`, Group by `kind`, `target`
+   - 이름 `운영자 알림 누름 (종류·열 곳)`
+2. 혜택·소식 알림 동의
+   - Event Segmentation: `setting_changed` where `key = notify_marketing`, Group by `value`, `screen`(`PushPermission` 가입 직후 체크 · `Settings` 설정 토글)
+   - 이름 `혜택·소식 알림 동의·철회`
+
 ## 7. 대시보드
 
 Dashboards → New → `PADO 이용 분석`에 위 차트를 모두 넣고, 공유 링크(Share → Copy link)를 어드민의 `AMPLITUDE_DASHBOARD_URL`에 넣는다.
