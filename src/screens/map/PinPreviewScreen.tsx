@@ -27,6 +27,8 @@ import { useDropMenu } from '@/hooks/useDropMenu';
 import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
 import { colors, fonts } from '@/theme/tokens';
 import { artUrl } from '@/utils/artUrl';
+import { capsuleLineWidth, capsulePillWidth } from '@/utils/capsule';
+import { Marquee } from '@/components/ui/Marquee';
 import { formatRelative } from '@/utils/format';
 
 const SERVICE_ORDER: ServiceId[] = ['spotify', 'appleMusic', 'youtubeMusic'];
@@ -34,6 +36,10 @@ const SERVICE_ORDER: ServiceId[] = ['spotify', 'appleMusic', 'youtubeMusic'];
 const STACK = ['#00C9FF', '#5DDCFF', '#B4EFFF'];
 const RING_GAP = 21; // 알약 바깥 → 링 (358 - 316) / 2
 const RING_STROKE = 7;
+const CAP_BORDER = 8; // 알약 흰 테두리 — 글자는 그 안쪽(capW − 16) 반원에 잘린다
+const TEXT_TOP = 20; // 주소 · 곡명 묶음 위치 (Figma)
+const ADDRESS_H = 18;
+const TEXT_GAP = 6;
 
 export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinPreview'>) {
   // 듣던 곡은 화면을 닫아도 계속 (다른 곡을 틀 때만 바뀜)
@@ -78,6 +84,11 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const capW = Math.round(capH * (316 / 421));
   const ringW = capW + RING_GAP * 2;
   const overlap = capH + RING_GAP - 34; // 카드는 알약 꼭대기에서 34 아래부터 시작 (알약·링은 카드 위에 겹침)
+  // 글자는 위쪽 반원 안 — 줄마다 그 높이에서 보이는 폭까지만 (넘치면 핀·첫 글자·…이 테두리에 잘린다)
+  // 주소 칩은 양 끝이 둥글어 끝 반원이 안쪽에 들어오는 폭, 곡명 줄은 줄 위 끝의 현 − 양옆 12
+  const innerW = capW - CAP_BORDER * 2;
+  const addressMaxW = capsulePillWidth(innerW, TEXT_TOP, ADDRESS_H);
+  const songMaxW = capsuleLineWidth(innerW, address ? TEXT_TOP + ADDRESS_H + TEXT_GAP : TEXT_TOP);
   const art = music.albumImageUrl ?? song.data?.albumImagePath;
   const openPlayer = () => { if (song.data) navigation.replace('Player', { songId: song.data.id, dropId }); };
   // 전체 듣기 — 누른 음악 앱으로 바로 딥링크
@@ -91,26 +102,27 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
       header={
         <View style={{ width: ringW, height: capH + RING_GAP, alignItems: 'center' }}>
           {song.data ? <ProgressRing songId={song.data.id} width={ringW} height={ringW * (364 / 358)} top={capH + RING_GAP - ringW * (364 / 358)} /> : null}
-          <View style={{ width: capW, height: capH, borderRadius: capW / 2, borderWidth: 8, borderColor: '#FFFFFF', overflow: 'hidden', backgroundColor: colors.card2 }}>
-            {art ? <Image source={{ uri: artUrl(art, capH)! }} style={{ position: 'absolute', left: 0, top: 0, width: capW - 16, height: capH - 16 }} resizeMode="cover" /> : null}
+          <View style={{ width: capW, height: capH, borderRadius: capW / 2, borderWidth: CAP_BORDER, borderColor: '#FFFFFF', overflow: 'hidden', backgroundColor: colors.card2 }}>
+            {art ? <Image source={{ uri: artUrl(art, capH)! }} style={{ position: 'absolute', left: 0, top: 0, width: innerW, height: capH - CAP_BORDER * 2 }} resizeMode="cover" /> : null}
             <LinearGradient pointerEvents="none" colors={['rgba(4,9,22,0.55)', 'rgba(4,9,22,0.25)', 'rgba(4,9,22,0)']} locations={[0, 0.55, 1]} style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 120 }} />
             {/* 알약 전체 탭 = 재생 화면 (가운데 재생 버튼은 따로) */}
             <Press accessibilityLabel="재생 화면 열기" onPress={openPlayer} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} />
-            <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 20, alignItems: 'center', gap: 6, paddingHorizontal: 24 }}>
+            <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: TEXT_TOP, alignItems: 'center', gap: TEXT_GAP }}>
               {address ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 18, paddingHorizontal: 8, borderRadius: 999, backgroundColor: 'rgba(18,33,74,0.8)', maxWidth: '100%' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: ADDRESS_H, paddingHorizontal: 8, borderRadius: 999, backgroundColor: 'rgba(18,33,74,0.8)', maxWidth: addressMaxW }}>
                   <PinGlyph size={7} color="#2BD1FF" />
                   <T v="tiny" numberOfLines={1} style={{ color: '#2BD1FF', flexShrink: 1 }}>{address}</T>
                 </View>
               ) : null}
-              <T v="captionStrong" numberOfLines={1} style={{ fontSize: 14, color: '#FFFFFF', textShadowColor: 'rgba(4,9,22,0.75)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } }}>
+              {/* 곡 · 가수 한 줄 — 보이는 폭보다 길면 흘러서 끝까지 보여 준다 */}
+              <Marquee v="captionStrong" width={songMaxW} style={{ fontSize: 14, color: '#FFFFFF', textShadowColor: 'rgba(4,9,22,0.75)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } }}>
                 {song.data ? `${song.data.title} · ${song.data.artist}` : ' '}
-              </T>
+              </Marquee>
             </View>
             <Press
               onPress={preview.toggle}
               accessibilityLabel={preview.playing ? '미리듣기 일시정지' : '30초 미리듣기'}
-              style={{ position: 'absolute', left: (capW - 16 - 58) / 2, top: (capH - 16 - 58) / 2, width: 58, height: 58, opacity: preview.available ? 1 : 0.5, shadowColor: '#FFFFFF', shadowOpacity: 0.4, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } }}
+              style={{ position: 'absolute', left: (innerW - 58) / 2, top: (capH - CAP_BORDER * 2 - 58) / 2, width: 58, height: 58, opacity: preview.available ? 1 : 0.5, shadowColor: '#FFFFFF', shadowOpacity: 0.4, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } }}
             >
               <PlayCircleGlyph size={58} playing={preview.playing} />
             </Press>
