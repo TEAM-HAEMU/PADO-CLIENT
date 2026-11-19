@@ -196,9 +196,9 @@ export function usePreview(song: PreviewSong | null | undefined, opts: { lazy?: 
   const setUrl = (u: string | null | false, adult?: boolean) => { if (song) setFound({ id: song.id, url: u, adult }); };
   const [looking, setLooking] = useState(false);
   const id = song?.id;
-  // 이 곡과 관련된 값만 구독 — 재생 중 진행률 갱신(250ms)이 다른 곡 행까지 다시 그리지 않게
-  const active = usePreviewStore(st => !!id && st.key === id);
-  const paused = usePreviewStore(st => st.paused);
+  // 이 곡과 관련된 값만 구독 — 재생 중 진행률 갱신(250ms)이나 다른 곡의 일시정지가 다른 곡 행까지 다시 그리지 않게
+  // (paused를 따로 구독하면 일시정지 한 번에 목록의 모든 행이 다시 그려진다 — QA R-15)
+  const playing = usePreviewStore(st => !!id && st.key === id && !st.paused);
   useEffect(() => {
     let alive = true;
     if (!song || opts.lazy) return;
@@ -213,7 +213,7 @@ export function usePreview(song: PreviewSong | null | undefined, opts: { lazy?: 
     loading: looking || (!opts.lazy && url === undefined),
     /** lazy면 눌러보기 전까지, 확인 불가(false)면 다시 누를 수 있게 '가능'으로 보여준다 */
     available: opts.lazy ? url !== null : url === false || !!url,
-    playing: active && !paused,
+    playing,
     toggle: async () => {
       if (!song) return;
       const st = usePreviewStore.getState();
