@@ -238,3 +238,50 @@ describe('react-native-maps iOS 그림 모드 패치', () => {
     expect(remove).toMatch(/padoFadeOut\(old\);/);
   });
 });
+
+/**
+ * Android 그림 모드 (identifier 'pado:<모습 키>' — iOS와 같은 원칙)
+ *  · 확대·축소·이동 때 새로 붙는 마커마다 뷰를 2~3번씩 찍어(createDrawable) 메인 스레드가 막혔다 → 모습 키별로 그림을 캐시하고, 묶음은 바로 그린다
+ *  · 마커 안 SVG 이미지(앨범 아트)를 받는 중이면 그 그림은 캐시하지 않는다(iOS에서 아트 빠진 그림이 캐시돼 회색으로 굳은 회귀의 교훈)
+ *  · 그림이 준비될 때까지 투명으로 붙이고, 바뀌거나 지울 때는 그림자 마커로 겹쳐 페이드 — 그림자는 눌리지 않는다
+ */
+describe('react-native-maps Android 그림 모드 패치', () => {
+  const marker = src('MapMarker.java');
+  const mapView = src('MapView.java');
+  const between = (from: string, to: string) => {
+    const start = marker.indexOf(from);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = marker.indexOf(to, start + from.length);
+    expect(end).toBeGreaterThan(start);
+    return marker.slice(start, end);
+  };
+
+  it("identifier가 'pado:'로 시작하면 모습 키로 쓰고, 그림 갱신은 캐시를 거친다", () => {
+    expect(between('public void setIdentifier(String identifier)', 'public void doDestroy()')).toMatch(/startsWith\(PADO_KEY_PREFIX\)/);
+    expect(between('public void updateMarkerIcon()', 'public LatLng interpolate')).toMatch(/if \(padoKey != null\) \{ padoTryIcon\(\); return; \}/);
+  });
+
+  it('핀 그림은 SVG 이미지를 받는 중이 아닐 때만 캐시하고, 찍은 버퍼는 복사해서 넣는다', () => {
+    const tryIcon = between('private void padoTryIcon()', 'private void padoMaybePlaceholder()');
+    expect(tryIcon).toMatch(/boolean complete = !padoSvgLoading\(this\);/);
+    expect(tryIcon).toMatch(/drawn\.copy\(Bitmap\.Config\.ARGB_8888, false\)/);
+    expect(tryIcon).toMatch(/padoCache\.put\(padoKey, e\)/);
+    expect(tryIcon).toMatch(/if \(complete && padoSvgUnknown\)/);
+    expect(between('private void padoMaybePlaceholder()', 'private void padoShow(')).not.toMatch(/padoCache\.put/);
+  });
+
+  it('묶음은 지름·숫자 키로 바로 그린다', () => {
+    expect(marker).toMatch(/private Bitmap padoClusterBitmap\(String key\)/);
+    expect(between('private BitmapDescriptor padoCached()', 'private void padoSchedulePoll()')).toMatch(/startsWith\("c\|"\)/);
+  });
+
+  it('그림이 없으면 투명으로 붙이고, 지울 때·바뀔 때는 그림자로 페이드아웃, 그림자는 눌리지 않는다', () => {
+    expect(marker).toMatch(/options\.icon\(padoPlaceholderIcon\);\s*options\.alpha\(0f\);/);
+    const remove = between('public void removeFromMap(Object collection)', 'private BitmapDescriptor getIcon()');
+    expect(remove).toMatch(/padoGhosts\.add\(old\)/);
+    expect(remove).toMatch(/padoFade\(old, old\.getAlpha\(\), 0f/);
+    expect(between('private void padoShow(', 'private static void padoFade(')).toMatch(/padoGhost\(padoIcon, marker\.getAlpha\(\)\)/);
+    expect(mapView).toMatch(/if \(MapMarker\.padoIsGhost\(marker\)\) return true;/);
+    expect(mapView).toMatch(/if \(airMapMarker == null\) return true;/);
+  });
+});
