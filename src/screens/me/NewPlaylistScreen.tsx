@@ -66,8 +66,8 @@ export default function NewPlaylistScreen({ navigation, route }: RootScreen<'New
         </View>}
         <View style={{ gap: 8 }}>
           <T style={{ fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, letterSpacing: -0.065, color: '#000000' }}>이름</T>
-          <View style={{ flexDirection: 'row', alignItems: 'center', height: 40, borderRadius: 99, paddingHorizontal: 16, borderWidth: 1, borderColor: '#EBEBEB' }}>
-            <TextInput autoFocus value={name} onChangeText={t => setName(t.slice(0, 30))} placeholder="플레이리스트 이름" placeholderTextColor="#9D9D9D" selectionColor={colors.primary} style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 13, letterSpacing: -0.065 }} onSubmitEditing={create} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 40, borderRadius: 99, paddingHorizontal: 16, borderWidth: 1, borderColor: '#EBEBEB' }}>
+            <TextInput autoFocus value={name} onChangeText={t => setName(t.slice(0, 30))} placeholder="플레이리스트 이름" placeholderTextColor="#9D9D9D" selectionColor={colors.primary} maxFontSizeMultiplier={1.2} style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 13, letterSpacing: -0.065 }} onSubmitEditing={create} />
             <T style={{ fontFamily: fonts.medium, fontSize: 10, lineHeight: 16, color: '#E0E0E2' }}>{name.length}/30</T>
           </View>
         </View>

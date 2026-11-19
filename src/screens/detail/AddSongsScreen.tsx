@@ -179,9 +179,9 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
     <Sheet style={{ height: '82%', paddingHorizontal: 26 }}>
       <View style={{ gap: 20, flex: 1 }}>
         <SheetTitle title="곡 추가" desc={desc} right={<View style={{ flexDirection: 'row', gap: 4 }}>{tabIcon('liked', 'heart', '좋아요')}{tabIcon('nearby', 'drop', '주변 드랍')}</View>} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 40, paddingHorizontal: 16, borderRadius: 99, borderWidth: 1, borderColor: '#55B0FF' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40, paddingHorizontal: 16, borderRadius: 99, borderWidth: 1, borderColor: '#55B0FF' }}>
           <Glyph name="search" size={15} color="#55B0FF" />
-          <TextInput value={q} onChangeText={setQ} onFocus={() => setTab('search')} placeholder="곡을 검색하세요" placeholderTextColor="#B0B0B2" selectionColor={colors.primary} style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 13, letterSpacing: -0.065 }} autoFocus />
+          <TextInput value={q} onChangeText={setQ} onFocus={() => setTab('search')} placeholder="곡을 검색하세요" placeholderTextColor="#B0B0B2" selectionColor={colors.primary} maxFontSizeMultiplier={1.2} style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 13, letterSpacing: -0.065 }} autoFocus />
           <ServiceGlyph service="spotify" size={14} />
         </View>
         {tab !== 'search' ? <T style={{ marginTop: -8, fontFamily: fonts.medium, fontSize: 12, lineHeight: 17, color: colors.ink3 }}>{tab === 'liked' ? '좋아요한 음악 드랍' : '주변 드랍'}</T> : null}
