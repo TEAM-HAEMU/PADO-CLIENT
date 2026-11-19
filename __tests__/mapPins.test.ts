@@ -236,10 +236,50 @@ describe('clusterPoints', () => {
     expect(b.map(c => c.count)).toEqual(a.map(c => c.count));
   });
 
-  test('줌 단계가 바뀌면 키도 바뀐다 (다른 격자)', () => {
-    const a = clusterPoints([here], wide);
-    const b = clusterPoints([here], { ...wide, longitudeDelta: 0.8, latitudeDelta: 1.2 });
-    expect(a[0].key).not.toBe(b[0].key);
+  test('줌 단계(칸 크기)가 바뀌어도 같은 무리의 키는 그대로다 — 폭 0.05 → 0.07 → 0.1', () => {
+    // 한 점 둘레 150m 안에 모인 드랍 6개 (0.05의 칸 0.0078도 ≈ 710m보다 훨씬 작다). id는 드랍 id
+    const pts = [here, north(40), east(60), north(-50), east(-80), north(120)].map((p, i) => ({ ...p, id: `d${i + 3}` }));
+    const at = (w: number) => clusterPoints(pts, { ...here, latitudeDelta: w * 1.8, longitudeDelta: w }, undefined, undefined, p => p.id);
+    expect(clusterCell(0.05)).not.toBe(clusterCell(0.07)); // 0.05 → 0.07에서 칸 단계가 바뀐다
+    const keys = [0.05, 0.07, 0.1, 0.07, 0.05].map(w => at(w));
+    for (const out of keys) {
+      expect(out).toHaveLength(1);
+      expect(out[0].count).toBe(6);
+      expect(out[0].key).toBe('d3'); // 가장 작은 id
+    }
+  });
+
+  test('묶음이 나뉘면 대표가 든 쪽이 키를 이어받고, 합쳐지면 합친 묶음의 대표 중 가장 작은 키', () => {
+    // 서로 4km 떨어진 두 무리 — 넓게 보면 하나, 좁게 보면 둘
+    const far = east(4000);
+    const pts = [
+      ...[here, north(30), east(40)].map((p, i) => ({ ...p, id: `b${i}` })),
+      ...[far, east(30, far), east(60, far)].map((p, i) => ({ ...p, id: `a${i}` })),
+    ];
+    const at = (w: number) => clusterPoints(pts, { ...here, latitudeDelta: w * 1.8, longitudeDelta: w }, undefined, undefined, p => p.id);
+    const merged = at(0.8);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].key).toBe('a0');
+    const split = at(0.05);
+    expect(split.map(c => c.key).sort()).toEqual(['a0', 'b0']);
+    expect(split.find(c => c.key === 'a0')!.count).toBe(3);
+  });
+
+  test('id를 주지 않으면 좌표로 대표를 고른다 — 그래도 줌 단계와 무관', () => {
+    const a = clusterPoints([here, north(30)], wide);
+    const b = clusterPoints([here, north(30)], { ...wide, longitudeDelta: 0.8, latitudeDelta: 1.2 });
+    expect(a[0].key).toBe(b[0].key);
+  });
+
+  test('가장자리 묶음도 칸 안의 드랍을 다 센다 — 끄는 방향에 따라 수·키가 바뀌지 않는다', () => {
+    const cell = clusterCell(wide.longitudeDelta);
+    // 그리는 범위(pad 0.5) 경도 끝 근처 칸에 드랍 4개 — 칸 안에서 서로 다른 경도
+    const edgeLng = wide.longitude + wide.longitudeDelta; // 그리는 범위 경도 끝
+    const base = Math.floor(edgeLng / cell) * cell;
+    const pts = [0.1, 0.3, 0.6, 0.9].map((f, i) => ({ latitude: here.latitude, longitude: base + cell * f, id: `e${i}` }));
+    const counts = [-0.3, -0.2, -0.1].map(dx => clusterPoints(pts, { ...wide, longitude: wide.longitude + dx * cell }, undefined, undefined, p => p.id))
+      .map(out => out.map(c => `${c.key}:${c.count}`));
+    for (const c of counts) if (c.length) expect(c).toEqual(['e0:4']);
   });
 
   test('500개도 칸 수만큼으로 줄어든다', () => {

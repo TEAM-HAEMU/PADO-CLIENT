@@ -74,6 +74,9 @@ const PREFETCH_ART = 150;
 // 물결은 가까운 핀 몇 개만 — 지도가 보이고 · 재생 중이고 · 지도가 멈춰 있을 때만 (마커 밖 PinRipples 레이어가 그린다)
 const ANIMATED_PINS = 4;
 
+// 묶음 대표를 고르는 드랍 id
+const dropKey = (d: DropSummary) => d.droppingId;
+
 // 하단 '가까운 드랍' 줄에 보이는 수
 const NEARBY_LIST = 12;
 // 고른 드랍으로 카메라를 옮기는 시간
@@ -269,7 +272,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   });
   const centerName = place.data && placeAt ? placeName(place.data, placeAt.level) : null;
   const clustered = drawState?.clustered ?? false;
-  const clusters = useMemo(() => (clustered && drawView ? clusterPoints(drops, drawView) : []), [clustered, drops, drawView]);
+  // 묶음 키는 대표 드랍 id — 확대·축소로 칸 크기가 바뀌어도 대표가 같은 묶음은 같은 마커로 남아 위치·숫자만 바뀐다 (clusterPoints)
+  const clusters = useMemo(() => (clustered && drawView ? clusterPoints(drops, drawView, undefined, undefined, dropKey) : []), [clustered, drops, drawView]);
   // 1개짜리 묶음은 수 원 대신 보통 핀으로 — 핀 모드와 같은 DropMarker·같은 키라 확대·축소로 모드가 바뀌어도 그 핀은 다시 만들어지지 않는다
   // 이미 그린 핀은 상한 안에서 조금 더 넓게(KEEP_PAD) 남겨 둔다 — 살짝 끌었다 되돌릴 때 마커를 지웠다 다시 만들지 않게
   const drawnPins = useRef<ReadonlySet<string>>(new Set());

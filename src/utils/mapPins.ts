@@ -96,7 +96,11 @@ export const MAX_CLUSTERS = 60;
 export const shouldCluster = (r: MapRegion | null, was = false): boolean => !!r && r.longitudeDelta > (was ? UNCLUSTER_LNG_DELTA : CLUSTER_LNG_DELTA);
 
 export interface DropCluster<T extends Coords = Coords> {
-  /** 같은 줌·같은 칸이면 같은 키 (지도를 끌어도 묶음 마커가 다시 만들어지지 않게) */
+  /**
+   * 묶음 마커 키 — 묶인 드랍 중 id가 가장 작은 드랍(대표)의 id. 줌 단계·칸과 무관해서
+   * 지도를 끌어도, 확대·축소로 칸 크기가 바뀌어도 대표가 같은 묶음은 같은 키다 (마커를 다시 만들지 않고 위치·숫자만 바꾼다).
+   * 묶음이 합쳐지면 합친 묶음의 대표는 합쳐진 묶음들의 대표 중 가장 작은 것, 나뉘면 대표가 든 쪽이 키를 이어받는다.
+   */
   key: string;
   /** 묶인 드랍들의 평균 좌표 — 묶음을 그리는 자리 */
   latitude: number;
@@ -116,28 +120,37 @@ export function clusterCell(lngDelta: number, columns = CLUSTER_COLUMNS) {
   return 2 ** Math.round(Math.log2(lngDelta / columns));
 }
 
+/** 좌표로 만든 id — id가 없는 점(테스트·좌표만 있는 목록)의 묶음 대표를 고를 때 */
+const coordId = (p: Coords) => `${p.latitude},${p.longitude}`;
+
+/** 묶을 때 칸을 세는 범위(pad) — 그리는 범위(0.5)보다 넓게. 가장자리 칸도 칸 안의 드랍을 다 세어, 지도를 끌어도 묶음의 수·대표가 바뀌지 않게 */
+const CLUSTER_COUNT_PAD = 1.5;
+
 /**
  * 보이는 영역(넉넉히) 안의 드랍을 격자 칸마다 하나로 묶는다. 잠긴 드랍도 그대로 센다(묶음엔 수만 있고 곡·커버는 없다).
  * 칸은 경도 0·위도 0을 기준으로 고정이라 같은 줌에서 지도를 끌어도 같은 드랍은 같은 묶음에 남는다.
  * 칸 높이(위도)는 화면에서 정사각형에 가깝게 경도 칸 × cos(위도) — cos는 0.1 단위로 맞춰 위아래로 끌어도 칸이 바뀌지 않게.
- * 묶음끼리 한 칸보다 가까우면(칸 경계에 걸쳐 갈라진 무리) 큰 쪽으로 합친다 — 키는 큰 쪽 칸의 키.
+ * 칸은 그리는 범위보다 넓게(CLUSTER_COUNT_PAD) 세고, 묶음 중심이 그리는 범위(pad 0.5) 안인 것만 낸다 — 가장자리 묶음의 수가 끄는 방향에 따라 달라지지 않게.
+ * 묶음끼리 한 칸보다 가까우면(칸 경계에 걸쳐 갈라진 무리) 큰 쪽으로 합친다.
+ * 키는 묶인 드랍 중 idOf가 가장 작은 드랍의 id (DropCluster.key) — 줌 단계가 바뀌어도 이어진다.
  * 묶음이 limit개를 넘으면 화면 가운데서 먼 것부터 뺀다 — 다 묶고 합친 뒤에 빼므로 남은 묶음의 수는 그대로 맞다. 남은 것의 순서는 바꾸지 않는다.
  */
-export function clusterPoints<T extends Coords>(points: readonly T[], region: MapRegion, columns = CLUSTER_COLUMNS, limit = MAX_CLUSTERS): DropCluster<T>[] {
+export function clusterPoints<T extends Coords>(points: readonly T[], region: MapRegion, columns = CLUSTER_COLUMNS, limit = MAX_CLUSTERS, idOf: (p: T) => string = coordId): DropCluster<T>[] {
   const cellLng = clusterCell(region.longitudeDelta, columns);
   const cos = Math.max(0.1, Math.round(Math.cos((region.latitude * Math.PI) / 180) * 10) / 10);
   const cellLat = cellLng * cos;
-  const level = Math.round(Math.log2(cellLng));
-  const cells = new Map<string, { n: number; first: T; lat: number; lng: number; minLat: number; maxLat: number; minLng: number; maxLng: number }>();
+  const cells = new Map<string, { n: number; first: T; rep: string; lat: number; lng: number; minLat: number; maxLat: number; minLng: number; maxLng: number }>();
   for (const p of points) {
-    if (!inRegion(p, region)) continue;
-    const key = `${level}:${Math.floor(p.longitude / cellLng)}:${Math.floor(p.latitude / cellLat)}`;
-    const c = cells.get(key);
+    if (!inRegion(p, region, CLUSTER_COUNT_PAD)) continue;
+    const cell = `${Math.floor(p.longitude / cellLng)}:${Math.floor(p.latitude / cellLat)}`;
+    const id = idOf(p);
+    const c = cells.get(cell);
     if (!c) {
-      cells.set(key, { n: 1, first: p, lat: p.latitude, lng: p.longitude, minLat: p.latitude, maxLat: p.latitude, minLng: p.longitude, maxLng: p.longitude });
+      cells.set(cell, { n: 1, first: p, rep: id, lat: p.latitude, lng: p.longitude, minLat: p.latitude, maxLat: p.latitude, minLng: p.longitude, maxLng: p.longitude });
       continue;
     }
     c.n++;
+    if (id < c.rep) c.rep = id;
     c.lat += p.latitude;
     c.lng += p.longitude;
     c.minLat = Math.min(c.minLat, p.latitude);
@@ -146,7 +159,8 @@ export function clusterPoints<T extends Coords>(points: readonly T[], region: Ma
     c.maxLng = Math.max(c.maxLng, p.longitude);
   }
   // 칸 경계에 걸친 무리는 이웃 칸으로 갈라져 묶음끼리 겹친다 → 큰 묶음부터 두고, 그 한 칸 거리 안의 작은 묶음은 큰 쪽에 합친다
-  const list = [...cells].map(([key, c]) => ({ key, ...c })).sort((a, b) => b.n - a.n || (a.key < b.key ? -1 : 1));
+  // (같은 수끼리는 대표 id 순 — 칸 번호 순으로 하면 줌 단계마다 합치는 쪽이 달라질 수 있다)
+  const list = [...cells.values()].sort((a, b) => b.n - a.n || (a.rep < b.rep ? -1 : a.rep > b.rep ? 1 : 0));
   const kept: typeof list = [];
   for (const c of list) {
     const lat = c.lat / c.n;
@@ -154,6 +168,7 @@ export function clusterPoints<T extends Coords>(points: readonly T[], region: Ma
     const into = kept.find(k => Math.hypot((k.lng / k.n - lng) / cellLng, (k.lat / k.n - lat) / cellLat) < 1);
     if (!into) { kept.push({ ...c }); continue; }
     into.n += c.n;
+    if (c.rep < into.rep) into.rep = c.rep;
     into.lat += c.lat;
     into.lng += c.lng;
     into.minLat = Math.min(into.minLat, c.minLat);
@@ -161,10 +176,12 @@ export function clusterPoints<T extends Coords>(points: readonly T[], region: Ma
     into.minLng = Math.min(into.minLng, c.minLng);
     into.maxLng = Math.max(into.maxLng, c.maxLng);
   }
-  const out = kept.map(c => ({
-    key: c.key, latitude: c.lat / c.n, longitude: c.lng / c.n, count: c.n,
-    minLat: c.minLat, maxLat: c.maxLat, minLng: c.minLng, maxLng: c.maxLng, single: c.n === 1 ? c.first : null,
-  }));
+  const out = kept
+    .map(c => ({
+      key: c.rep, latitude: c.lat / c.n, longitude: c.lng / c.n, count: c.n,
+      minLat: c.minLat, maxLat: c.maxLat, minLng: c.minLng, maxLng: c.maxLng, single: c.n === 1 ? c.first : null,
+    }))
+    .filter(c => inRegion(c, region));
   if (out.length <= limit) return out;
   // 화면 가운데서 먼 정도 — 영역 크기로 나눈 가로·세로 중 큰 쪽 (0.5 이하면 화면 안이라 화면 밖 묶음보다 늘 앞선다)
   const far = (c: DropCluster<T>) => Math.max(Math.abs(c.longitude - region.longitude) / region.longitudeDelta, Math.abs(c.latitude - region.latitude) / region.latitudeDelta);
