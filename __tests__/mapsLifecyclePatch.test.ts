@@ -199,7 +199,7 @@ describe('react-native-maps iOS 그림 모드 패치', () => {
     expect(insert).toMatch(/if \(!_padoKey\) \[_realMarker setIconView:_iconView\];/);
     expect(insert).toMatch(/if \(padoCached\) \[self padoShowIcon:padoCached\];\s*else if \(!_padoKey\) \[_realMarker setMap:map\];/);
     const show = slice('- (void)padoShowIcon:', '- (void)padoApplyTracking');
-    expect(show).toMatch(/_realMarker\.appearAnimation = kGMSMarkerAnimationFadeIn;/);
+    expect(show).toMatch(/_realMarker\.appearAnimation = .*kGMSMarkerAnimationFadeIn;/);
     expect(show).toMatch(/_realMarker\.map = _padoPendingMap;/);
   });
 
@@ -283,5 +283,41 @@ describe('react-native-maps Android 그림 모드 패치', () => {
     expect(between('private void padoShow(', 'private static void padoFade(')).toMatch(/padoGhost\(padoIcon, marker\.getAlpha\(\)\)/);
     expect(mapView).toMatch(/if \(MapMarker\.padoIsGhost\(marker\)\) return true;/);
     expect(mapView).toMatch(/if \(airMapMarker == null\) return true;/);
+  });
+});
+
+/**
+ * 묶음(키 'c|…')은 페이드 없이 한 번에 — 축소할 때 묶음끼리 합쳐지면 옛·새 묶음이 0.2초 동안 함께 반투명해져 숫자가 겹쳐 보였다 (사용자 결정).
+ * 핀은 그대로 페이드. 묶음→핀은 핀이 붙기 시작한 순간만 묶음을 잠깐 남긴다(빈 지도 프레임이 생기지 않게)
+ */
+describe('react-native-maps 묶음은 한 번에 바꾸기 (iOS·Android)', () => {
+  const ios = fs.readFileSync(path.resolve('node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m'), 'utf8');
+  const android = src('MapMarker.java');
+  const cut = (code: string, from: string, to: string) => {
+    const a = code.indexOf(from);
+    expect(a).toBeGreaterThanOrEqual(0);
+    const b = code.indexOf(to, a + from.length);
+    expect(b).toBeGreaterThan(a);
+    return code.slice(a, b);
+  };
+
+  it('iOS: 묶음은 등장 페이드 없이 붙고, 그림 교체·제거 때 페이드아웃하지 않는다', () => {
+    expect(ios).toMatch(/appearAnimation = padoIsClusterKey\(_padoKey\) \? kGMSMarkerAnimationNone : kGMSMarkerAnimationFadeIn;/);
+    const show = cut(ios, '- (void)padoShowIcon:', '- (void)padoApplyTracking');
+    expect(show).toMatch(/if \(!cluster\) padoFadeOut\(old\);/);
+    const remove = cut(ios, '- (void)padoRemoveFromMap', '- (NSUInteger)padoSignature');
+    const clusterBranch = cut(remove, 'padoIsClusterKey(self->_padoKey)', 'return;\n        }');
+    expect(clusterBranch).not.toMatch(/padoFadeOut/);
+    expect(clusterBranch).toMatch(/padoLastPinInsertAt < 0\.1 \? PADO_CLUSTER_LINGER_S : 0/);
+  });
+
+  it('Android: 묶음은 페이드 없이 그림을 바꾸고, 지울 때도 페이드하지 않는다', () => {
+    const show = cut(android, 'private void padoShow(', 'private void padoGhost(');
+    const clusterShow = cut(show, 'if (padoIsClusterKey(padoKey)) {', 'return;\n        }');
+    expect(clusterShow).toMatch(/marker\.setAlpha\(opacity\);/);
+    expect(clusterShow).not.toMatch(/padoFade|padoGhost/);
+    const remove = cut(android, 'public void removeFromMap(Object collection)', '} else if (padoKey != null && padoIcon != null) {');
+    expect(remove).toMatch(/padoIsClusterKey\(padoKey\) && padoIcon != null/);
+    expect(remove).not.toMatch(/padoFade/);
   });
 });

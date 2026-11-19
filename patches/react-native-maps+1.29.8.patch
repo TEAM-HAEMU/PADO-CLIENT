@@ -1,8 +1,8 @@
 diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
-index 09278e7..3abeb83 100644
+index 09278e7..c2a4b53 100644
 --- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
 +++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
-@@ -99,11 +99,70 @@ public class MapMarker extends MapFeature {
+@@ -99,11 +99,75 @@ public class MapMarker extends MapFeature {
      private float calloutAnchorY;
      private boolean calloutAnchorIsSet;
  
@@ -46,6 +46,11 @@ index 09278e7..3abeb83 100644
 +     *  · 그림이 바뀌거나(묶음 숫자·고른 핀) 지울 때는 옛 그림을 그림자 마커로 남겨 페이드아웃한다 — 그림자는 눌리지 않는다 (MapView.onMarkerClick)
 +     */
 +    private static final long PADO_FADE_MS = 180;
++    // 묶음(키 'c|…')은 페이드 없이 한 번에 나타나고·바뀌고·사라진다 — 합쳐질 때 옛·새 묶음이 함께 반투명해져 숫자가 겹쳐 보였다.
++    // 핀이 막 붙기 시작한 때(묶음→핀) 지우는 묶음만 PADO_CLUSTER_LINGER_MS 남겼다가 지운다 (핀 페이드인 첫 순간 지도가 비지 않게)
++    private static final long PADO_CLUSTER_LINGER_MS = 120;
++    private static long padoLastPinAddAt;
++    private static boolean padoIsClusterKey(String key) { return key != null && key.startsWith("c|"); }
 +    private static final long PADO_PLACEHOLDER_MS = 1000;
 +    private static final long PADO_POLL_MS = 100;
 +    private static final int PADO_MAX_TRIES = 60; // 받는 중이면 0.1초마다 최대 6초 — 그 뒤로는 다시 붙을 때 다시 시도
@@ -73,7 +78,7 @@ index 09278e7..3abeb83 100644
      private boolean hasCustomMarkerView = false;
      private final MapMarkerManager markerManager;
      private String imageUri;
-@@ -212,6 +271,13 @@ public class MapMarker extends MapFeature {
+@@ -212,6 +276,13 @@ public class MapMarker extends MapFeature {
  
      public void setIdentifier(String identifier) {
          this.identifier = identifier;
@@ -87,7 +92,7 @@ index 09278e7..3abeb83 100644
          update(false);
      }
  
-@@ -279,7 +345,7 @@ public class MapMarker extends MapFeature {
+@@ -279,7 +350,7 @@ public class MapMarker extends MapFeature {
  
      public void setOpacity(float opacity) {
          this.opacity = opacity;
@@ -96,7 +101,7 @@ index 09278e7..3abeb83 100644
              marker.setAlpha(opacity);
          }
          update(false);
-@@ -311,8 +377,13 @@ public class MapMarker extends MapFeature {
+@@ -311,8 +382,13 @@ public class MapMarker extends MapFeature {
      }
  
      public void setTracksViewChanges(boolean tracksViewChanges) {
@@ -110,7 +115,7 @@ index 09278e7..3abeb83 100644
      }
  
      private void updateTracksViewChanges() {
-@@ -344,16 +415,24 @@ public class MapMarker extends MapFeature {
+@@ -344,16 +420,24 @@ public class MapMarker extends MapFeature {
              return false;
          }
  
@@ -139,7 +144,7 @@ index 09278e7..3abeb83 100644
          marker.setIcon(getIcon());
      }
  
-@@ -469,6 +548,9 @@ public class MapMarker extends MapFeature {
+@@ -469,6 +553,9 @@ public class MapMarker extends MapFeature {
          // if children are added, it means we are rendering a custom marker
          if (!(child instanceof MapCallout)) {
              hasCustomMarkerView = true;
@@ -149,7 +154,7 @@ index 09278e7..3abeb83 100644
              updateTracksViewChanges();
              hackToHandleDraweeLifecycle(child);
          }
-@@ -540,8 +622,12 @@ public class MapMarker extends MapFeature {
+@@ -540,8 +627,12 @@ public class MapMarker extends MapFeature {
              if (hasCustomMarkerView) {
                  hasCustomMarkerView = false;
                  clearDrawableCache();
@@ -163,7 +168,7 @@ index 09278e7..3abeb83 100644
              }
          } else {
              // custom subview
-@@ -562,9 +648,22 @@ public class MapMarker extends MapFeature {
+@@ -562,9 +653,23 @@ public class MapMarker extends MapFeature {
      @Override
      public void addToMap(Object collection) {
          MarkerManager.Collection markerCollection = (MarkerManager.Collection) collection;
@@ -176,6 +181,7 @@ index 09278e7..3abeb83 100644
 +        padoIconPlaceholder = false;
 +        padoTries = 0;
 +        padoAttachedAt = android.os.SystemClock.uptimeMillis();
++        if (padoKey != null && !padoIsClusterKey(padoKey)) padoLastPinAddAt = padoAttachedAt; // 묶음→핀 전환 (removeFromMap)
 +        marker = markerCollection.addMarker(options);
          this.markerCollectionRef = new SoftReference<>(markerCollection);
 +        if (padoFollowUp && width > 0) {
@@ -187,12 +193,21 @@ index 09278e7..3abeb83 100644
      }
  
      @Override
-@@ -573,11 +672,172 @@ public class MapMarker extends MapFeature {
+@@ -573,11 +678,189 @@ public class MapMarker extends MapFeature {
              return;
          }
          MarkerManager.Collection markerCollection = (MarkerManager.Collection) collection;
 -        markerCollection.remove(marker);
-+        if (padoKey != null && padoIcon != null) {
++        if (padoIsClusterKey(padoKey) && padoIcon != null) {
++            // 묶음: 페이드 없이 지운다. 핀이 막 붙기 시작했으면(묶음→핀) 핀 페이드인 첫 순간만큼 남긴다 (그동안 눌리지 않음)
++            Marker old = marker;
++            if (android.os.SystemClock.uptimeMillis() - padoLastPinAddAt < 100) {
++                padoGhosts.add(old);
++                padoHandler.postDelayed(() -> { markerCollection.remove(old); padoGhosts.remove(old); }, PADO_CLUSTER_LINGER_MS);
++            } else {
++                markerCollection.remove(old);
++            }
++        } else if (padoKey != null && padoIcon != null) {
 +            // PADO 그림 모드: 보이던 마커는 그림자로 남겨 페이드아웃 뒤 지운다 (그동안 눌리지 않음)
 +            Marker old = marker;
 +            padoGhosts.add(old);
@@ -315,6 +330,14 @@ index 09278e7..3abeb83 100644
 +
 +    private void padoShow(BitmapDescriptor icon, boolean placeholder) {
 +        if (marker == null || icon == padoIcon) return;
++        if (padoIsClusterKey(padoKey)) {
++            // 묶음: 페이드 없이 한 번에 (Android는 그림만 바꿔도 비는 프레임이 없었다)
++            marker.setIcon(icon);
++            padoIcon = icon;
++            padoIconPlaceholder = placeholder;
++            marker.setAlpha(opacity);
++            return;
++        }
 +        if (padoIcon == null) {
 +            marker.setIcon(icon);
 +            padoIcon = icon;
@@ -361,7 +384,7 @@ index 09278e7..3abeb83 100644
      private BitmapDescriptor getIcon() {
          if (hasCustomMarkerView) {
              // creating a bitmap from an arbitrary view
-@@ -613,7 +873,19 @@ public class MapMarker extends MapFeature {
+@@ -613,7 +896,19 @@ public class MapMarker extends MapFeature {
          options.draggable(draggable);
          options.zIndex(zIndex);
          options.alpha(opacity);
@@ -382,7 +405,7 @@ index 09278e7..3abeb83 100644
          return options;
      }
  
-@@ -636,13 +908,12 @@ public class MapMarker extends MapFeature {
+@@ -636,13 +931,12 @@ public class MapMarker extends MapFeature {
          } else {
              marker.setInfoWindowAnchor(0.5f, 0);
          }
@@ -397,7 +420,7 @@ index 09278e7..3abeb83 100644
          updateTracksViewChanges();
          clearDrawableCache();
          update(true);
-@@ -810,7 +1081,7 @@ public class MapMarker extends MapFeature {
+@@ -810,7 +1104,7 @@ public class MapMarker extends MapFeature {
  
      public void setUpdated(boolean updated) {
          if (updated) {
@@ -683,10 +706,10 @@ index 82a78e2..7f39fd5 100644
  
  #endif
 diff --git a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
-index d729954..1e4b35c 100644
+index d729954..de01afa 100644
 --- a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
 +++ b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
-@@ -17,6 +17,173 @@
+@@ -17,6 +17,182 @@
  #import "AIRGoogleMapCallout.h"
  #import "AIRDummyView.h"
  
@@ -713,6 +736,15 @@ index d729954..1e4b35c 100644
 + * 말풍선(zIndex 1000↑)·내 위치·프로필 미니 지도처럼 identifier가 없는 마커는 예전 iconView 방식 그대로.
 + */
 +static const NSTimeInterval PADO_FADE_S = 0.18;
++/*
++ * 묶음(키 'c|…')은 페이드 없이 한 번에 나타나고·바뀌고·사라진다 — 축소할 때 묶음끼리 합쳐지면 옛 묶음과 새 묶음이 함께 반투명해져 숫자가 겹쳐 보였다.
++ * 핀이 막 붙기 시작한 마운트(묶음→핀)에서 지우는 묶음만 PADO_CLUSTER_LINGER_S 동안 남겼다가 지운다 — 핀이 페이드인하는 첫 순간 지도가 비지 않게.
++ * 묶음 그림만 바꿀 때는 새 마커를 위에 붙이고 옛 마커는 PADO_CLUSTER_SWAP_S 뒤에 뗀다(지도가 새 그림을 올리는 1~2프레임 동안 비지 않게, 새 마커가 덮는다).
++ */
++static const NSTimeInterval PADO_CLUSTER_LINGER_S = 0.12;
++static const NSTimeInterval PADO_CLUSTER_SWAP_S = 0.05;
++static CFTimeInterval padoLastPinInsertAt = 0;
++static BOOL padoIsClusterKey(NSString *key) { return [key hasPrefix:@"c|"]; }
 +static const NSTimeInterval PADO_PLACEHOLDER_S = 1.0;
 +static NSString *const PADO_KEY_PREFIX = @"pado:";
 +
@@ -860,7 +892,7 @@ index d729954..1e4b35c 100644
  CGRect unionRect(CGRect a, CGRect b) {
      return CGRectMake(
                        MIN(a.origin.x, b.origin.x),
-@@ -47,6 +214,24 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -47,6 +223,24 @@ CGRect unionRect(CGRect a, CGRect b) {
      NSString* _identifier;
      NSString* _title;
      NSString* _subtitle;
@@ -885,7 +917,7 @@ index d729954..1e4b35c 100644
  
  }
  
-@@ -93,14 +278,27 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -93,14 +287,27 @@ CGRect unionRect(CGRect a, CGRect b) {
  
  - (void) didInsertInMap:(AIRGoogleMap *) map
  {
@@ -915,7 +947,7 @@ index d729954..1e4b35c 100644
      }
      if (_rotation != 0){
          [_realMarker setRotation:_rotation];
-@@ -145,17 +343,35 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -145,17 +352,36 @@ CGRect unionRect(CGRect a, CGRect b) {
      if (_zIndex){
          [_realMarker setZIndex:_zIndex];
      }
@@ -928,6 +960,7 @@ index d729954..1e4b35c 100644
 +    if (padoCached) [self padoShowIcon:padoCached];
 +    else if (!_padoKey) [_realMarker setMap:map];
 +    padoLastInsertAt = CACurrentMediaTime();
++    if (_padoKey && !padoIsClusterKey(_padoKey)) padoLastPinInsertAt = padoLastInsertAt; // 묶음→핀 전환 (padoRemoveFromMap)
 +    [self padoApplyTracking];
  }
  
@@ -953,7 +986,7 @@ index d729954..1e4b35c 100644
  }
  
  - (void)insertReactSubview:(id<RCTComponent>)subview atIndex:(NSInteger)atIndex {
-@@ -305,6 +521,14 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -305,6 +531,14 @@ CGRect unionRect(CGRect a, CGRect b) {
  - (void)setIdentifier:(NSString *)identifier {
      _realMarker.identifier = identifier;
      _identifier = identifier;
@@ -968,7 +1001,7 @@ index d729954..1e4b35c 100644
  }
  
  - (NSString *)identifier {
-@@ -340,7 +564,7 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -340,7 +574,7 @@ CGRect unionRect(CGRect a, CGRect b) {
  
  - (void)setOpacity:(double)opacity
  {
@@ -977,7 +1010,7 @@ index d729954..1e4b35c 100644
      _opacity = opacity;
  }
  
-@@ -501,7 +725,7 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -501,7 +735,7 @@ CGRect unionRect(CGRect a, CGRect b) {
  }
  
  - (void)setTappable:(BOOL)tappable {
@@ -986,7 +1019,7 @@ index d729954..1e4b35c 100644
      _tappable = tappable;
  }
  
-@@ -519,12 +743,252 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -519,12 +753,265 @@ CGRect unionRect(CGRect a, CGRect b) {
  }
  
  - (void)setTracksViewChanges:(BOOL)tracksViewChanges {
@@ -1025,6 +1058,18 @@ index d729954..1e4b35c 100644
 +        self->_padoTrackTimer = nil;
 +        GMSMarker *old = self->_realMarker;
 +        BOOL handover = CACurrentMediaTime() - padoLastInsertAt < 0.1;
++        if (self->_padoKey && self->_padoIcon && padoIsClusterKey(self->_padoKey)) {
++            // 묶음: 페이드 없이 뗀다. 핀이 막 붙기 시작했으면(묶음→핀) 핀 페이드인 첫 순간만큼 남긴다
++            old.tappable = NO;
++            NSTimeInterval wait = CACurrentMediaTime() - padoLastPinInsertAt < 0.1 ? PADO_CLUSTER_LINGER_S : 0;
++            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(wait * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++                if (!self->_padoRemovePending || self->_realMarker != old) return;
++                self->_padoRemovePending = NO;
++                old.map = nil;
++                [self->_iconView removeFromSuperview];
++            });
++            return;
++        }
 +        if (!handover && !(self->_padoKey && self->_padoIcon)) {
 +            self->_padoRemovePending = NO;
 +            old.map = nil;
@@ -1194,8 +1239,9 @@ index d729954..1e4b35c 100644
 +        // 한 마커의 그림만 갈아 끼우면 Google 지도가 새 그림을 텍스처로 올리는 1~2프레임 동안 그 마커를 그리지 않아 깜빡였다
 +        GMSMarker *old = _realMarker;
 +        old.tappable = NO;
-+        padoFadeOut(old);
-+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(PADO_FADE_S * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ old.map = nil; });
++        BOOL cluster = padoIsClusterKey(_padoKey);
++        if (!cluster) padoFadeOut(old); // 묶음은 페이드 없이 — 새 마커가 위에서 바로 덮는다
++        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((cluster ? PADO_CLUSTER_SWAP_S : PADO_FADE_S) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ old.map = nil; });
 +        [self didInsertInMap:(AIRGoogleMap *)old.map]; // 새 마커 — 아래에서 이 그림으로 붙여 페이드인 (캐시에 있으면 이미 붙었다)
 +        [self padoShowIcon:img];
 +        return;
@@ -1204,7 +1250,7 @@ index d729954..1e4b35c 100644
 +    if (_padoIcon) { _padoIcon = img; return; }
 +    _padoIcon = img;
 +    if (!_realMarker.map && _padoPendingMap) {
-+        _realMarker.appearAnimation = kGMSMarkerAnimationFadeIn;
++        _realMarker.appearAnimation = padoIsClusterKey(_padoKey) ? kGMSMarkerAnimationNone : kGMSMarkerAnimationFadeIn; // 묶음은 한 번에
 +        _realMarker.map = _padoPendingMap;
 +    }
 +    _padoPendingMap = nil;
