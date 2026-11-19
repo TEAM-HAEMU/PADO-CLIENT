@@ -1,0 +1,14 @@
+diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
+index 623d90c..c1b7044 100644
+--- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
++++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
+@@ -1452,6 +1452,9 @@ public class ReactExoplayerView extends FrameLayout implements
+ 
+     private void onStopPlayback() {
+         audioManager.abandonAudioFocus(audioFocusChangeListener);
++        // PADO: 포커스를 놓았으면 표시도 내린다 — 안 내리면 다음 곡(같은 플레이어로 주소만 바꿈)을 틀 때
++        // requestAudioFocus()가 이미 가진 줄 알고 요청을 건너뛰어, 포커스 없이 재생돼 전화가 와도 멈추지 않는다
++        hasAudioFocus = false;
+     }
+ 
+     private void updateResumePosition() {
