@@ -105,15 +105,18 @@ describe('useNearbyDrops — 가려진 동안 폴링 쉬기, 돌아오면 한 �
     act(() => r.unmount());
   });
 
-  it('잠깐 다녀왔으면(2분 안) 돌아와도 다시 받지 않는다', async () => {
+  it('잠깐 다녀왔으면(2분 안) 돌아와도 곧바로 받지 않고, 받은 지 2분이 되는 때 받는다', async () => {
     let r!: import('react-test-renderer').ReactTestRenderer;
     await act(async () => { r = TestRenderer.create(el(true)); });
     await flush();
     await act(async () => r.update(el(false)));
-    await flush(30_000);
+    await flush(90_000);
     await act(async () => r.update(el(true)));
     await flush();
     expect(nearby).toHaveBeenCalledTimes(1);
+    // 돌아온 지 30초(받은 지 2분) — 주기 타이머(돌아온 순간부터 2분)를 기다리지 않는다
+    await flush(30_000);
+    expect(nearby).toHaveBeenCalledTimes(2);
     act(() => r.unmount());
   });
 

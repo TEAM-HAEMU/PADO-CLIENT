@@ -29,7 +29,7 @@ export const qk = {
   me: ['me'] as const,
 };
 
-/** 주변 드랍을 다시 받는 간격 — 지도가 보이는 동안 이보다 오래된 목록을 보여 주지 않는다 */
+/** 주변 드랍을 다시 받는 간격 — 지도가 보이는 동안 이보다 오래된 목록을 보여 주지 않는다 (가렸다 돌아오면 남은 시간만큼만 기다림) */
 export const NEARBY_POLL_MS = 120_000;
 /** 다시 보이게 된 순간 목록을 새로 받아야 하는가 — 마지막으로 받은 지 NEARBY_POLL_MS가 지났거나 아직 못 받음 */
 export const nearbyDueOnReturn = (dataUpdatedAt: number, now: number) => !dataUpdatedAt || now - dataUpdatedAt >= NEARBY_POLL_MS;
@@ -50,8 +50,14 @@ export function useNearbyDrops(coords: Coords | null, live = true) {
   useEffect(() => {
     const back = live && !wasLive.current;
     wasLive.current = live;
+    if (!back || !coords) return;
     // 받은 시각은 캐시에서 읽는다 — 결과의 dataUpdatedAt을 읽으면 같은 목록을 다시 받을 때마다 화면이 다시 그려진다(추적 속성)
-    if (back && coords && nearbyDueOnReturn(qc.getQueryState(queryKey)?.dataUpdatedAt ?? 0, Date.now())) q.refetch({ cancelRefetch: false });
+    const at = qc.getQueryState(queryKey)?.dataUpdatedAt ?? 0;
+    const now = Date.now();
+    if (nearbyDueOnReturn(at, now)) { q.refetch({ cancelRefetch: false }); return; }
+    // 아직 2분이 안 됐으면 남은 시간 뒤에 한 번 — 주기 타이머는 다시 보인 순간부터 2분을 새로 세므로, 두지 않으면 최대 4분 가까이 묵는다
+    const t = setTimeout(() => q.refetch({ cancelRefetch: false }), at + NEARBY_POLL_MS - now);
+    return () => clearTimeout(t);
   }, [live]); // eslint-disable-line react-hooks/exhaustive-deps -- 다시 보이게 된 순간에만
   return q;
 }
