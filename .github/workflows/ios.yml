@@ -1,0 +1,87 @@
+# iOS 네이티브 컴파일 검사 — react-native-maps 패치(patches/)와 ios/ 네이티브 코드가 실제로 빌드되는지 PR마다 확인한다.
+# 서명·업로드 없이 시뮬레이터용 Debug 빌드만 한다 (JS 번들은 Android 워크플로의 tsc·eslint·jest가 본다).
+# 레포가 공개라 macOS 러너 시간은 무료. 네이티브와 상관없는 PR은 paths 필터로 건너뛴다.
+#
+# 선택 Secret: GOOGLE_SERVICE_INFO_PLIST_B64 — 없으면 컴파일용 빈 GoogleService-Info.plist를 만든다(앱 실행용 아님).
+name: iOS 빌드
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'patches/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ios.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'patches/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: iOS 시뮬레이터 빌드 (Debug)
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci   # postinstall에서 patch-package가 패치를 적용 — 패치가 안 맞으면 여기서 실패
+
+      - name: 컴파일용 설정 파일
+        env:
+          GOOGLE_SERVICE_INFO_PLIST_B64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_B64 }}
+        run: |
+          echo "USE_MOCK=false" > .env
+          if [ -n "$GOOGLE_SERVICE_INFO_PLIST_B64" ]; then
+            echo "$GOOGLE_SERVICE_INFO_PLIST_B64" | base64 -d > ios/PADO/GoogleService-Info.plist
+          else
+            echo "::warning::GOOGLE_SERVICE_INFO_PLIST_B64가 없어 빈 plist로 컴파일만 해요"
+            printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict/></plist>\n' > ios/PADO/GoogleService-Info.plist
+          fi
+
+      - uses: actions/cache@v6
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock', 'patches/**') }}
+
+      - name: pod install
+        working-directory: ios
+        env:
+          LANG: en_US.UTF-8
+        run: pod install
+
+      - name: xcodebuild (시뮬레이터, 서명 없음)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace PADO.xcworkspace -scheme PADO -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/dd CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO \
+            build | tee build.log | grep -E "error:|warning: .*AirGoogleMaps|\*\* BUILD" || true
+          grep -q "\*\* BUILD SUCCEEDED \*\*" build.log
+
+      - name: 빌드 로그 (실패 시)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-build-log
+          path: ios/build.log
