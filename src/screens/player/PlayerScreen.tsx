@@ -12,6 +12,8 @@ import { BackGlyph, HeadphonesGlyph, HeartGlyph, MoreGlyph, PlayCircleGlyph } fr
 import { Art, Icon, Press, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
 import { useDropMenu } from '@/hooks/useDropMenu';
+import { useOpenedDropLock } from '@/hooks/useOpenedDropLock';
+import { LockedDropScreen } from '@/components/detail/LockedDrop';
 import { useComments, useDrop, useDropPlace, useLikeCount, useSong, useToggleLike, useIsLiked } from '@/hooks/api';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
@@ -39,7 +41,10 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const songQ = useSong(songId, { keepPrevious: !!queue });
   const song = songQ.data;
   const drop = useDrop(dropId).data;
-  const preview = usePreview(song);
+  // 드랍의 곡이면 재생 반경 잠금 — 링크(song/…?dropId=)로 바로 열어도 지도와 같은 규칙. 드랍 없이 곡만 열면 잠그지 않는다
+  const lock = useOpenedDropLock(dropId, drop);
+  const open = !dropId || lock.status === 'open';
+  const preview = usePreview(open ? song : null);
   const menu = useDropMenu(dropId, drop?.userId, '드랍', drop && 'username' in drop ? drop.username : undefined, song);
   const likeCount = useLikeCount(dropId).data;
   const comments = useComments(dropId).data;
@@ -72,7 +77,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   latestSong.current = songId;
   React.useEffect(() => {
     // 다음 곡을 불러오는 동안엔 이전 곡이 자리만 지키고 있으므로 기다린다
-    if (!(autoplay || queue) || startedFor.current === songId || preview.loading || songQ.isPlaceholderData || !song || song.id !== songId) return;
+    if (!open || !(autoplay || queue) || startedFor.current === songId || preview.loading || songQ.isPlaceholderData || !song || song.id !== songId) return;
     startedFor.current = songId;
     if (!preview.available) return skipFrom(songId, false); // 미리듣기가 없는 곡
     if (preview.playing) return;
@@ -84,7 +89,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
       if (r === 'none' || r === 'adult') skipFrom(from, false);
       else if (r === 'unavailable') { toast('지금은 미리듣기를 불러올 수 없어요. 잠시 후 다시 시도해주세요.', 'error'); skipFrom(from, true); }
     });
-  }, [songId, song?.id, preview.loading, preview.available]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [songId, song?.id, preview.loading, preview.available, open]); // eslint-disable-line react-hooks/exhaustive-deps
   const endedKey = usePreviewStore(st => st.endedKey);
   const loaded = usePreviewStore(st => st.key === songId);
   const endedAtMount = React.useRef(usePreviewStore.getState().endedKey);
@@ -103,7 +108,8 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
     skipFrom(songId, true);
   }, [lastError]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!song) return <ScreenState error={songQ.error} onRetry={() => songQ.refetch()} />;
+  if (dropId && drop && lock.status === 'locked') return <LockedDropScreen lock={lock.lock} note={drop.content} />;
+  if (!song || !open) return <ScreenState error={songQ.error} onRetry={() => songQ.refetch()} />;
 
   // 전체 듣기 — 고른 음악 앱으로 딥링크 (없으면 선택 시트)
   const listen = () => listenFull(usePrefs.getState().service, song);

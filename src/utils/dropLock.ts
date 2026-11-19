@@ -15,8 +15,11 @@ export interface LockTarget { droppingId: string; latitude: number; longitude: n
 export type PlayRegion = Pick<DropRegion, 'unit' | 'code'>;
 /** 지금 위치 + 오차 반경(m, 모르면 null) */
 export interface LockHere extends Coords { accuracy?: number | null }
-/** remainingM: 몇 m 더 가까이 가야 열리는지 (위치를 모르거나 오차가 커서 판정할 수 없으면 null, imprecise: 오차가 커서) */
-export type DropLock = { locked: false } | { locked: true; remainingM: number | null; imprecise?: true };
+/**
+ * remainingM: 몇 m 더 가까이 가야 열리는지 (위치를 모르거나 오차가 커서 판정할 수 없으면 null, imprecise: 오차가 커서).
+ * far: 드랍 좌표는 모르지만 지금 위치의 주변 목록에 없어 재생 반경 밖으로 본 드랍 (링크로 연 음악 드랍 — 상세 응답에 좌표가 없다)
+ */
+export type DropLock = { locked: false } | { locked: true; remainingM: number | null; imprecise?: true; far?: true };
 
 const OPEN: DropLock = { locked: false };
 
@@ -60,7 +63,7 @@ export function dropLock(d: LockTarget, here: LockHere | null, playMeters: numbe
 export function lockJudge() {
   const opened = new Set<string>();
   const last = new Map<string, DropLock>();
-  return (d: LockTarget, here: LockHere | null, playMeters: number, alwaysOpen?: ReadonlySet<string>, awaiting = false, region?: PlayRegion | null): DropLock => {
+  const judge = (d: LockTarget, here: LockHere | null, playMeters: number, alwaysOpen?: ReadonlySet<string>, awaiting = false, region?: PlayRegion | null): DropLock => {
     if (exempt(d, alwaysOpen)) return OPEN;
     const prev = last.get(d.droppingId);
     if (awaiting && prev) return prev;
@@ -70,6 +73,8 @@ export function lockJudge() {
     last.set(d.droppingId, lock);
     return lock;
   };
+  /** 이 드랍을 판정한 적이 있는지 — 위치를 기다리는 동안 지난 판정을 쓸 수 있는지 (링크로 연 화면이 성급히 잠그지 않게) */
+  return Object.assign(judge, { judged: (id: string) => last.has(id) });
 }
 
 /**
@@ -80,8 +85,9 @@ export function lockMessage(lock: DropLock, radius?: DropRadius) {
   if (!lock.locked) return '';
   if (lock.imprecise) return '위치 오차가 커서 열 수 없어요. 정확한 위치 사용을 허용했는지 확인해주세요';
   const r = lock.remainingM;
-  if (r == null) return '내 위치를 찾으면 가까운 드랍을 들을 수 있어요';
   const region = radius && playRegionOf(radius);
+  if (lock.far) return region ? `${shortRegionName(region.name)} 안이나 ${formatRadius(radius.playMeters)} 안에서 들을 수 있어요` : radius ? `드랍 ${formatRadius(radius.playMeters)} 안으로 가까이 가면 들을 수 있어요` : '드랍 가까이 가면 들을 수 있어요';
+  if (r == null) return '내 위치를 찾으면 가까운 드랍을 들을 수 있어요';
   if (region) return `${shortRegionName(region.name)} 안이나 ${formatRadius(radius.playMeters)} 안에서 들을 수 있어요`;
   if (r < 10) return '조금만 더 가까이 가면 들을 수 있어요';
   const up = Math.ceil(r / 10) * 10;

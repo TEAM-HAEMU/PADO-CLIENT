@@ -8,6 +8,8 @@ import { Glyph } from '@/components/detail/glyphs';
 import { BgWave, DiscRow, PlaylistHero } from '@/components/detail/parts';
 import { useCommentCount, useDrop, useLikeCount, useToggleLike, useIsLiked } from '@/hooks/api';
 import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
+import { useOpenedDropLock } from '@/hooks/useOpenedDropLock';
+import { LockedDropScreen } from '@/components/detail/LockedDrop';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
@@ -34,9 +36,12 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
   const insets = useSafeAreaInsets();
   const drop = useDrop(dropId);
   const d = drop.data && isPlaylistDetail(drop.data) ? drop.data : null;
-  useDropOpenedEvent(dropId, 'PLAYLIST', d, source);
-  // 플리 드랍 핀을 누르면 첫 곡 미리듣기를 바로
-  const first = d?.songs[0];
+  // 재생 반경 잠금 — 링크·푸시로 바로 열어도 지도와 같은 규칙 (잠기면 곡 목록·재생을 보이지 않는다)
+  const lock = useOpenedDropLock(dropId, d, source);
+  const unlocked = lock.status === 'open';
+  useDropOpenedEvent(dropId, 'PLAYLIST', unlocked ? d : null, source);
+  // 플리 드랍 핀을 누르면 첫 곡 미리듣기를 바로 — 열린 드랍만
+  const first = unlocked ? d?.songs[0] : undefined;
   const autoStarted = React.useRef(false);
   React.useEffect(() => {
     if (!first || autoStarted.current) return;
@@ -65,7 +70,8 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
     </View>
   ) : undefined, [d, dropId, navigation]);
 
-  if (!d) return <ScreenState title="플리 드랍" error={drop.error} onRetry={() => drop.refetch()} />;
+  if (d && lock.status === 'locked') return <LockedDropScreen title="플리 드랍" lock={lock.lock} note={d.content} />;
+  if (!d || !unlocked) return <ScreenState title="플리 드랍" error={drop.error} onRetry={() => drop.refetch()} />;
 
   const more = menu.open;
   const count = (n?: number) => (n ? <T style={{ fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, color: '#969696' }}>{n}</T> : null);

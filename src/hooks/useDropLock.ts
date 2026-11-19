@@ -9,6 +9,9 @@ import { playRegionOf } from '@/utils/dropScope';
 /** 드랍마다 지난 판정(열려 있던 드랍·마지막 잠금 여부) — 앱 전체에서 같이 쓴다 (앱을 켜 둔 동안만 기억) */
 const judge = lockJudge();
 
+/** 이 드랍을 판정한 적이 있는지 (awaiting이면 지난 판정을 돌려준다) */
+export const lockJudged = (id: string) => judge.judged(id);
+
 export function useDropLock() {
   const coords = useLocation(currentCoords);
   const accuracy = useLocation(s => s.accuracy);

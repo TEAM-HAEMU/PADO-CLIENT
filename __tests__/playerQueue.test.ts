@@ -12,6 +12,8 @@ jest.mock('@/components/music/PreviewRow', () => require('./setup/screenEnv').mo
 jest.mock('@/components/player/glyphs', () => require('./setup/screenEnv').mockHostModule());
 jest.mock('@/components/ui/ScreenState', () => require('./setup/screenEnv').mockHostModule());
 jest.mock('react-native-linear-gradient', () => () => null);
+jest.mock('@/hooks/useOpenedDropLock', () => ({ useOpenedDropLock: () => ({ status: 'open' }) }));
+jest.mock('@/components/detail/LockedDrop', () => require('./setup/screenEnv').mockHostModule());
 jest.mock('@/hooks/useDropMenu', () => ({ useDropMenu: () => ({ open: jest.fn() }) }));
 jest.mock('@/hooks/api', () => ({
   useComments: () => ({ data: [] }), useDrop: () => ({ data: undefined }), useDropPlace: () => undefined, useLikeCount: () => ({ data: 0 }),

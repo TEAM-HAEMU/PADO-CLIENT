@@ -11,6 +11,8 @@ import { Glyph, VoteFill, VOTE_FILL_W } from '@/components/detail/glyphs';
 import { AddressPill, BgWave, CommentBar, DiscRow } from '@/components/detail/parts';
 import { qk, useComments, useDrop, useLikeCount, useToggleLike, useIsLiked } from '@/hooks/api';
 import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
+import { useOpenedDropLock } from '@/hooks/useOpenedDropLock';
+import { LockedDropScreen } from '@/components/detail/LockedDrop';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
@@ -27,7 +29,10 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
   const qc = useQueryClient();
   const drop = useDrop(dropId);
   const d = drop.data && isVoteDetail(drop.data) ? drop.data : null;
-  useDropOpenedEvent(dropId, 'VOTE', d, source);
+  // 재생 반경 잠금 — 링크·푸시로 바로 열어도 지도와 같은 규칙 (잠기면 후보·투표를 보이지 않는다)
+  const lock = useOpenedDropLock(dropId, d, source);
+  const open = lock.status === 'open';
+  useDropOpenedEvent(dropId, 'VOTE', open ? d : null, source);
   const comments = useComments(dropId).data ?? [];
   const likeCount = useLikeCount(dropId).data;
   const liked = useIsLiked(dropId);
@@ -36,7 +41,7 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
 
   const voting = React.useRef(false);
   const vote = async (songId: string) => {
-    if (!d || voting.current) return;
+    if (!d || !open || voting.current) return;
     if (!authed) return toast('로그인이 필요해요.');
     voting.current = true;
     try {
@@ -50,7 +55,8 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
   const more = menu.open;
 
 
-  if (!d) return <ScreenState title="투표" error={drop.error} onRetry={() => drop.refetch()} />;
+  if (d && lock.status === 'locked') return <LockedDropScreen title="투표" lock={lock.lock} note={d.content} />;
+  if (!d || !open) return <ScreenState title="투표" error={drop.error} onRetry={() => drop.refetch()} />;
   const total = d.totalVotes || 0;
   const voted = !!d.userVotedOption;
 

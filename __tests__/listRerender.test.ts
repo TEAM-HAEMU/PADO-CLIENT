@@ -49,6 +49,8 @@ jest.mock('@/services/previewSource', () => ({ findPreview: jest.fn(async () => 
 jest.mock('@/store/toast', () => ({ toast: jest.fn() }));
 jest.mock('@/store/auth', () => ({ useAuth: (sel: (s: { status: string }) => unknown) => sel({ status: 'authed' }) }));
 jest.mock('@/hooks/useDropOpenedEvent', () => ({ useDropOpenedEvent: () => {} }));
+jest.mock('@/hooks/useOpenedDropLock', () => ({ useOpenedDropLock: () => ({ status: 'open' }) }));
+jest.mock('@/components/detail/LockedDrop', () => require('./setup/screenEnv').mockHostModule());
 jest.mock('@/hooks/useDropMenu', () => ({ useDropMenu: () => ({ open: jest.fn() }) }));
 jest.mock('@/hooks/useBlockUser', () => ({ useBlockUser: () => jest.fn() }));
 jest.mock('@/hooks/useDropLock', () => { const lock = () => ({ locked: false }); return { useDropLock: () => lock }; });

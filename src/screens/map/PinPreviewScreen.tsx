@@ -25,6 +25,8 @@ import { SERVICES } from '@/services/musicLinks';
 import { startPreview, usePreview, usePreviewProgress } from '@/services/preview';
 import { useDropMenu } from '@/hooks/useDropMenu';
 import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
+import { useOpenedDropLock } from '@/hooks/useOpenedDropLock';
+import { LockedDropSheet } from '@/components/detail/LockedDrop';
 import { colors, fonts } from '@/theme/tokens';
 import { artUrl } from '@/utils/artUrl';
 import { capsuleLineWidth, capsulePillWidth } from '@/utils/capsule';
@@ -50,15 +52,18 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const d = drop.data;
   const music = d && isMusicDetail(d) ? d : null;
   const song = useSong(music?.songId);
-  const preview = usePreview(song.data);
-  // 핀을 누르면 그 곡 미리듣기를 바로 (지도 자동 재생으로 듣던 곡이면 이어서)
+  // 재생 반경 잠금 — 링크·푸시로 바로 열어도 지도와 같은 규칙 (투표·플리는 넘겨받은 화면이 판정)
+  const lock = useOpenedDropLock(dropId, music, source);
+  const open = lock.status === 'open';
+  const preview = usePreview(open ? song.data : null);
+  // 핀을 누르면 그 곡 미리듣기를 바로 (지도 자동 재생으로 듣던 곡이면 이어서) — 열린 드랍만
   const autoStarted = React.useRef<string | null>(null);
   React.useEffect(() => {
     const s = song.data;
-    if (!s || autoStarted.current === s.id) return;
+    if (!s || !open || autoStarted.current === s.id) return;
     autoStarted.current = s.id;
     startPreview(s);
-  }, [song.data]);
+  }, [song.data, open]);
   const likeCount = useLikeCount(dropId).data;
   const commentCount = useCommentCount(dropId).data;
   const liked = useIsLiked(dropId);
@@ -67,7 +72,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const menu = useDropMenu(dropId, d?.userId, '드랍', d && 'username' in d ? d.username : undefined, song.data);
   const address = useDropPlace(dropId, d);
   // 투표·플리 드랍은 넘겨받은 화면이 센다
-  useDropOpenedEvent(dropId, 'MUSIC', music, source);
+  useDropOpenedEvent(dropId, 'MUSIC', open ? music : null, source);
 
   React.useEffect(() => {
     if (!d) return;
@@ -75,7 +80,8 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
     else if (isPlaylistDetail(d)) navigation.replace('PlaylistDrop', { dropId, source });
   }, [d, dropId, navigation, source]);
 
-  if (!music) {
+  if (music && lock.status === 'locked') return <LockedDropSheet lock={lock.lock} note={music.content} />;
+  if (!music || !open) {
     return <Sheet><View style={{ height: 320 }}>{drop.isError ? <T v="body" c="ink2" style={{ textAlign: 'center', marginTop: 60 }}>{errorMessage(drop.error)}</T> : <Loading />}</View></Sheet>;
   }
 
