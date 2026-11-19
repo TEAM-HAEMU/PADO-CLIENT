@@ -28,6 +28,7 @@ import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
 import { colors, fonts } from '@/theme/tokens';
 import { artUrl } from '@/utils/artUrl';
 import { capsuleLineWidth, capsulePillWidth } from '@/utils/capsule';
+import { Marquee } from '@/components/ui/Marquee';
 import { formatRelative } from '@/utils/format';
 
 const SERVICE_ORDER: ServiceId[] = ['spotify', 'appleMusic', 'youtubeMusic'];
@@ -113,9 +114,10 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
                   <T v="tiny" numberOfLines={1} style={{ color: '#2BD1FF', flexShrink: 1 }}>{address}</T>
                 </View>
               ) : null}
-              <T v="captionStrong" numberOfLines={1} style={{ maxWidth: songMaxW, fontSize: 14, color: '#FFFFFF', textShadowColor: 'rgba(4,9,22,0.75)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } }}>
+              {/* 곡 · 가수 한 줄 — 보이는 폭보다 길면 흘러서 끝까지 보여 준다 */}
+              <Marquee v="captionStrong" width={songMaxW} style={{ fontSize: 14, color: '#FFFFFF', textShadowColor: 'rgba(4,9,22,0.75)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } }}>
                 {song.data ? `${song.data.title} · ${song.data.artist}` : ' '}
-              </T>
+              </Marquee>
             </View>
             <Press
               onPress={preview.toggle}
