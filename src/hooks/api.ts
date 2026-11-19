@@ -45,15 +45,20 @@ export const useSongSearch = (q: string) => useQuery({ queryKey: ['search', q.tr
 
 export const useLikeCount = (id: UUID | undefined) => useQuery({ queryKey: qk.likeCount(id ?? ''), enabled: !!id && authed(), queryFn: () => likeApi.countForDrop(id!) });
 /** 내가 누른 좋아요 수 (GET /likes/count/user) */
-export const useMyLikeCount = () => useQuery({ queryKey: qk.myLikeCount, enabled: authed(), queryFn: likeApi.countMine });
+export const useMyLikeCount = () => useQuery({ queryKey: qk.myLikeCount, enabled: authed(), queryFn: likeApi.countMine, staleTime: USER_DATA_STALE });
 export const useCommentCount = (id: UUID | undefined) => useQuery({ queryKey: ['commentCount', id], enabled: !!id && authed(), queryFn: () => commentApi.count(id!) });
 export const useComments = (id: UUID | undefined) => useQuery({ queryKey: qk.comments(id ?? ''), enabled: !!id && authed(), queryFn: () => commentApi.list(id!) });
 
-export const useMe = () => useQuery({ queryKey: qk.me, enabled: authed(), queryFn: userApi.me });
-export const useMyDrops = () => useQuery({ queryKey: qk.myDrops, enabled: authed(), queryFn: userApi.myDrops });
-export const useMyLikes = () => useQuery({ queryKey: qk.myLikes, enabled: authed(), queryFn: userApi.myLikes });
-export const useAgreements = () => useQuery({ queryKey: ['agreements'], enabled: authed(), queryFn: userApi.agreements });
-export const useBlocks = () => useQuery({ queryKey: ['blocks'], enabled: authed(), queryFn: safetyApi.blocks });
+/**
+ * 내 정보 — 내가 바꿀 때만 바뀌고(바꾸는 곳마다 무효화가 있다) 남이 바꾸지 않는 것들. 10분 동안은 새로 마운트돼도 다시 받지 않는다.
+ * (미리보기 시트·재생 화면처럼 이 훅을 새로 마운트하는 화면을 열 때마다 목록을 다시 받던 것.) 오래 백그라운드에 있다 돌아오면 다시 받는다
+ */
+export const USER_DATA_STALE = 10 * 60_000;
+export const useMe = () => useQuery({ queryKey: qk.me, enabled: authed(), queryFn: userApi.me, staleTime: USER_DATA_STALE });
+export const useMyDrops = () => useQuery({ queryKey: qk.myDrops, enabled: authed(), queryFn: userApi.myDrops, staleTime: USER_DATA_STALE });
+export const useMyLikes = () => useQuery({ queryKey: qk.myLikes, enabled: authed(), queryFn: userApi.myLikes, staleTime: USER_DATA_STALE });
+export const useAgreements = () => useQuery({ queryKey: ['agreements'], enabled: authed(), queryFn: userApi.agreements, staleTime: USER_DATA_STALE });
+export const useBlocks = () => useQuery({ queryKey: ['blocks'], enabled: authed(), queryFn: safetyApi.blocks, staleTime: USER_DATA_STALE });
 
 export const useNotifications = () => useQuery({ queryKey: ['notifications', 'list'], enabled: authed(), queryFn: () => notificationApi.list(50) });
 export const useUnreadCount = () => useQuery({ queryKey: ['notifications', 'unread'], enabled: authed(), queryFn: notificationApi.unreadCount, refetchInterval: 120_000 });

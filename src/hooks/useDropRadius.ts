@@ -76,9 +76,13 @@ export function useDropRadius(): DropRadius {
     initialDataUpdatedAt: 0,
     placeholderData: keepPreviousData,
     staleTime: 10 * 60_000,
+    // 이 훅은 여러 화면이 같이 쓴다 — 새로 마운트될 때는 아직 한 번도 묻지 않았을 때만 받는다.
+    // 받기에 실패한 뒤(서버 장애·오프라인)에도 화면을 열 때마다 다시 묻지 않게: 다음 시도는 10분 주기·좌표 변경·오래 있다 돌아올 때
+    refetchOnMount: query => query.state.dataUpdateCount === 0 && query.state.errorUpdateCount === 0,
+    retryOnMount: false,
     refetchInterval: 10 * 60_000,
     gcTime: Infinity,
-    retry: 1,
+    // 재시도는 기본 정책(4xx는 안 함, 네트워크·5xx는 한 번 — hooks/queryClient)
   });
   return q.data ?? DEFAULT_RADIUS;
 }
