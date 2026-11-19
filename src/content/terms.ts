@@ -26,9 +26,9 @@ export const OPERATOR = {
 /**
  * 2026-11-19 마케팅 정보 수신 동의를 '혜택·소식 알림 수신 동의(선택)' 하나로 바꾸고 앱 푸시 알림을 전송 방법에 더함
  * (서비스 이용약관 제7조의2, 개인정보 처리방침, 혜택·소식 알림 수신 동의).
- * 시행일 미정 — 'TBD' 자리. 정해지면 날짜로 바꾸고 서버 TermType의 SERVICE·PRIVACY·MARKETING 버전도 같은 값으로 (시행 7일 전 고지)
+ * 시행 2026-12-03 — 서버 TermType의 SERVICE·PRIVACY·MARKETING 버전도 같은 값. 서버 배포가 개정 안내 시점이라 늦어도 2026-11-26까지 배포 (시행 7일 전 고지)
  */
-const AD_PUSH_EFFECTIVE = 'TBD';
+const AD_PUSH_EFFECTIVE = '2026-12-03';
 /** 이전 시행일 2026-10-07 (2026-09-30 Amplitude 분석 추가) → 혜택·소식 알림 개정 */
 const EFFECTIVE = AD_PUSH_EFFECTIVE;
 /** 위치기반서비스 이용약관만 따로 — 2026-11-13 표시 범위를 회사가 정하는 거리 또는 같은 행정구역으로 바꾸고 재생 거리 안내 추가 (백엔드 배포 2026-11-16 기준 7일 전 고지). 서버 TermType.LOCATION과 같은 값 */
