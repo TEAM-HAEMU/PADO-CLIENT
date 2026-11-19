@@ -367,7 +367,10 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const latest = useRef({ sorted, pickDrop, selectedId });
   useEffect(() => { latest.current = { sorted, pickDrop, selectedId }; });
   const markerPressedAt = useRef(0);
-  const onListPick = useCallback((x: NearbyItem) => latest.current.pickDrop(x, 'list'), []);
+  const onListPick = useCallback((id: string) => {
+    const x = latest.current.sorted.find(p => p.d.droppingId === id);
+    if (x) latest.current.pickDrop(x, 'list');
+  }, []);
   const onPinPress = useCallback((id: string) => {
     markerPressedAt.current = Date.now();
     const x = latest.current.sorted.find(p => p.d.droppingId === id);
@@ -590,52 +593,64 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
 }
 
 /**
- * 하단 '가까운 드랍' 줄 — 재생 중인 곡 표시를 여기서만 구독한다 (재생이 바뀔 때 지도 화면 전체가 아니라 이 줄만 다시 그린다)
+ * 하단 '가까운 드랍' 줄 — 재생 중인 곡 표시를 여기서만 구독한다 (재생이 바뀔 때 지도 화면 전체가 아니라 이 줄만 다시 그린다).
+ * 걸을 때마다(GPS 갱신) 거리순 목록이 새 배열로 오지만, 칸마다 보이는 값(곡·잠금·거리 글자·고름·재생 중)이 그대로면 그 칸은 다시 그리지 않는다 (2026-11-20 QA R-17)
  */
-const NearbyList = memo(function NearbyListRow({ items, selectedId, onPick }: { items: readonly NearbyItem[]; selectedId: string | null; onPick: (x: NearbyItem) => void }) {
+const NearbyList = memo(function NearbyListRow({ items, selectedId, onPick }: { items: readonly NearbyItem[]; selectedId: string | null; onPick: (id: string) => void }) {
   const playingKey = usePreviewStore(st => st.key);
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, gap: 12 }}>
-      {items.map((x, i) => {
-        const { d, m, lock } = x;
-        const picked = d.droppingId === selectedId;
-        if (lock.locked) {
-          // 잠긴 드랍 — 곡·커버 대신 자물쇠와 거리만
-          return (
-            <Press key={d.droppingId} onPress={() => onPick(x)} accessibilityLabel={`잠긴 드랍 · ${formatDistance(m)}`} accessibilityState={{ selected: picked }} trackAs="주변 목록 잠긴 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: picked ? 1 : 0.6 }}>
-                <View style={{ width: 49, height: 49, borderRadius: 9, backgroundColor: colors.card2, alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name="lock" size={18} color={colors.ink3} />
-                </View>
-              </View>
-              <View style={{ alignSelf: 'stretch' }}>
-                <T v="caption" c="onPrimary" numberOfLines={1} style={{ textAlign: 'center' }}>{formatDistance(m)}</T>
-                <T v="tiny" numberOfLines={1} style={{ textAlign: 'center', color: '#98A2B8' }}>더 가까이</T>
-              </View>
-            </Press>
-          );
-        }
-        const fresh = i < 3;
-        const onAir = d.type === 'MUSIC' && !!playingKey && d.songId === playingKey;
-        return (
-          <Press key={d.droppingId} onPress={() => onPick(x)} accessibilityState={{ selected: picked }} trackAs="주변 목록 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
-            {/* Figma 'stay music' 아트: 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 (재생 중이면 시안 테두리 + 글로우) */}
-            <View style={[{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: onAir || picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: fresh || onAir || picked ? 1 : 0.6 }, onAir || picked || fresh ? glow(onAir || picked ? 0.9 : 0.5, 12) : null]}>
-              <Art uri={dropArt(d)} size={49} radius={9} />
-              {onAir ? (
-                <View style={{ position: 'absolute', right: -7, bottom: -7, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#040916' }}>
-                  <Icon name="wave" size={10} color={colors.ink} />
-                </View>
-              ) : null}
-            </View>
-            <View style={{ alignSelf: 'stretch' }}>
-              <T v="caption" c="onPrimary" numberOfLines={1} style={{ textAlign: 'center' }}>{dropTitle(d)}</T>
-              <T v="tiny" numberOfLines={1} style={{ textAlign: 'center', color: '#98A2B8' }}>{d.type === 'MUSIC' ? d.artist : dropSub(d)}</T>
-            </View>
-          </Press>
-        );
-      })}
+      {items.map(({ d, m, lock }, i) => (
+        <NearbyCell
+          key={d.droppingId}
+          d={d}
+          locked={lock.locked}
+          // 거리는 잠긴 칸에만 보인다 — 열린 칸은 걸어도 다시 그릴 게 없다
+          distance={lock.locked ? formatDistance(m) : ''}
+          picked={d.droppingId === selectedId}
+          fresh={i < 3}
+          onAir={d.type === 'MUSIC' && !!playingKey && d.songId === playingKey}
+          onPick={onPick}
+        />
+      ))}
     </ScrollView>
+  );
+});
+
+/** '가까운 드랍' 한 칸 — 원시값 props라 값이 같으면 다시 그리지 않는다 */
+const NearbyCell = memo(function NearbyCell({ d, locked, distance, picked, fresh, onAir, onPick }: { d: DropSummary; locked: boolean; distance: string; picked: boolean; fresh: boolean; onAir: boolean; onPick: (id: string) => void }) {
+  if (locked) {
+    // 잠긴 드랍 — 곡·커버 대신 자물쇠와 거리만
+    return (
+      <Press onPress={() => onPick(d.droppingId)} accessibilityLabel={`잠긴 드랍 · ${distance}`} accessibilityState={{ selected: picked }} trackAs="주변 목록 잠긴 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
+        <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: picked ? 1 : 0.6 }}>
+          <View style={{ width: 49, height: 49, borderRadius: 9, backgroundColor: colors.card2, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="lock" size={18} color={colors.ink3} />
+          </View>
+        </View>
+        <View style={{ alignSelf: 'stretch' }}>
+          <T v="caption" c="onPrimary" numberOfLines={1} style={{ textAlign: 'center' }}>{distance}</T>
+          <T v="tiny" numberOfLines={1} style={{ textAlign: 'center', color: '#98A2B8' }}>더 가까이</T>
+        </View>
+      </Press>
+    );
+  }
+  return (
+    <Press onPress={() => onPick(d.droppingId)} accessibilityState={{ selected: picked }} trackAs="주변 목록 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
+      {/* Figma 'stay music' 아트: 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 (재생 중이면 시안 테두리 + 글로우) */}
+      <View style={[{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: onAir || picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: fresh || onAir || picked ? 1 : 0.6 }, onAir || picked || fresh ? glow(onAir || picked ? 0.9 : 0.5, 12) : null]}>
+        <Art uri={dropArt(d)} size={49} radius={9} />
+        {onAir ? (
+          <View style={{ position: 'absolute', right: -7, bottom: -7, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#040916' }}>
+            <Icon name="wave" size={10} color={colors.ink} />
+          </View>
+        ) : null}
+      </View>
+      <View style={{ alignSelf: 'stretch' }}>
+        <T v="caption" c="onPrimary" numberOfLines={1} style={{ textAlign: 'center' }}>{dropTitle(d)}</T>
+        <T v="tiny" numberOfLines={1} style={{ textAlign: 'center', color: '#98A2B8' }}>{d.type === 'MUSIC' ? d.artist : dropSub(d)}</T>
+      </View>
+    </Press>
   );
 });
 
