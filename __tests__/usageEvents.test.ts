@@ -13,6 +13,7 @@ afterEach(() => jest.useRealTimers());
 
 test('서버가 세는 이벤트만 허용 목록', () => {
   expect(isServerEvent('drop_opened')).toBe(true);
+  expect(isServerEvent('push_opened')).toBe(true);
   expect(isServerEvent('screen_viewed')).toBe(false);
 });
 
@@ -27,6 +28,14 @@ test('마지막 이벤트 뒤 잠깐 기다렸다 한 번에 보낸다', async (
   await flushPromises();
   expect(sent).toEqual([[{ name: 'app_opened' }, { name: 'drop_opened', droppingId: 'd1' }]]);
   expect(q.size).toBe(0);
+});
+
+test('알림 누름은 운영자 발송 ID(noticeId)를 함께 보낸다', async () => {
+  const { q, sent } = setup();
+  q.enqueue('push_opened', undefined, 'n1');
+  q.enqueue('push_opened');
+  await q.flush();
+  expect(sent).toEqual([[{ name: 'push_opened', noticeId: 'n1' }, { name: 'push_opened' }]]);
 });
 
 test('50개가 차면 바로, 넘치는 건 다음 요청으로 나눈다', async () => {

@@ -15,12 +15,13 @@ jest.mock('@/services/pushSettings', () => ({ loadPushSettings: jest.fn(async ()
 jest.mock('@/services/analytics', () => ({ track: jest.fn() }));
 jest.mock('@/services/monitoring', () => ({ reportError: jest.fn() }));
 
-import { retryPushTokenIfNeeded, syncPushToken, unregisterPushToken } from '@/services/push';
+import { openUrlFor, retryPushTokenIfNeeded, syncPushToken, unregisterPushToken } from '@/services/push';
 import { kv } from '@/store/storage';
 
 const { pushApi } = jest.requireMock('@/api/endpoints') as { pushApi: { registerToken: jest.Mock; deleteToken: jest.Mock } };
 const fcm = jest.requireMock('@react-native-firebase/messaging') as { getToken: jest.Mock; deleteToken: jest.Mock };
 const { useAuth } = jest.requireMock('@/store/auth');
+const { track } = jest.requireMock('@/services/analytics') as { track: jest.Mock };
 const flush = () => new Promise<void>(r => setImmediate(r));
 function deferred() { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; }
 
@@ -94,4 +95,21 @@ test('삭제(기기 토큰 폐기까지)가 끝나기 전에 등록하면 끝난
   await sync;
   expect(fcm.getToken).toHaveBeenCalledTimes(1);
   expect(pushApi.registerToken).toHaveBeenCalledTimes(1);
+});
+
+describe('알림 누름 → 화면 + push_opened', () => {
+  const NOTICE = '0199a5e0-2222-7abc-8def-000000000456';
+  test('운영자 발송: target에 따른 화면, 분석에 kind·target, 서버 집계용 notice_id', () => {
+    expect(openUrlFor({ type: 'notice', noticeId: NOTICE, kind: 'AD', target: 'MY_PLAYLISTS' })).toBe('pado://playlists');
+    expect(track).toHaveBeenCalledWith('push_opened', { type: 'notice', has_drop: false, kind: 'AD', target: 'MY_PLAYLISTS', notice_id: NOTICE });
+  });
+  test('다른 종류는 지금처럼 type·has_drop만', () => {
+    const drop = '0199a5e0-1111-7abc-8def-000000000123';
+    expect(openUrlFor({ type: 'like', droppingId: drop })).toBe(`pado://drop/${drop}?source=notification`);
+    expect(track).toHaveBeenCalledWith('push_opened', { type: 'like', has_drop: true });
+  });
+  test('우리 알림이 아니면 아무것도 안 한다', () => {
+    expect(openUrlFor({})).toBeNull();
+    expect(track).not.toHaveBeenCalled();
+  });
 });

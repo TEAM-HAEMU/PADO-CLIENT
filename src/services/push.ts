@@ -3,7 +3,7 @@
  * 계약: handoff/push-fcm-contract.md (앱용 API · 보내는 조건과 문구 · 앱)
  *
  *  - 토큰: 로그인 + 권한 허용이면 PUT /push/tokens (앱 시작·로그인 직후·토큰 갱신). 로그아웃 직전 DELETE /push/tokens
- *  - 알림을 누르면 data.type에 따라 pado:// 딥링크로 연다 (navigation/linking이 받아 처리 — 로그인 전이면 보관)
+ *  - 알림을 누르면 data.type(운영자 발송이면 data.target)에 따라 pado:// 딥링크로 연다 (navigation/linking이 받아 처리 — 로그인 전이면 보관)
  *  - 앱이 앞에 있을 때: iOS는 firebase.json의 presentation 옵션으로 시스템 배너, Android는 notifee로 같은 채널에 띄운다
  *  - Firebase 설정 파일이 없는 빌드(GoogleService-Info.plist·google-services.json 없음)에선 조용히 아무것도 하지 않는다
  */
@@ -166,11 +166,20 @@ setBeforeSignOut(({ callServer, accessToken }) => unregisterPushToken(callServer
 type OpenListener = (url: string) => void;
 const openListeners = new Set<OpenListener>();
 
-/** 알림 data → 딥링크 URL (분석 push_opened). 우리 알림이 아니면 null */
+/**
+ * 알림 data → 딥링크 URL (분석 push_opened). 우리 알림이 아니면 null.
+ * 운영자 발송(notice)이면 kind·target을 붙이고, notice_id는 서버 집계(POST /events push_opened + noticeId)로도 간다 (analytics.track이 넘김)
+ */
 export function openUrlFor(data: Record<string, unknown> | undefined | null): string | null {
   const t = pushTarget(data);
   if (!t) return null;
-  track('push_opened', { type: t.type, has_drop: !!t.droppingId });
+  track('push_opened', {
+    type: t.type,
+    has_drop: !!t.droppingId,
+    ...(t.kind ? { kind: t.kind } : null),
+    ...(t.target ? { target: t.target } : null),
+    ...(t.noticeId ? { notice_id: t.noticeId } : null),
+  });
   return t.url;
 }
 

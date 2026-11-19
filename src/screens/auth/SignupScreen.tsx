@@ -18,6 +18,8 @@ import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
 import { type ServiceId, usePrefs } from '@/store/prefs';
 import { getProviderCredential } from '@/services/socialAuth';
+import { changeMarketingConsent } from '@/services/pushSettings';
+import { MARKETING_TITLE, termTitle } from '@/content/terms';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
@@ -27,7 +29,7 @@ const FALLBACK_TERMS: Term[] = [
   { type: 'SERVICE', title: '서비스 이용약관', version: '', required: true },
   { type: 'PRIVACY', title: '개인정보 수집·이용 동의', version: '', required: true },
   { type: 'LOCATION', title: '위치기반서비스 이용약관', version: '', required: true },
-  { type: 'MARKETING', title: '마케팅 정보 수신 동의', version: '', required: false },
+  { type: 'MARKETING', title: MARKETING_TITLE, version: '', required: false },
 ];
 
 export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>) {
@@ -77,6 +79,9 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
     if (listenApp && listenApp !== usePrefs.getState().service) usePrefs.getState().setService(listenApp);
   };
 
+  // 혜택·소식 알림(선택)에 동의하고 가입했으면 푸시 설정 marketing도 켠다 — 동의 기록은 가입 요청이 이미 남겼다. 처리 결과는 토스트로
+  const saveMarketing = (a: Agreements) => { if (a.MARKETING) changeMarketingConsent(true, { agreement: false }); };
+
   const submit = async () => {
     if (!validate()) return;
     if (!requiredOk) return toast('필수 약관에 동의해주세요.', 'error');
@@ -89,11 +94,13 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
         const pair = await authApi.socialSignup({ signupToken: social.signupToken, username: username.trim(), ...(providerEmail ? {} : { email: email.trim() }), birthDate: birth, ...genderField, agreements });
         saveListenApp();
         await signIn(pair, { method: social.provider.toLowerCase(), signup: true });
+        saveMarketing(agreements);
       } else {
         await authApi.register({ username: username.trim(), password, email: email.trim(), birthDate: birth, ...genderField, agreements });
         saveListenApp();
         try {
           await signIn(await authApi.login(email.trim(), password), { method: 'email', signup: true });
+          saveMarketing(agreements);
         } catch {
           // 가입은 됐는데 자동 로그인만 실패 — 폼에 남겨두면 재시도 시 U4가 나므로 로그인 화면으로
           toast('가입이 완료됐어요. 로그인해주세요.', 'success');
@@ -146,7 +153,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
           <GenderSelect optional value={gender} onChange={setGender} />
           <ListenAppSelect value={listenApp} onChange={setListenApp} />
 
-          {/* 약관 — 전체 동의 + 개별(필수 3 · 선택 마케팅), 각 항목 '보기' */}
+          {/* 약관 — 전체 동의 + 개별(필수 3 · 선택 혜택·소식 알림), 각 항목 '보기' */}
           <View style={{ borderRadius: 8, backgroundColor: colors.field, overflow: 'hidden' }}>
             <Press onPress={() => setAgreed(allOn ? {} : Object.fromEntries(terms.map(t => [t.type, true])))} accessibilityRole="checkbox" accessibilityState={{ checked: allOn }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 }}>
               <CheckBox on={allOn} />
@@ -156,9 +163,9 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
               <Press key={t.type} onPress={() => setAgreed(a => ({ ...a, [t.type]: !a[t.type] }))} accessibilityRole="checkbox" accessibilityState={{ checked: !!agreed[t.type] }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
                 <CheckBox on={!!agreed[t.type]} small />
                 <T v="captionStrong" c="ink3" style={{ flex: 1, fontFamily: fonts.regular }}>
-                  <T v="captionStrong" c={t.required ? 'primary' : 'ink2'}>{t.required ? '[필수] ' : '[선택] '}</T>{t.title}
+                  <T v="captionStrong" c={t.required ? 'primary' : 'ink2'}>{t.required ? '[필수] ' : '[선택] '}</T>{termTitle(t.type, t.title, true)}
                 </T>
-                <Press onPress={() => navigation.navigate('TermsView', { type: t.type })} hitSlop={10} accessibilityRole="link" accessibilityLabel={`${t.title} 보기`}>
+                <Press onPress={() => navigation.navigate('TermsView', { type: t.type })} hitSlop={10} accessibilityRole="link" accessibilityLabel={`${termTitle(t.type, t.title, true)} 보기`}>
                   <T v="captionStrong" c="ink2" style={{ fontFamily: fonts.regular, textDecorationLine: 'underline' }}>보기</T>
                 </Press>
               </Press>

@@ -143,7 +143,8 @@ export function track(name: string, props?: Record<string, unknown>) {
   if (mode === 'off') return;
   if (isServerEvent(name)) {
     const id = props?.drop_id;
-    usageQueue.enqueue(name, typeof id === 'string' ? id : undefined);
+    const notice = props?.notice_id;
+    usageQueue.enqueue(name, typeof id === 'string' ? id : undefined, typeof notice === 'string' ? notice : undefined);
   }
   if (!started) {
     if (analyticsEnabled() && early.length < 50) early.push([name, props]);

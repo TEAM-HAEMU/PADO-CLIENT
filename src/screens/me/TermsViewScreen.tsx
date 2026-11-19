@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/endpoints';
 import { Empty, T, TopBar } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
-import { TERMS } from '@/content/terms';
+import { TERMS, termTitle } from '@/content/terms';
 import type { RootScreen } from '@/navigation/types';
 import { colors } from '@/theme/tokens';
 
@@ -18,7 +18,7 @@ export default function TermsViewScreen({ navigation, route }: RootScreen<'Terms
   const { type } = route.params;
   const server = useQuery({ queryKey: ['terms'], queryFn: authApi.terms }).data?.find(t => t.type === type);
   const doc = TERMS[type];
-  const title = server?.title ?? doc?.title ?? '약관';
+  const title = server || doc ? termTitle(type, server?.title) : '약관';
   const version = server?.version ?? doc?.version;
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
