@@ -7,6 +7,8 @@ const fs = require('fs') as { readFileSync: (p: string, enc: 'utf8') => string; 
 const path = require('path') as { resolve: (...p: string[]) => string };
 
 const root = path.resolve('.');
+// 모듈로 만들어 다른 테스트 파일의 전역 fs·path 선언과 겹치지 않게
+export {};
 const pkg = JSON.parse(fs.readFileSync(path.resolve(root, 'package.json'), 'utf8'));
 const lock = JSON.parse(fs.readFileSync(path.resolve(root, 'package-lock.json'), 'utf8'));
 const deps: Record<string, string> = { ...pkg.dependencies, ...pkg.devDependencies };
