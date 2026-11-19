@@ -1,10 +1,12 @@
 /** React Query 훅 — 화면은 이 훅들만 쓴다 */
+import { useRef } from 'react';
 import { keepPreviousData, skipToken, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { commentApi, dropApi, likeApi, notificationApi, playlistApi, safetyApi, songApi, userApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
-import type { CreateDropBody, LikedDrop, UUID } from '@/api/types';
+import type { CreateDropBody, DropSummary, LikedDrop, UUID } from '@/api/types';
 import { useDropRadius } from '@/hooks/useDropRadius';
 import { searchKm } from '@/utils/dropScope';
+import { coveredMeters, nextNearbyCenter } from '@/utils/nearbyArea';
 import { dropPlace, type DropPlaceFields } from '@/utils/address';
 import { useAuth } from '@/store/auth';
 import type { Coords } from '@/services/location';
@@ -14,8 +16,8 @@ import { toast } from '@/store/toast';
 const authed = () => useAuth.getState().status === 'authed';
 
 export const qk = {
-  // 약 100m 격자 — 걸을 때마다(15m) 키가 바뀌어 핀이 전부 다시 그려지지 않게
-  nearby: (c: Coords | null) => ['nearby', c && Math.round(c.latitude * 1e3), c && Math.round(c.longitude * 1e3)] as const,
+  /** 받은 자리(중심) — 위치마다가 아니라 받은 영역을 벗어날 때만 바뀐다 (useNearbyDrops·utils/nearbyArea) */
+  nearby: (c: Coords | null) => ['nearby', c?.latitude ?? null, c?.longitude ?? null] as const,
   drop: (id: UUID) => ['drop', id] as const,
   song: (id: UUID) => ['song', id] as const,
   likeCount: (id: UUID) => ['likeCount', id] as const,
@@ -30,12 +32,21 @@ export const qk = {
 
 /**
  * 주변 드랍 — 범위는 서버가 운영자 보기 설정으로 고른다(가까운 순, 최대 500개).
- * 거리 모드는 표시 반경(km), 전국·같은 지역 모드는 넓은 값을 보낸다. 같은 지역 모드는 지역이 바뀌면 다시 받는다
+ * 거리 모드는 표시 반경(km), 전국·같은 지역 모드는 넓은 값을 보낸다. 같은 지역 모드는 지역이 바뀌면 다시 받는다.
+ * 받은 영역 안에서 움직이는 동안은 같은 중심 그대로 — 반경의 1/10(5km면 500m)을 넘게 움직이면 지금 자리로 다시 받는다 (utils/nearbyArea).
+ * 새로 생긴 남의 드랍은 2분마다 같은 중심으로 다시 받을 때 들어온다 (서 있을 때와 같은 신선도)
  */
 export function useNearbyDrops(coords: Coords | null) {
+  const qc = useQueryClient();
   const radius = useDropRadius();
   const km = searchKm(radius);
-  return useQuery({ queryKey: [...qk.nearby(coords), km, radius.mode, radius.regionUnit, radius.region?.code ?? null], enabled: !!coords, queryFn: () => dropApi.nearby(coords!.latitude, coords!.longitude, km), refetchInterval: 120_000, placeholderData: keepPreviousData });
+  const scope = [km, radius.mode, radius.regionUnit, radius.region?.code ?? null] as const;
+  // 같은 입력이면 같은 결과라 렌더 중에 바꿔도 된다 (버려진 렌더가 있어도 다음 렌더가 같은 중심을 고른다)
+  const center = useRef<Coords | null>(null);
+  const prev = center.current;
+  const covered = prev ? coveredMeters(prev, qc.getQueryData<DropSummary[]>([...qk.nearby(prev), ...scope]), km) : km * 1000;
+  const at = (center.current = nextNearbyCenter(prev, coords, covered));
+  return useQuery({ queryKey: [...qk.nearby(at), ...scope], enabled: !!at, queryFn: () => dropApi.nearby(at!.latitude, at!.longitude, km), refetchInterval: 120_000, placeholderData: keepPreviousData });
 }
 
 export const useDrop = (id: UUID | undefined) => useQuery({ queryKey: qk.drop(id ?? ''), enabled: !!id, queryFn: () => dropApi.get(id!) });
