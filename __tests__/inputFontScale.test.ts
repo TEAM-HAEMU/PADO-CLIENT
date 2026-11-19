@@ -12,6 +12,8 @@ const fs = require('fs') as {
 const path = require('path') as { resolve: (...p: string[]) => string; join: (...p: string[]) => string };
 
 const SRC = path.resolve('src');
+// 모듈로 만들어 다른 테스트 파일의 전역 fs·path 선언과 겹치지 않게
+export {};
 
 function tsxFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
