@@ -66,7 +66,7 @@
 | `tap` | `Press`로 만든 모든 버튼 | `label`, `kind`(`press`·`long_press`) | |
 | `session_start` / `session_end` | Amplitude 세션 (5분) | | |
 | `api_error` | API가 2xx가 아님 | `method`, `path`(ID는 `:id`), `status`, `code` | |
-| `setting_changed` | 설정 변경 | `key`, `value`. 알림 토글은 `notify_like`·`notify_comment`·`notify_nearby`·`notify_notice`·`notify_marketing`(혜택·소식 — 설정 토글과 가입 직후 알림 안내의 체크) | |
+| `setting_changed` | 설정 변경 | `key`, `value`. 알림 토글은 `notify_like`·`notify_comment`·`notify_nearby`·`notify_notice`·`notify_marketing`(혜택·소식 알림 — 설정 토글, 가입 화면의 선택 동의, 가입 직후 알림 안내의 체크, 약관 개정 시트. 가입 약관 MARKETING 동의와 같은 값) | |
 
 `tap.label`: `trackAs` → 접근성 라벨 → testID → 버튼 글자 순. 숫자는 `#`으로 바뀐다 (`좋아요 #개`).
 닉네임·곡명·플리 이름이 들어가는 버튼은 `trackAs`로 고정 라벨을 준다 (`내 드랍`, `곡 행`, `알림 항목` 등).

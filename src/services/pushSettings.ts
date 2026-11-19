@@ -4,11 +4,12 @@
  *  - 같은 토글을 빠르게 여러 번 누르면 마지막 요청의 결과만 반영한다 (늦게 온 이전 응답·실패가 새 값을 덮지 않게)
  *  - 서버 응답(전체 값)은 요청 중인 토글을 빼고 맞춘다
  *  - 주변 새 드랍을 켜면 서버가 켜짐을 저장한 뒤에 지금 위치를 보낸다 (꺼져 있을 때 보낸 위치는 서버가 버림)
- *  - 혜택·소식(marketing): 바꾼 뒤 서버 응답의 marketingUpdatedAt으로 처리 결과를 알린다 (화면이 utils/marketingConsent 문구로 토스트)
+ *  - 혜택·소식(marketing): 가입 약관 MARKETING 동의와 함께 바꾸고, 서버 응답의 marketingUpdatedAt으로 처리 결과를 알린다 (changeMarketingConsent)
  */
-import { pushApi } from '@/api/endpoints';
+import { pushApi, userApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
-import type { PushSettings, PushSettingsResponse } from '@/api/types';
+import type { PushSettings, PushSettingsResponse, UserAgreement } from '@/api/types';
+import { queryClient } from '@/hooks/queryClient';
 import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
 import { marketingResultText } from '@/utils/marketingConsent';
@@ -80,24 +81,46 @@ export async function changePushSetting(key: PushSettingKey, value: boolean): Pr
 
 const NOT_READY = '지금은 바꿀 수 없어요. 잠시 뒤 다시 해 주세요.';
 
+/** 가입 약관의 MARKETING 동의 기록을 같은 값으로 (PUT /users/agreements/marketing) + 화면 캐시 맞추기 */
+async function setMarketingAgreement(value: boolean) {
+  await userApi.setMarketing(value);
+  queryClient.setQueryData<UserAgreement[]>(['agreements'], old => old?.map(a => (a.type === 'MARKETING' ? { ...a, agreed: value } : a)));
+  queryClient.invalidateQueries({ queryKey: ['agreements'] });
+}
+
 /**
- * 혜택·소식(광고성) 알림 동의·철회 — 설정 › 알림 토글과 가입 직후 알림 안내의 체크가 함께 쓴다.
- * 저장되면 서버의 marketingUpdatedAt 날짜로 처리 결과를 토스트로 알린다 (법이 요구하는 처리 결과 통지). 실패하면 되돌리고 오류 토스트
+ * 혜택·소식 알림(광고성, 이메일·앱 푸시 하나의 선택 동의) 동의·철회 — 설정 토글, 가입 직후 알림 안내의 체크, 가입 화면의 선택 동의가 함께 쓴다.
+ *  - 푸시 설정 marketing과 가입 약관 MARKETING 동의를 같은 값으로 맞춘다 (agreement: false면 푸시만 — 가입 화면에서 이미 동의를 보낸 경우)
+ *  - 둘 다 저장되면 서버의 marketingUpdatedAt 날짜로 처리 결과를 토스트로 한 번 알린다 (법이 요구하는 처리 결과 통지)
+ *  - 하나라도 실패하면 토글을 되돌리고(이미 바뀐 푸시 설정도 원래대로 돌려 보고) 오류 토스트
+ *  - 연달아 누르면 마지막 요청만 동의 기록까지 맞추고 결과를 알린다
  */
-export async function changeMarketingConsent(value: boolean): Promise<boolean> {
+export async function changeMarketingConsent(value: boolean, opts: { agreement?: boolean } = {}): Promise<boolean> {
+  const syncAgreement = opts.agreement ?? true;
+  let res: PushSettingsResponse | undefined;
   try {
-    const res = await changePushSetting('marketing', value);
-    if (!res) return true;
-    // 서버가 아직 이 값을 모르면(배포 전) 저장되지 않은 것 — 동의했다고 알리지 않고 되돌린다
-    if (typeof res.marketing !== 'boolean') {
-      usePrefs.getState().applyNotify({ marketing: false });
-      toast(NOT_READY, 'error');
-      return false;
-    }
-    toast(marketingResultText(res.marketing, res.marketingUpdatedAt), 'success');
-    return true;
+    res = await changePushSetting('marketing', value);
   } catch (e) {
     toast(errorMessage(e), 'error');
     return false;
   }
+  if (!res) return true;
+  // 서버가 아직 이 값을 모르면(배포 전) 저장되지 않은 것 — 동의했다고 알리지 않고 되돌린다
+  if (typeof res.marketing !== 'boolean') {
+    usePrefs.getState().applyNotify({ marketing: !value });
+    toast(NOT_READY, 'error');
+    return false;
+  }
+  if (syncAgreement) {
+    try {
+      await setMarketingAgreement(value);
+    } catch (e) {
+      // 동의 기록만 실패 — 이미 바꾼 푸시 설정을 원래대로 (그것도 실패하면 서버가 가진 값이 화면에 남는다)
+      toast(errorMessage(e), 'error');
+      await changePushSetting('marketing', !value).catch(() => {});
+      return false;
+    }
+  }
+  toast(marketingResultText(res.marketing, res.marketingUpdatedAt), 'success');
+  return true;
 }

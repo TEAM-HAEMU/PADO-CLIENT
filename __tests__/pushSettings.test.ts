@@ -1,13 +1,14 @@
 /* 설정 › 알림 토글 ↔ 서버 (GET·PUT /push/settings) — 바로 반영, 실패하면 되돌림, 연달아 누르면 마지막 것만 */
 jest.mock('@/services/analytics', () => ({ migrateAnalyticsMode: () => 'basic', setAnalyticsMode: jest.fn(async () => undefined), setUserProps: jest.fn(), track: jest.fn() }));
 jest.mock('@/services/monitoring', () => ({ setMonitoringMode: jest.fn(), reportError: jest.fn() }));
-jest.mock('@/api/endpoints', () => ({ pushApi: { settings: jest.fn(), updateSettings: jest.fn() } }));
+jest.mock('@/api/endpoints', () => ({ pushApi: { settings: jest.fn(), updateSettings: jest.fn() }, userApi: { setMarketing: jest.fn(async () => undefined) } }));
+jest.mock('@/hooks/queryClient', () => ({ queryClient: { setQueryData: jest.fn(), invalidateQueries: jest.fn() } }));
 jest.mock('@/store/toast', () => ({ toast: jest.fn() }));
 
 import { usePrefs } from '@/store/prefs';
 import { changeMarketingConsent, changePushSetting, loadPushSettings, setOnNearbyChanged } from '@/services/pushSettings';
 
-const { pushApi } = jest.requireMock('@/api/endpoints') as { pushApi: { settings: jest.Mock; updateSettings: jest.Mock } };
+const { pushApi, userApi } = jest.requireMock('@/api/endpoints') as { pushApi: { settings: jest.Mock; updateSettings: jest.Mock }; userApi: { setMarketing: jest.Mock } };
 const analytics = jest.requireMock('@/services/analytics') as { track: jest.Mock };
 const { toast } = jest.requireMock('@/store/toast') as { toast: jest.Mock };
 const DEFAULTS = { like: true, comment: true, nearby: false, notice: true, marketing: false };
@@ -131,12 +132,14 @@ test('이미 같은 값이면 요청하지 않는다', async () => {
   expect(pushApi.updateSettings).not.toHaveBeenCalled();
 });
 
-describe('혜택·소식 알림 동의 — 처리 결과 알림', () => {
-  test('동의하면 서버가 저장한 날짜로 알린다', async () => {
+describe('혜택·소식 알림 동의 — 푸시 설정 + 가입 약관 MARKETING 동의를 함께, 처리 결과 알림', () => {
+  test('동의하면 두 곳을 모두 켜고 서버가 저장한 날짜로 한 번 알린다', async () => {
     pushApi.updateSettings.mockResolvedValueOnce({ ...DEFAULTS, marketing: true, marketingUpdatedAt: '2026-11-19T15:30:00Z' });
     await expect(changeMarketingConsent(true)).resolves.toBe(true);
     expect(pushApi.updateSettings).toHaveBeenCalledWith({ marketing: true });
+    expect(userApi.setMarketing).toHaveBeenCalledWith(true);
     expect(usePrefs.getState().notify.marketing).toBe(true);
+    expect(toast).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith('2026년 11월 20일 혜택·소식 알림 수신에 동의했어요', 'success');
   });
 
@@ -144,6 +147,7 @@ describe('혜택·소식 알림 동의 — 처리 결과 알림', () => {
     usePrefs.setState({ notify: { ...DEFAULTS, marketing: true } });
     pushApi.updateSettings.mockResolvedValueOnce({ ...DEFAULTS, marketing: false, marketingUpdatedAt: '2026-11-21T01:00:00+09:00' });
     await changeMarketingConsent(false);
+    expect(userApi.setMarketing).toHaveBeenCalledWith(false);
     expect(toast).toHaveBeenCalledWith('2026년 11월 21일 혜택·소식 알림 수신을 거부했어요', 'success');
   });
 
@@ -156,6 +160,7 @@ describe('혜택·소식 알림 동의 — 처리 결과 알림', () => {
     await a;
     expect(toast).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith('2026년 11월 19일 혜택·소식 알림 수신을 거부했어요', 'success');
+    expect(userApi.setMarketing.mock.calls).toEqual([[false]]); // 앞선 요청은 동의 기록까지 가지 않는다
     expect(usePrefs.getState().notify.marketing).toBe(false);
   });
 
@@ -163,7 +168,26 @@ describe('혜택·소식 알림 동의 — 처리 결과 알림', () => {
     pushApi.updateSettings.mockRejectedValueOnce(new Error('500'));
     await expect(changeMarketingConsent(true)).resolves.toBe(false);
     expect(usePrefs.getState().notify.marketing).toBe(false);
+    expect(userApi.setMarketing).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith('500', 'error');
+  });
+
+  test('동의 기록만 실패하면 이미 켠 푸시 설정을 되돌리고 오류만 알린다', async () => {
+    pushApi.updateSettings
+      .mockResolvedValueOnce({ ...DEFAULTS, marketing: true, marketingUpdatedAt: '2026-11-19T03:00:00Z' })
+      .mockResolvedValueOnce({ ...DEFAULTS, marketing: false, marketingUpdatedAt: '2026-11-19T03:00:01Z' });
+    userApi.setMarketing.mockRejectedValueOnce(new Error('agreement 500'));
+    await expect(changeMarketingConsent(true)).resolves.toBe(false);
+    expect(pushApi.updateSettings.mock.calls).toEqual([[{ marketing: true }], [{ marketing: false }]]);
+    expect(usePrefs.getState().notify.marketing).toBe(false);
+    expect(toast.mock.calls).toEqual([['agreement 500', 'error']]);
+  });
+
+  test('가입 화면에서 이미 동의를 보냈으면(agreement: false) 푸시 설정만 켜고 결과를 알린다', async () => {
+    pushApi.updateSettings.mockResolvedValueOnce({ ...DEFAULTS, marketing: true, marketingUpdatedAt: '2026-11-19T03:00:00Z' });
+    await expect(changeMarketingConsent(true, { agreement: false })).resolves.toBe(true);
+    expect(userApi.setMarketing).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith('2026년 11월 19일 혜택·소식 알림 수신에 동의했어요', 'success');
   });
 
   test('서버가 아직 marketing을 모르면(배포 전) 동의했다고 알리지 않고 되돌린다', async () => {

@@ -115,7 +115,7 @@ Retention Analysis
    - Event Segmentation: `push_opened` where `type = notice`, Group by `kind`, `target`
    - 이름 `운영자 알림 누름 (종류·열 곳)`
 2. 혜택·소식 알림 동의
-   - Event Segmentation: `setting_changed` where `key = notify_marketing`, Group by `value`, `screen`(`PushPermission` 가입 직후 체크 · `Settings` 설정 토글)
+   - Event Segmentation: `setting_changed` where `key = notify_marketing`, Group by `value`, `screen`(`Signup` 가입 화면 동의 · `PushPermission` 가입 직후 체크 · `Settings` 설정 토글 · `TermsUpdate` 약관 개정 시트)
    - 이름 `혜택·소식 알림 동의·철회`
 
 ## 7. 대시보드
