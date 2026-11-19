@@ -1,8 +1,8 @@
 diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
-index 09278e7..ea282f6 100644
+index 09278e7..82bc9e1 100644
 --- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
 +++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
-@@ -99,7 +99,17 @@ public class MapMarker extends MapFeature {
+@@ -99,7 +99,31 @@ public class MapMarker extends MapFeature {
      private float calloutAnchorY;
      private boolean calloutAnchorIsSet;
  
@@ -17,10 +17,24 @@ index 09278e7..ea282f6 100644
 +    private final Runnable padoFollowUpDraw = () -> {
 +        if (marker != null) updateMarkerIcon();
 +    };
++    // PADO: 커스텀 뷰(자식)가 다 빠졌다 — 마커를 지우는 중이면 곧 지도에서도 떨어진다. 그동안 그림을 바꾸지 않는다 (padoChildrenGone)
++    private boolean padoChildrenGonePending = false;
++    // PADO: MapView가 떼기로 한 마커 (같은 마운트 안에서 다시 붙으면 false로)
++    boolean padoDetaching = false;
++    private final Runnable padoChildrenGone = () -> {
++        // 떼는 중이면 지도에서 떨어질 때까지(removeFromMap) 계속 막아 둔다
++        if (!padoChildrenGonePending || padoDetaching) return;
++        padoChildrenGonePending = false;
++        // 자식 없이 지도에 남았으면 원래대로 기본 핀으로
++        if (marker != null && !this.hasCustomMarkerView) {
++            updateTracksViewChanges();
++            update(true);
++        }
++    };
  
      private boolean tracksViewChanges = true;
      private boolean tracksViewChangesActive = false;
-@@ -311,8 +321,13 @@ public class MapMarker extends MapFeature {
+@@ -311,8 +335,13 @@ public class MapMarker extends MapFeature {
      }
  
      public void setTracksViewChanges(boolean tracksViewChanges) {
@@ -34,7 +48,7 @@ index 09278e7..ea282f6 100644
      }
  
      private void updateTracksViewChanges() {
-@@ -344,16 +359,20 @@ public class MapMarker extends MapFeature {
+@@ -344,16 +373,23 @@ public class MapMarker extends MapFeature {
              return false;
          }
  
@@ -48,6 +62,9 @@ index 09278e7..ea282f6 100644
  
      public void updateMarkerIcon() {
          if (marker == null) return;
++        // PADO: 자식 뷰가 빠진 직후(마커를 지우는 중)에는 그림을 바꾸지 않는다 — 원래는 Google 기본 빨간 핀으로 바뀌어,
++        // 지도에서 떨어질 때까지(떼기는 마운트가 끝난 뒤 — MapView.padoDetachMarker) 확대·축소 때 빨간 핀이 번쩍였다
++        if (padoChildrenGonePending) return;
  
 +        // PADO: 붙은 뒤 처음 제대로 찍을 때(레이아웃이 끝난 뒤) 아트용 한 번을 예약한다 — 마커 안 SVG 이미지는 처음 그릴 때 디스크에서 받기 시작해
 +        // 그다음 그릴 때 나온다. 받은 것을 알려 주는 신호(로드 이벤트·invalidate)는 마커 밖으로 오지 않아 시간으로 잡는다
@@ -58,16 +75,31 @@ index 09278e7..ea282f6 100644
          marker.setIcon(getIcon());
      }
  
-@@ -469,6 +488,8 @@ public class MapMarker extends MapFeature {
+@@ -469,6 +505,9 @@ public class MapMarker extends MapFeature {
          // if children are added, it means we are rendering a custom marker
          if (!(child instanceof MapCallout)) {
              hasCustomMarkerView = true;
++            padoChildrenGonePending = false;
 +            // PADO: 지도에 붙은 뒤에 자식이 들어온 경우에도 아트용 한 번을 예약한다(addToMap 때는 커스텀 뷰인지 몰랐다)
 +            if (marker != null && tracksViewChanges) padoFollowUp = true;
              updateTracksViewChanges();
              hackToHandleDraweeLifecycle(child);
          }
-@@ -562,8 +583,16 @@ public class MapMarker extends MapFeature {
+@@ -540,8 +579,12 @@ public class MapMarker extends MapFeature {
+             if (hasCustomMarkerView) {
+                 hasCustomMarkerView = false;
+                 clearDrawableCache();
++                // PADO: 기본 핀으로 바꾸는 것은 마운트가 끝난 뒤로 미룬다 — 마커를 지우는 중이면(떼기·삭제가 같은 마운트) 바꾸지 않는다.
++                // 그사이 추적·150ms 찍기·추적 끌 때 찍기도 그림을 바꾸지 않는다 (updateMarkerIcon)
++                padoChildrenGonePending = true;
++                padoHandler.removeCallbacks(padoFollowUpDraw);
++                padoHandler.post(padoChildrenGone);
+                 updateTracksViewChanges();
+-                update(true);
+             }
+         } else {
+             // custom subview
+@@ -562,8 +605,16 @@ public class MapMarker extends MapFeature {
      @Override
      public void addToMap(Object collection) {
          MarkerManager.Collection markerCollection = (MarkerManager.Collection) collection;
@@ -85,16 +117,19 @@ index 09278e7..ea282f6 100644
          updateTracksViewChanges();
      }
  
-@@ -575,6 +604,8 @@ public class MapMarker extends MapFeature {
+@@ -575,6 +626,11 @@ public class MapMarker extends MapFeature {
          MarkerManager.Collection markerCollection = (MarkerManager.Collection) collection;
          markerCollection.remove(marker);
          marker = null;
 +        padoFollowUp = false;
++        padoDetaching = false;
++        padoChildrenGonePending = false;
 +        padoHandler.removeCallbacks(padoFollowUpDraw);
++        padoHandler.removeCallbacks(padoChildrenGone);
          updateTracksViewChanges();
      }
  
-@@ -613,7 +644,14 @@ public class MapMarker extends MapFeature {
+@@ -613,7 +669,14 @@ public class MapMarker extends MapFeature {
          options.draggable(draggable);
          options.zIndex(zIndex);
          options.alpha(opacity);
@@ -110,7 +145,7 @@ index 09278e7..ea282f6 100644
          return options;
      }
  
-@@ -636,13 +674,12 @@ public class MapMarker extends MapFeature {
+@@ -636,13 +699,12 @@ public class MapMarker extends MapFeature {
          } else {
              marker.setInfoWindowAnchor(0.5f, 0);
          }
@@ -125,7 +160,7 @@ index 09278e7..ea282f6 100644
          updateTracksViewChanges();
          clearDrawableCache();
          update(true);
-@@ -810,7 +847,7 @@ public class MapMarker extends MapFeature {
+@@ -810,7 +872,7 @@ public class MapMarker extends MapFeature {
  
      public void setUpdated(boolean updated) {
          if (updated) {
@@ -135,7 +170,7 @@ index 09278e7..ea282f6 100644
              this.updated = 0;
          }
 diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
-index 94288ef..fabb2d2 100644
+index 94288ef..79a2fd8 100644
 --- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
 +++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapView.java
 @@ -14,6 +14,8 @@ import androidx.lifecycle.DefaultLifecycleObserver;
@@ -265,14 +300,14 @@ index 94288ef..fabb2d2 100644
 -            if (!paused) {
 -                pauseSafely();
 -            }
--        }
+         }
 -
 -        // These operations don't need synchronization
 -        try {
 -            onStop();
 -        } catch (Exception e) {
 -            Log.e("MapView", "Error during stop in onDetachedFromWindow: " + e.getMessage());
-         }
+-        }
 -
 -        savedFeatures = new ArrayList<>(features);
 -        features.clear();
@@ -292,7 +327,7 @@ index 94288ef..fabb2d2 100644
              if (!paused) {
                  pauseSafely();
              }
-@@ -1211,7 +1202,10 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+@@ -1211,7 +1202,11 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
          // This is where we intercept them and do the appropriate underlying mapview action.
          if (child instanceof MapMarker) {
              MapMarker annotation = (MapMarker) child;
@@ -301,10 +336,11 @@ index 94288ef..fabb2d2 100644
 +            if (!padoDetachedMarkers.remove(annotation) || annotation.getFeature() == null) {
 +                annotation.addToMap(markerCollection);
 +            }
++            annotation.padoDetaching = false;
              safeAddFeature(index, annotation);
  
              // Allow visibility event to be triggered later
-@@ -1325,7 +1319,11 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+@@ -1325,7 +1320,11 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
          }
          if (feature instanceof MapMarker) {
              markerMap.remove(feature.getFeature());
@@ -317,7 +353,7 @@ index 94288ef..fabb2d2 100644
              safeRemoveFeatureFromAttacherGroup(feature);
          } else if (feature instanceof MapHeatmap) {
              heatmapMap.remove(feature.getFeature());
-@@ -1343,6 +1341,30 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
+@@ -1343,6 +1342,31 @@ public class MapView extends com.google.android.gms.maps.MapView implements Goog
          }
      }
  
@@ -328,6 +364,7 @@ index 94288ef..fabb2d2 100644
 +     * 다시 붙으면 있던 마커를 그대로 쓴다. 다시 붙지 않았으면 그 작업이 끝난 뒤 지운다.
 +     */
 +    private void padoDetachMarker(MapMarker marker) {
++        marker.padoDetaching = true;
 +        padoDetachedMarkers.add(marker);
 +        if (!padoFlushPosted) {
 +            padoFlushPosted = true;
@@ -398,10 +435,26 @@ index 82a78e2..7f39fd5 100644
  
  #endif
 diff --git a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
-index d729954..7a817e8 100644
+index d729954..79cc6b7 100644
 --- a/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
 +++ b/node_modules/react-native-maps/ios/AirGoogleMaps/AIRGoogleMapMarker.m
-@@ -47,6 +47,10 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -17,6 +17,15 @@
+ #import "AIRGoogleMapCallout.h"
+ #import "AIRDummyView.h"
+ 
++/*
++ * PADO: 같은 마운트에서 새 마커가 붙었으면(핀↔묶음 전환·묶음 다시 나누기) 뗄 마커를 PADO_HANDOVER_S 뒤에 뗀다.
++ * 새 마커의 첫 그림은 다음 런루프의 레이아웃·스냅샷을 거쳐 몇 프레임 뒤에 나오는데(마커가 수십 개면 더 늦다),
++ * 옛 마커는 마운트 바로 뒤에 떼어져 그 사이 지도에 마커가 하나도 없는 순간(0.2~0.4초)이 있었다 → 그동안 옛 마커를 남겨 둔다.
++ * 새로 붙은 마커가 없으면(그냥 지움) 전처럼 마운트 바로 뒤에 뗀다.
++ */
++static const NSTimeInterval PADO_HANDOVER_S = 0.35;
++static CFTimeInterval padoLastInsertAt = 0;
++
+ CGRect unionRect(CGRect a, CGRect b) {
+     return CGRectMake(
+                       MIN(a.origin.x, b.origin.x),
+@@ -47,6 +56,10 @@ CGRect unionRect(CGRect a, CGRect b) {
      NSString* _identifier;
      NSString* _title;
      NSString* _subtitle;
@@ -412,7 +465,7 @@ index d729954..7a817e8 100644
  
  }
  
-@@ -93,9 +97,18 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -93,13 +106,24 @@ CGRect unionRect(CGRect a, CGRect b) {
  
  - (void) didInsertInMap:(AIRGoogleMap *) map
  {
@@ -432,15 +485,22 @@ index d729954..7a817e8 100644
      _realMarker.tracksInfoWindowChanges = _tracksInfoWindowChanges;
  
      [_realMarker setPosition:_coordinates];
-@@ -146,6 +159,7 @@ CGRect unionRect(CGRect a, CGRect b) {
+     if (_iconView){
++        // PADO: 자식 뷰가 이미 자리를 잡았으면 아이콘 크기를 지금 맞춘다 — 0x0으로 붙어 다음 런루프까지 빈 마커로 있지 않게
++        [self layoutSubviews];
+         [_realMarker setIconView:_iconView];
+     }
+     if (_rotation != 0){
+@@ -146,6 +170,8 @@ CGRect unionRect(CGRect a, CGRect b) {
          [_realMarker setZIndex:_zIndex];
      }
      [_realMarker setMap:map];
++    padoLastInsertAt = CACurrentMediaTime();
 +    [self padoApplyTracking];
  }
  
  - (void)iconViewInsertSubview:(UIView*)subview atIndex:(NSInteger)atIndex {
-@@ -156,6 +170,15 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -156,6 +182,15 @@ CGRect unionRect(CGRect a, CGRect b) {
          _realMarker.iconView = _iconView;
      }
      [_iconView insertSubview:subview atIndex:atIndex];
@@ -456,7 +516,7 @@ index d729954..7a817e8 100644
  }
  
  - (void)insertReactSubview:(id<RCTComponent>)subview atIndex:(NSInteger)atIndex {
-@@ -519,12 +542,71 @@ CGRect unionRect(CGRect a, CGRect b) {
+@@ -519,12 +554,82 @@ CGRect unionRect(CGRect a, CGRect b) {
  }
  
  - (void)setTracksViewChanges:(BOOL)tracksViewChanges {
@@ -485,13 +545,24 @@ index d729954..7a817e8 100644
 +- (void)padoRemoveFromMap {
 +    if (!_realMarker.map) return;
 +    _padoRemovePending = YES;
-+    // 마운트(한 번의 메인 스레드 작업)가 끝난 뒤에도 다시 붙지 않았으면 그때 뗀다
++    // 마운트(한 번의 메인 스레드 작업)가 끝난 뒤에도 다시 붙지 않았으면 그때 뗀다 — 그 마운트에서 새 마커가 붙었으면 PADO_HANDOVER_S 뒤에
 +    dispatch_async(dispatch_get_main_queue(), ^{
 +        if (!self->_padoRemovePending) return;
-+        self->_padoRemovePending = NO;
-+        [self->_padoTrackTimer invalidate];
++        [self->_padoTrackTimer invalidate]; // 옛 모습 그대로 둔다 (자식 뷰는 이미 빠졌을 수 있다)
 +        self->_padoTrackTimer = nil;
-+        self->_realMarker.map = nil;
++        GMSMarker *old = self->_realMarker;
++        BOOL handover = CACurrentMediaTime() - padoLastInsertAt < 0.1;
++        if (!handover) {
++            self->_padoRemovePending = NO;
++            old.map = nil;
++            return;
++        }
++        old.tappable = NO; // 남겨 둔 동안 눌리지 않게 (컴포넌트는 이미 지워졌다)
++        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(PADO_HANDOVER_S * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
++            if (!self->_padoRemovePending || self->_realMarker != old) return; // 그사이 다시 붙음
++            self->_padoRemovePending = NO;
++            old.map = nil;
++        });
 +    });
 +}
 +
