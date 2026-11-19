@@ -2,7 +2,7 @@
 import { keepPreviousData, skipToken, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { commentApi, dropApi, likeApi, notificationApi, playlistApi, safetyApi, songApi, userApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
-import type { CreateDropBody, LikedDrop, UUID } from '@/api/types';
+import type { CreateDropBody, DropSummary, LikedDrop, UUID } from '@/api/types';
 import { useDropRadius } from '@/hooks/useDropRadius';
 import { searchKm } from '@/utils/dropScope';
 import { dropPlace, type DropPlaceFields } from '@/utils/address';
@@ -27,6 +27,8 @@ export const qk = {
   myDrops: ['myDrops'] as const,
   me: ['me'] as const,
 };
+/** 좋아요 토글 진행 중인지 보는 키 (useToggleLike) */
+const toggleLikeKey = (dropId: UUID) => ['toggleLike', dropId];
 
 /**
  * 주변 드랍 — 범위는 서버가 운영자 보기 설정으로 고른다(가까운 순, 최대 500개).
@@ -50,7 +52,20 @@ export const useCommentCount = (id: UUID | undefined) => useQuery({ queryKey: ['
 export const useComments = (id: UUID | undefined) => useQuery({ queryKey: qk.comments(id ?? ''), enabled: !!id && authed(), queryFn: () => commentApi.list(id!) });
 
 export const useMe = () => useQuery({ queryKey: qk.me, enabled: authed(), queryFn: userApi.me });
-export const useMyDrops = () => useQuery({ queryKey: qk.myDrops, enabled: authed(), queryFn: userApi.myDrops });
+/**
+ * 내 드랍 목록에 온 좋아요 수를 드랍별 좋아요 수 캐시(qk.likeCount)에 넣는다 — 프로필 숫자와 상세 화면이 따로 묻지 않고 같은 숫자를 바로 보게.
+ * 좋아요를 누르는 중인 드랍은 건너뛴다 (낙관적으로 바꾼 숫자를 응답 전에 받은 옛 값으로 덮지 않게 — 끝나면 useToggleLike가 다시 맞춘다)
+ */
+export function seedLikeCounts(qc: QueryClient, drops: readonly DropSummary[]) {
+  for (const d of drops) {
+    if (typeof d.likeCount !== 'number' || qc.isMutating({ mutationKey: toggleLikeKey(d.droppingId) }) > 0) continue;
+    qc.setQueryData(qk.likeCount(d.droppingId), d.likeCount);
+  }
+}
+export function useMyDrops() {
+  const qc = useQueryClient();
+  return useQuery({ queryKey: qk.myDrops, enabled: authed(), queryFn: async () => { const drops = await userApi.myDrops(); seedLikeCounts(qc, drops); return drops; } });
+}
 export const useMyLikes = () => useQuery({ queryKey: qk.myLikes, enabled: authed(), queryFn: userApi.myLikes });
 export const useAgreements = () => useQuery({ queryKey: ['agreements'], enabled: authed(), queryFn: userApi.agreements });
 export const useBlocks = () => useQuery({ queryKey: ['blocks'], enabled: authed(), queryFn: safetyApi.blocks });
@@ -88,7 +103,7 @@ const likedNow = (qc: QueryClient, dropId: UUID) =>
  */
 export function useToggleLike(dropId: UUID) {
   const qc = useQueryClient();
-  const mutationKey = ['toggleLike', dropId];
+  const mutationKey = toggleLikeKey(dropId);
   const m = useMutation({
     mutationKey,
     mutationFn: () => likeApi.toggle(dropId),

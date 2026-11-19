@@ -227,7 +227,8 @@ export async function mockFetch(method: string, url: string, headers: Record<str
   if (path === '/users' && method === 'PATCH') { const e = need(); if (e) return e; const u2 = users.find(x => x.id === me)!; if (b.username) u2.username = String(b.username); if (b.gender !== undefined) u2.gender = !!b.gender; if (b.birthDate) u2.birth = String(b.birthDate); return ok(undefined); }
   if (path === '/users/profile-image' && method === 'PUT') { const e = need(); if (e) return e; return err(500, 'F1', '파일 업로드 실패'); }
   if (path === '/users/withdrawal' && method === 'POST') { const e = need(); if (e) return e; sessions.delete(token!); return ok(undefined); }
-  if (path === '/users/my-drop') { const e = need(); if (e) return e; return ok({ droppings: drops.filter(d => d.summary.userId === me).map(d => withMine(d.summary, me)) }); }
+  // 실서버처럼 드랍마다 받은 좋아요 수(likeCount)를 담는다
+  if (path === '/users/my-drop') { const e = need(); if (e) return e; return ok({ droppings: drops.filter(d => d.summary.userId === me).map(d => ({ ...withMine(d.summary, me), likeCount: likes.get(d.summary.droppingId)?.size ?? 0 })) }); }
   if (path === '/users/my-like') {
     const e = need(); if (e) return e;
     const liked = drops.filter(d => likes.get(d.summary.droppingId)?.has(me!));
