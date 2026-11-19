@@ -9,7 +9,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, makeMutable, useAnimatedProps, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 import { Spin } from '@/components/anim';
@@ -35,17 +35,27 @@ function useCurrentRouteName() {
   return name;
 }
 
-/** 진행률 테두리 — 250ms마다 바뀌므로 이 부분만 다시 그린다 */
+/** 재생 진행률(0~1) — 플레이어가 250ms마다 알려 주는 위치를 UI 스레드 값으로 옮겨 둔다 */
+export const progressOf = (position: number, duration: number) => (duration > 0 ? Math.min(1, Math.max(0, position / duration)) : 0);
+const ringProgress = makeMutable(progressOf(usePreviewStore.getState().position, usePreviewStore.getState().duration));
+usePreviewStore.subscribe((s, prev) => {
+  if (s.position !== prev.position || s.duration !== prev.duration) ringProgress.value = progressOf(s.position, s.duration);
+});
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const RING_R = RING / 2 - 2;
+const RING_C = 2 * Math.PI * RING_R;
+
+/**
+ * 진행률 테두리 — 진행률을 React 상태로 구독하지 않고 Reanimated 값으로 테두리 길이만 바꾼다.
+ * 재생 중 250ms마다 오는 위치 갱신이 JS에서 커밋(다시 그리기)을 만들지 않는다 (2026-11-20 QA R-04)
+ */
 function ProgressRing() {
-  const position = usePreviewStore(s => s.position);
-  const duration = usePreviewStore(s => s.duration);
-  const r = RING / 2 - 2;
-  const c = 2 * Math.PI * r;
-  const p = duration ? Math.min(1, position / duration) : 0;
+  const arc = useAnimatedProps(() => ({ strokeDashoffset: RING_C * (1 - ringProgress.value) }));
   return (
     <Svg width={RING} height={RING} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }} pointerEvents="none">
-      <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={colors.line} strokeWidth={2.5} fill="none" />
-      <Circle cx={RING / 2} cy={RING / 2} r={r} stroke="#00C9FF" strokeWidth={2.5} fill="none" strokeDasharray={`${c} ${c}`} strokeDashoffset={c * (1 - p)} strokeLinecap="round" />
+      <Circle cx={RING / 2} cy={RING / 2} r={RING_R} stroke={colors.line} strokeWidth={2.5} fill="none" />
+      <AnimatedCircle cx={RING / 2} cy={RING / 2} r={RING_R} stroke="#00C9FF" strokeWidth={2.5} fill="none" strokeDasharray={`${RING_C} ${RING_C}`} strokeLinecap="round" animatedProps={arc} />
     </Svg>
   );
 }
