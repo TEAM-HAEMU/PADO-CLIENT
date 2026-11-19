@@ -13,6 +13,7 @@ import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { track } from '@/services/analytics';
+import { clampText } from '@/utils/text';
 
 const REASONS: [ReportReason, string][] = [['SPAM', '스팸·광고'], ['ABUSE', '욕설·괴롭힘'], ['SEXUAL', '음란물'], ['HATE', '혐오 표현'], ['PRIVACY', '개인정보 노출'], ['ETC', '기타']];
 
@@ -55,7 +56,7 @@ export default function ReportScreen({ navigation, route }: RootScreen<'Report'>
             </Press>
           ))}
         </View>
-        <TextInput value={detail} onChangeText={t => setDetail(t.slice(0, 500))} placeholder="자세한 내용 (선택, 500자)" placeholderTextColor={GREY} multiline maxFontSizeMultiplier={1.2} selectionColor={colors.primary} style={{ minHeight: 64, borderRadius: 16, padding: 14, paddingTop: 14, backgroundColor: colors.field, borderWidth: 1, borderColor: colors.lineStrong, color: colors.ink, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, textAlignVertical: 'top' }} />
+        <TextInput value={detail} onChangeText={t => setDetail(clampText(t, 500))} placeholder="자세한 내용 (선택, 500자)" placeholderTextColor={GREY} multiline maxFontSizeMultiplier={1.2} selectionColor={colors.primary} style={{ minHeight: 64, borderRadius: 16, padding: 14, paddingTop: 14, backgroundColor: colors.field, borderWidth: 1, borderColor: colors.lineStrong, color: colors.ink, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, textAlignVertical: 'top' }} />
         {userId ? (
           <Press onPress={() => setBlock(b => !b)} accessibilityRole="checkbox" accessibilityState={{ checked: block }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, paddingVertical: 2 }}>
             <View style={{ width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: block ? colors.primary : 'transparent', borderWidth: block ? 0 : 1.5, borderColor: '#E7E7E7' }}>

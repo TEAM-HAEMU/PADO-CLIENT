@@ -13,6 +13,7 @@ import { usePreview } from '@/services/preview';
 import { useDraft } from '@/store/draft';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
+import { clampText, textLength } from '@/utils/text';
 
 const TOPIC_MAX = 40;
 
@@ -62,11 +63,11 @@ export default function VoteCreateScreen({ navigation }: RootScreen<'VoteCreate'
         <View style={{ gap: 8, padding: 16, borderRadius: 16, backgroundColor: '#46BEFF', shadowColor: '#9BE7FF', shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 4 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <T style={{ fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, letterSpacing: -0.24, color: '#EBF6FF' }}>질문</T>
-            <T style={{ fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, letterSpacing: -0.2, color: '#EBF6FF' }}>{topic.length}/{TOPIC_MAX}</T>
+            <T style={{ fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, letterSpacing: -0.2, color: '#EBF6FF' }}>{textLength(topic)}/{TOPIC_MAX}</T>
           </View>
           <TextInput
             value={topic}
-            onChangeText={t => set({ topic: t.slice(0, TOPIC_MAX) })}
+            onChangeText={t => set({ topic: clampText(t, TOPIC_MAX) })}
             placeholder="이 장소에 가장 어울리는 곡은?"
             placeholderTextColor="rgba(255,255,255,0.6)"
             multiline
