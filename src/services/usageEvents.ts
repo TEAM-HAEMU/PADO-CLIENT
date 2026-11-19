@@ -1,7 +1,7 @@
 /**
- * 서버 이용 집계 (POST /events) — 전체 사용자 기준 숫자(앱 열기·드랍 열기·미리듣기·잠금 탭·공유)를 서버가 합계로만 센다.
+ * 서버 이용 집계 (POST /events) — 전체 사용자 기준 숫자(앱 열기·드랍 열기·미리듣기·잠금 탭·공유·알림 누름)를 서버가 합계로만 센다.
  *  - 모아서 보낸다: 마지막 이벤트 10초 뒤, 50개가 차면 바로, 앱이 백그라운드로 갈 때
- *  - 로그인 토큰을 붙이지 않는다 (서버도 사용자와 연결하지 않음). 이름과 드랍 ID 말고는 보내지 않는다
+ *  - 로그인 토큰을 붙이지 않는다 (서버도 사용자와 연결하지 않음). 이름과 드랍 ID, 알림 누름이면 운영자 발송 ID(noticeId) 말고는 보내지 않는다
  *  - 분석을 완전히 끈 사람은 보내지 않는다 (analytics.ts가 판단해서 enqueue를 부른다)
  *  - 화면을 막지 않는다: 실패는 조용히. 네트워크 오류면 다음 번에 다시, 404(서버 배포 전)·400이면 버린다
  *  - 목 모드에선 보내지 않는다
@@ -9,9 +9,10 @@
 import { env } from '@/config';
 import { newRequestId, REQUEST_ID_HEADER } from '@/api/requestId';
 
-export const SERVER_EVENTS = ['app_opened', 'drop_opened', 'preview_started', 'drop_locked_tap', 'share_opened'] as const;
+export const SERVER_EVENTS = ['app_opened', 'drop_opened', 'preview_started', 'drop_locked_tap', 'share_opened', 'push_opened'] as const;
 export type ServerEventName = (typeof SERVER_EVENTS)[number];
-export interface ServerEvent { name: ServerEventName; droppingId?: string }
+/** noticeId: push_opened에서 운영자 발송 알림을 눌렀을 때만 — 서버가 그 알림의 누른 수를 1 올린다 */
+export interface ServerEvent { name: ServerEventName; droppingId?: string; noticeId?: string }
 
 export const isServerEvent = (name: string): name is ServerEventName => (SERVER_EVENTS as readonly string[]).includes(name);
 
@@ -77,9 +78,9 @@ export function createUsageQueue(opts: { send?: Send; debounceMs?: number; enabl
   }
 
   return {
-    enqueue(name: ServerEventName, droppingId?: string | null) {
+    enqueue(name: ServerEventName, droppingId?: string | null, noticeId?: string | null) {
       if (!enabled()) return;
-      queue.push(droppingId ? { name, droppingId } : { name });
+      queue.push({ name, ...(droppingId ? { droppingId } : null), ...(noticeId ? { noticeId } : null) });
       if (queue.length > QUEUE_MAX) queue = queue.slice(-QUEUE_MAX);
       if (queue.length >= BATCH_MAX) flush();
       else schedule();

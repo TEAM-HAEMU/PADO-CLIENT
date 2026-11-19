@@ -209,6 +209,17 @@ test('서버 집계 이벤트는 드랍 ID와 함께 모아서 토큰 없이 POS
   expect(JSON.parse(init.body)).toEqual({ events: [{ name: 'drop_opened', droppingId: 'd1' }, { name: 'preview_started' }] });
 });
 
+test('알림 누름(push_opened)은 운영자 발송 ID를 noticeId로 서버에 보낸다', async () => {
+  const fetch = (globalThis as unknown as { fetch: jest.Mock }).fetch;
+  const { a } = load();
+  await a.setAnalyticsMode('basic');
+  a.track('push_opened', { type: 'notice', has_drop: false, kind: 'AD', target: 'MAP', notice_id: 'n1' });
+  a.track('push_opened', { type: 'like', has_drop: true });
+  a.onAppStateChange('background');
+  await flushPromises();
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ events: [{ name: 'push_opened', noticeId: 'n1' }, { name: 'push_opened' }] });
+});
+
 test('첫 실행이면 first_open, 이후엔 app_opened만', async () => {
   const { a, amp } = load();
   await a.setAnalyticsMode('basic');
