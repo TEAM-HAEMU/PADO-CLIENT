@@ -1,8 +1,9 @@
 /** 3.3 한마디 남기기 — Figma 'B 3.3 한마디 남기기' (고른 곡 · 한마디 입력 · 추천 문구) → POST /droppings */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { useIsMutating, useQueryClient } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
+import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { errorMessage } from '@/api/errors';
 import type { CreateDropBody } from '@/api/types';
@@ -46,6 +47,8 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   const footerH = useRef(0);
   const scroll = useFocusedInputScroll(footerH);
   const keyboard = useKeyboardVisible();
+  // iPhone SE·mini(높이 700pt 미만)는 묶음 사이 여백을 줄여 추천 문구 제목까지 첫 화면에 보이게
+  const compact = useWindowDimensions().height < 700;
   const art = draftArt(draft);
   // 'GANADARA를 고르셨군요! / 음악을 바다에 빠뜨려보세요.' — 조사는 곡·플리 이름 받침에 맞춘다
   const head = useMemo(() => {
@@ -116,7 +119,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
         키보드가 뜨면 버튼이 키보드 바로 위로 올라오고 스크롤 영역이 그만큼 줄어든다(겹치지 않음) → 입력칸은 버튼 위에 맞춰 스크롤.
         Android는 adjustResize로 창 자체가 줄어든다
       */}
-      <ScrollView ref={scroll.ref} keyboardDismissMode="interactive" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24, gap: 36 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll.ref} keyboardDismissMode="interactive" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: compact ? 12 : 20, paddingBottom: 24, gap: compact ? 24 : 36 }} keyboardShouldPersistTaps="handled">
         <View style={{ gap: 20 }}>
           {/* 곡 고르기에서 틀어 둔 미리듣기가 있으면 아트를 눌러 일시정지/재개 */}
           <DiscArt uri={art} size={100} mark={songLoaded} playing={songPlaying} onToggle={songLoaded ? () => usePreviewStore.getState().toggle() : undefined} style={{ alignSelf: 'flex-start' }} />
@@ -151,12 +154,13 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
       </ScrollView>
       {/* 키보드가 떠 있으면 위치 문구는 접어 입력칸 자리를 남긴다 (버튼만) */}
       <View onLayout={e => { footerH.current = e.nativeEvent.layout.height; }} style={{ gap: 12, paddingHorizontal: 24, paddingTop: 12, paddingBottom: keyboard ? 12 : insets.bottom + 26 }}>
-        {keyboard ? null : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-            <PinGlyph height={13} />
-            <T v="captionStrong" c="ink2" numberOfLines={1} style={{ fontFamily: fonts.regular }}>지금 서 있는 {address || label || '이곳'}에 남겨져요</T>
-          </View>
-        )}
+        {/* 스크롤 끝이 버튼 영역에 잘려 보이지 않게 — 아래로 더 있다는 표시 겸 흐리게 이어 준다 (키보드가 뜨면 입력칸 글자 수를 가리지 않게 숨김) */}
+        <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0)', colors.page]} style={{ position: 'absolute', left: 0, right: 0, top: -28, height: 28, display: keyboard ? 'none' : 'flex' }} />
+        {/* 뷰를 빼고 넣지 않고 display로 숨긴다 — 키보드 애니메이션 중 뷰 트리를 바꾸면 Reanimated 레이아웃 애니메이션 쪽 단언에 걸렸다(디버그) */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, display: keyboard ? 'none' : 'flex' }}>
+          <PinGlyph height={13} />
+          <T v="captionStrong" c="ink2" numberOfLines={1} style={{ fontFamily: fonts.regular }}>지금 서 있는 {address || label || '이곳'}에 남겨져요</T>
+        </View>
         <PrimaryButton label="여기 빠뜨리기" onPress={submit} loading={creating} />
       </View>
     </KeyboardAvoidingView>
