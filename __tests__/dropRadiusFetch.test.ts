@@ -10,7 +10,7 @@ jest.mock('@/services/location', () => ({ useLocation: (sel: (s: { coords: null 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@/api/errors';
 import { shouldRetryQuery } from '@/hooks/queryClient';
-import { useDropRadius } from '@/hooks/useDropRadius';
+import { radiusRefetchMs, RADIUS_REFRESH_MS, useDropRadius } from '@/hooks/useDropRadius';
 const React = require('react') as typeof import('react');
 const TestRenderer = require('react-test-renderer') as typeof import('react-test-renderer');
 const { act } = TestRenderer;
@@ -47,4 +47,40 @@ test('네트워크 오류는 한 번만 다시 시도한다', async () => {
   open(); await flush();
   open(); await flush();
   expect(mockDropRadius).toHaveBeenCalledTimes(2);
+});
+
+describe('실패했을 때 다시 묻는 주기', () => {
+  // 가짜 시계 — 타이머를 흘리며 그 사이 생긴 프라미스(요청·재시도 대기)도 끝까지 돌린다
+  const tick = (ms: number) => act(() => jest.advanceTimersByTimeAsync(ms));
+  const settle = () => tick(50);
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { jest.useRealTimers(); });
+
+  test('첫 실행에서 네트워크 오류로 못 받으면 30초 뒤 다시 묻는다 — 기본값이 10분 동안 남지 않게', async () => {
+    mockDropRadius.mockRejectedValueOnce(new ApiError(0, null)).mockRejectedValueOnce(new ApiError(0, null)).mockResolvedValue(OK);
+    open(); await settle(); // 첫 요청 + 재시도 1번 (retryDelay 0)
+    expect(mockDropRadius).toHaveBeenCalledTimes(2);
+    await tick(29_000); await settle();
+    expect(mockDropRadius).toHaveBeenCalledTimes(2);
+    await tick(1_500); await settle();
+    expect(mockDropRadius).toHaveBeenCalledTimes(3);
+    // 받고 나면 평소 주기(10분)로
+    await tick(5 * 60_000); await settle();
+    expect(mockDropRadius).toHaveBeenCalledTimes(3);
+  });
+
+  test('4xx로 실패하면 짧게 다시 묻지 않는다 (평소 10분)', async () => {
+    mockDropRadius.mockRejectedValue(new ApiError(404, null));
+    open(); await settle();
+    await tick(5 * 60_000); await settle();
+    expect(mockDropRadius).toHaveBeenCalledTimes(1);
+  });
+
+  test('실패가 이어지면 간격을 두 배씩, 10분까지', () => {
+    const net = (n: number) => radiusRefetchMs({ status: 'error', error: new ApiError(0, null), errorUpdateCount: n });
+    expect([1, 2, 3, 4, 5, 6, 9].map(net)).toEqual([30_000, 60_000, 120_000, 240_000, 480_000, RADIUS_REFRESH_MS, RADIUS_REFRESH_MS]);
+    expect(radiusRefetchMs({ status: 'error', error: new ApiError(503, null), errorUpdateCount: 1 })).toBe(30_000);
+    expect(radiusRefetchMs({ status: 'error', error: new Error('bad drop radius'), errorUpdateCount: 1 })).toBe(RADIUS_REFRESH_MS);
+    expect(radiusRefetchMs({ status: 'success', error: null, errorUpdateCount: 3 })).toBe(RADIUS_REFRESH_MS);
+  });
 });
