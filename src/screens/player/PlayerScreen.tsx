@@ -40,10 +40,12 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const nextId = queue && qIndex >= 0 ? queue[qIndex + 1] : undefined;
   const songQ = useSong(songId, { keepPrevious: !!queue });
   const song = songQ.data;
-  const drop = useDrop(dropId).data;
-  // 드랍의 곡이면 재생 반경 잠금 — 링크(song/…?dropId=)로 바로 열어도 지도와 같은 규칙. 드랍 없이 곡만 열면 잠그지 않는다
-  const lock = useOpenedDropLock(dropId, drop);
-  const open = !dropId || lock.status === 'open';
+  const dropQ = useDrop(dropId);
+  const drop = dropQ.data;
+  // 드랍의 곡이면 재생 반경 잠금 — 링크(song/…?dropId=)로 바로 열어도 지도와 같은 규칙. 드랍 없이 곡만 열면 잠그지 않는다.
+  // 드랍 상세를 못 받으면(삭제·만료된 드랍, 네트워크) 판정 없이 곡만 보여 준다 — 곡은 드랍 없이도 들을 수 있어 잠금이 지키는 게 없고, 로딩에 머물지 않게
+  const lock = useOpenedDropLock(dropId, drop, undefined, dropQ.isError);
+  const open = !dropId || lock.status === 'open' || lock.status === 'unavailable';
   const preview = usePreview(open ? song : null);
   const menu = useDropMenu(dropId, drop?.userId, '드랍', drop && 'username' in drop ? drop.username : undefined, song);
   const likeCount = useLikeCount(dropId).data;

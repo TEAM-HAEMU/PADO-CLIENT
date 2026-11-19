@@ -1,6 +1,6 @@
 /* 링크·푸시로 바로 연 드랍 상세의 잠금 판정 (B-05) — 지도와 같은 규칙 */
 import { lockJudge, lockMessage } from '@/utils/dropLock';
-import { openedDropLock, type OpenedLockInput } from '@/utils/openedDropLock';
+import { beforeDetail, nearbyFreshness, openedDropLock, type NearbyQueryState, type OpenedLockInput } from '@/utils/openedDropLock';
 import { DEFAULT_RADIUS } from '@/utils/dropScope';
 
 // 서울 시청 — 드랍은 부산 강서구(약 330km)
@@ -97,4 +97,33 @@ test('판정기는 판정한 적이 있는 드랍을 기억한다 (위치를 기
   expect(judge.judged('busan')).toBe(false);
   judge(BUSAN, SEOUL, 500);
   expect(judge.judged('busan')).toBe(true);
+});
+
+describe('상세를 받기 전 (리뷰 반영 — 상세를 못 받으면 로딩에 머물던 것)', () => {
+  test('받는 중이면 기다리고, 실패하면 unavailable', () => {
+    expect(beforeDetail('d1', undefined, false)).toEqual({ status: 'pending' });
+    expect(beforeDetail('d1', undefined, true)).toEqual({ status: 'unavailable' });
+  });
+  test('드랍 없이 연 화면(곡만)은 판정 대상이 아님 — 기다림 상태 그대로 (화면이 dropId 없으면 열어 둔다)', () => {
+    expect(beforeDetail(undefined, undefined, true)).toEqual({ status: 'pending' });
+  });
+});
+
+describe('주변 목록이 연 뒤 새로 받아졌는지 — 쿼리 키와 상관없이', () => {
+  const OPENED = 1000;
+  const q = (over: Partial<NearbyQueryState>): NearbyQueryState => ({ status: 'success', fetchStatus: 'idle', dataUpdatedAt: 500, errorUpdatedAt: 0, ...over });
+  test('아직 다시 받으라고 하지 않았으면 기다린다', () => {
+    expect(nearbyFreshness([q({ dataUpdatedAt: 2000 })], false, OPENED)).toBe('loading');
+  });
+  test('하나라도 받는 중이면 기다린다', () => {
+    expect(nearbyFreshness([q({ dataUpdatedAt: 2000 }), q({ fetchStatus: 'fetching' })], true, OPENED)).toBe('loading');
+  });
+  test('연 뒤 받은 목록이 있으면 done (묵은 목록만 있으면 기다림)', () => {
+    expect(nearbyFreshness([q({}), q({ dataUpdatedAt: 1500 })], true, OPENED)).toBe('done');
+    expect(nearbyFreshness([q({})], true, OPENED)).toBe('loading');
+  });
+  test('연 뒤 실패만 있거나 오프라인으로 멈춰 있으면 error (기다리지 않음)', () => {
+    expect(nearbyFreshness([q({ status: 'error', errorUpdatedAt: 1200 })], true, OPENED)).toBe('error');
+    expect(nearbyFreshness([q({ fetchStatus: 'paused' })], true, OPENED)).toBe('error');
+  });
 });

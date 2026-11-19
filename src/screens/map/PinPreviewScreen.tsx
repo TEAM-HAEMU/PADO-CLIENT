@@ -53,7 +53,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const music = d && isMusicDetail(d) ? d : null;
   const song = useSong(music?.songId);
   // 재생 반경 잠금 — 링크·푸시로 바로 열어도 지도와 같은 규칙 (투표·플리는 넘겨받은 화면이 판정)
-  const lock = useOpenedDropLock(dropId, music, source);
+  const lock = useOpenedDropLock(dropId, music, source, drop.isError);
   const open = lock.status === 'open';
   const preview = usePreview(open ? song.data : null);
   // 핀을 누르면 그 곡 미리듣기를 바로 (지도 자동 재생으로 듣던 곡이면 이어서) — 열린 드랍만

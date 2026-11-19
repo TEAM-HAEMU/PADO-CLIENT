@@ -12,7 +12,8 @@ import type { RegionCodes } from '@/api/types';
 import { IMPRECISE_FACTOR, sameRegion, type DropLock, type LockHere, type LockTarget, type PlayRegion } from '@/utils/dropLock';
 
 export type LockedDropLock = Extract<DropLock, { locked: true }>;
-export type OpenedLock = { status: 'pending' } | { status: 'open' } | { status: 'locked'; lock: LockedDropLock };
+/** unavailable: 드랍 상세를 못 받음(없는 드랍·네트워크) — 판정할 수 없다. 화면이 오류로 보일지 곡만 보일지 정한다 */
+export type OpenedLock = { status: 'pending' } | { status: 'open' } | { status: 'locked'; lock: LockedDropLock } | { status: 'unavailable' };
 
 export interface OpenedLockInput {
   /** 내 드랍이거나 좋아요한 드랍 (상세의 isMyDropping 포함) */
@@ -53,4 +54,26 @@ export function openedDropLock(i: OpenedLockInput): OpenedLock {
   // 주변 목록을 못 받았으면(오프라인 등) 열지 않는다 — 규칙을 지키는 쪽으로
   if (i.nearby === 'loading') return PENDING;
   return { status: 'locked', lock: { locked: true, remainingM: null, far: true } };
+}
+
+/** 상세를 받기 전 — 받는 중이면 기다리고, 요청이 실패했으면 기다리지 않는다 (로딩에 머물지 않게) */
+export function beforeDetail(dropId: string | undefined, detail: unknown, failed: boolean): OpenedLock {
+  if (dropId && !detail && failed) return { status: 'unavailable' };
+  return PENDING;
+}
+
+/** 주변 목록 쿼리 하나의 상태 (react-query QueryState에서 쓰는 것만) */
+export interface NearbyQueryState { status: 'pending' | 'success' | 'error'; fetchStatus: 'fetching' | 'paused' | 'idle'; dataUpdatedAt: number; errorUpdatedAt: number }
+
+/**
+ * 좌표 없는 드랍을 판정할 주변 목록이 '이 화면을 연 뒤' 새로 받아졌는지 — 쿼리 키와 상관없이 ['nearby'] 쿼리 전체를 본다.
+ * 하나라도 받는 중이면 loading, 연 뒤 받은 목록이 있으면 done, 연 뒤 실패만 있거나 오프라인으로 멈춰 있으면 error. 아직 다시 받으라고 하지 않았으면 loading
+ */
+export function nearbyFreshness(queries: readonly NearbyQueryState[], asked: boolean, openedAt: number): OpenedLockInput['nearby'] {
+  if (!asked || queries.some(q => q.fetchStatus === 'fetching')) return 'loading';
+  if (queries.some(q => q.status === 'success' && q.dataUpdatedAt >= openedAt)) return 'done';
+  if (queries.some(q => q.errorUpdatedAt >= openedAt)) return 'error';
+  // 오프라인이라 요청이 멈춰 있으면(paused) 기다리지 않는다 — 받을 수 없으니 실패와 같게
+  if (queries.some(q => q.fetchStatus === 'paused')) return 'error';
+  return 'loading';
 }

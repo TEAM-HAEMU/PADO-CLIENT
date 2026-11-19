@@ -37,7 +37,7 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
   const drop = useDrop(dropId);
   const d = drop.data && isPlaylistDetail(drop.data) ? drop.data : null;
   // 재생 반경 잠금 — 링크·푸시로 바로 열어도 지도와 같은 규칙 (잠기면 곡 목록·재생을 보이지 않는다)
-  const lock = useOpenedDropLock(dropId, d, source);
+  const lock = useOpenedDropLock(dropId, d, source, drop.isError);
   const unlocked = lock.status === 'open';
   useDropOpenedEvent(dropId, 'PLAYLIST', unlocked ? d : null, source);
   // 플리 드랍 핀을 누르면 첫 곡 미리듣기를 바로 — 열린 드랍만

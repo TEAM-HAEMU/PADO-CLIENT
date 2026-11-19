@@ -30,7 +30,7 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
   const drop = useDrop(dropId);
   const d = drop.data && isVoteDetail(drop.data) ? drop.data : null;
   // 재생 반경 잠금 — 링크·푸시로 바로 열어도 지도와 같은 규칙 (잠기면 후보·투표를 보이지 않는다)
-  const lock = useOpenedDropLock(dropId, d, source);
+  const lock = useOpenedDropLock(dropId, d, source, drop.isError);
   const open = lock.status === 'open';
   useDropOpenedEvent(dropId, 'VOTE', open ? d : null, source);
   const comments = useComments(dropId).data ?? [];
