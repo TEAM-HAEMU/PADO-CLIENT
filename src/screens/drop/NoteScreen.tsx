@@ -1,6 +1,6 @@
 /** 3.3 한마디 남기기 — Figma 'B 3.3 한마디 남기기' (고른 곡 · 한마디 입력 · 추천 문구) → POST /droppings */
-import React, { useEffect, useMemo, useState } from 'react';
-import { Linking, ScrollView, TextInput, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, View } from 'react-native';
 import { useIsMutating, useQueryClient } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import { Wave } from '@/components/ui/Wave';
 import { CREATE_DROP_KEY, useCreateDrop, useMyDrops } from '@/hooks/api';
 import { regionOf } from '@/utils/address';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
+import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { navigationRef } from '@/navigation/ref';
 import type { RootScreen } from '@/navigation/types';
 import { currentCoords, preciseDropHint, PRECISE_DROP_TITLE, tooImpreciseToDrop, useLocation } from '@/services/location';
@@ -41,7 +42,10 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   // 드랍을 만드는 중 — 이 화면이 아니라 앱 전체 기준 (제출 중 뒤로 갔다 다시 들어온 새 화면에서도 두 번째 제출이 나가지 않게)
   const creating = useIsMutating({ mutationKey: CREATE_DROP_KEY }) > 0;
   const myDrops = useMyDrops().data;
-  const scroll = useFocusedInputScroll();
+  // 하단 고정 버튼 영역 높이 — 키보드가 뜨면 입력칸을 이 영역 위에 맞춘다
+  const footerH = useRef(0);
+  const scroll = useFocusedInputScroll(footerH);
+  const keyboard = useKeyboardVisible();
   const art = draftArt(draft);
   // 'GANADARA를 고르셨군요! / 음악을 바다에 빠뜨려보세요.' — 조사는 곡·플리 이름 받침에 맞춘다
   const head = useMemo(() => {
@@ -103,12 +107,16 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       {/* Figma 'wave' 인스턴스 — 화면 아래쪽에 깔림 */}
       <Wave scale={1.2} style={{ position: 'absolute', left: -79, right: -79, bottom: -34 }} />
       <TopBar title="한마디 남기기" onBack={navigation.goBack} />
-      {/* 버튼은 바닥에 고정하지 않고 내용 흐름 끝에 둔다 — 키보드 위로 따라 올라와 입력칸을 가리지 않게. 키보드가 뜨면 입력칸에 맞춰 스크롤 */}
-      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: insets.bottom + 26, gap: 36 }} keyboardShouldPersistTaps="handled">
+      {/*
+        주요 버튼은 스크롤 밖 하단에 고정한다 — iPhone SE(667pt)에선 내용 흐름 끝에 두면 첫 화면에서 보이지 않았다 (QA 2026-11-20 U-01).
+        키보드가 뜨면 버튼이 키보드 바로 위로 올라오고 스크롤 영역이 그만큼 줄어든다(겹치지 않음) → 입력칸은 버튼 위에 맞춰 스크롤.
+        Android는 adjustResize로 창 자체가 줄어든다
+      */}
+      <ScrollView ref={scroll.ref} keyboardDismissMode="interactive" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24, gap: 36 }} keyboardShouldPersistTaps="handled">
         <View style={{ gap: 20 }}>
           {/* 곡 고르기에서 틀어 둔 미리듣기가 있으면 아트를 눌러 일시정지/재개 */}
           <DiscArt uri={art} size={100} mark={songLoaded} playing={songPlaying} onToggle={songLoaded ? () => usePreviewStore.getState().toggle() : undefined} style={{ alignSelf: 'flex-start' }} />
@@ -140,16 +148,18 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
             {SUGGEST.map(s => <Chip key={s} label={s} onPress={() => setText(t => (t ? `${t} ${s}` : s).slice(0, MAX))} />)}
           </View>
         </View>
-        <View style={{ flex: 1 }} />
-        <View style={{ gap: 12 }}>
+      </ScrollView>
+      {/* 키보드가 떠 있으면 위치 문구는 접어 입력칸 자리를 남긴다 (버튼만) */}
+      <View onLayout={e => { footerH.current = e.nativeEvent.layout.height; }} style={{ gap: 12, paddingHorizontal: 24, paddingTop: 12, paddingBottom: keyboard ? 12 : insets.bottom + 26 }}>
+        {keyboard ? null : (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
             <PinGlyph height={13} />
             <T v="captionStrong" c="ink2" numberOfLines={1} style={{ fontFamily: fonts.regular }}>지금 서 있는 {address || label || '이곳'}에 남겨져요</T>
           </View>
-          <PrimaryButton label="여기 빠뜨리기" onPress={submit} loading={creating} />
-        </View>
-      </ScrollView>
-    </View>
+        )}
+        <PrimaryButton label="여기 빠뜨리기" onPress={submit} loading={creating} />
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
