@@ -60,16 +60,18 @@ export function CommentBar({ placeholder, onComment, liked, likeCount, onLike }:
 }
 
 /** Figma 'tag' 30px 알약 — on: 파란 바탕 + 옅은 글자 / off: 옅은 하늘 바탕 + 파란 글자 */
-function TagButton({ label, on, icon, onPress, accessibilityLabel }: { label?: string; on?: boolean; icon: React.ReactNode; onPress: () => void; accessibilityLabel?: string }) {
+/** disabled: 누를 수 없음을 PrimaryButton처럼 흐리게(0.4) 보여 주고 누름도 받지 않는다 */
+function TagButton({ label, on, icon, onPress, accessibilityLabel, disabled }: { label?: string; on?: boolean; icon: React.ReactNode; onPress: () => void; accessibilityLabel?: string; disabled?: boolean }) {
   return (
-    <Press onPress={onPress} accessibilityLabel={accessibilityLabel} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 30, paddingHorizontal: label ? 14 : 8, minWidth: 30, borderRadius: 999, backgroundColor: on ? 'rgba(43,156,255,0.8)' : 'rgba(240,252,255,0.8)' }}>
+    <Press onPress={onPress} disabled={disabled} accessibilityState={{ disabled: !!disabled }} accessibilityLabel={accessibilityLabel} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, height: 30, paddingHorizontal: label ? 14 : 8, minWidth: 30, borderRadius: 999, backgroundColor: on ? 'rgba(43,156,255,0.8)' : 'rgba(240,252,255,0.8)', opacity: disabled ? 0.4 : 1 }}>
       {icon}
       {label ? <T style={{ fontFamily: fonts.medium, fontSize: 12, lineHeight: 17, letterSpacing: -0.24, color: on ? '#F0FCFF' : colors.primary }}>{label}</T> : null}
     </Press>
   );
 }
 
-export function PlaylistHero({ images, title, meta, onPlay, onShuffle, onService }: { images: (string | null)[]; title: string; meta: string; onPlay: () => void; onShuffle: () => void; onService?: () => void }) {
+/** empty: 담긴 곡이 없음 — 재생 버튼들을 흐리게 하고 누름을 막는다 (눌러도 아무 일이 없던 것) */
+export function PlaylistHero({ images, title, meta, onPlay, onShuffle, onService, empty }: { images: (string | null)[]; title: string; meta: string; onPlay: () => void; onShuffle: () => void; onService?: () => void; empty?: boolean }) {
   const service = usePrefs(s => s.service) ?? 'spotify';
   return (
     <View style={{ alignItems: 'center', gap: 20 }}>
@@ -79,9 +81,9 @@ export function PlaylistHero({ images, title, meta, onPlay, onShuffle, onService
         <T style={{ fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, letterSpacing: -0.065, color: colors.ink3, textAlign: 'center' }}>{meta}</T>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <TagButton label="셔플로 듣기" icon={<Shuffle />} onPress={onShuffle} />
-        <TagButton label="전체 재생" on icon={<Glyph name="playSmall" size={16} color="#F0FCFF" />} onPress={onPlay} />
-        {onService ? <TagButton icon={<ServiceGlyph service={service} size={16} />} onPress={onService} accessibilityLabel="재생 앱" /> : null}
+        <TagButton label="셔플로 듣기" icon={<Shuffle />} onPress={onShuffle} disabled={empty} />
+        <TagButton label="전체 재생" on icon={<Glyph name="playSmall" size={16} color="#F0FCFF" />} onPress={onPlay} disabled={empty} />
+        {onService ? <TagButton icon={<ServiceGlyph service={service} size={16} />} onPress={onService} accessibilityLabel="재생 앱" disabled={empty} /> : null}
       </View>
     </View>
   );

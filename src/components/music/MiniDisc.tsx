@@ -21,13 +21,14 @@ import { useScreenVisible } from '@/hooks/useScreenVisible';
 import { navigationRef } from '@/navigation/ref';
 import { usePreviewStore } from '@/services/preview';
 import { colors, glow } from '@/theme/tokens';
+import { MINI_DISC_RING, MINI_DISC_SIZE, MINI_DISC_TAB_BOTTOM } from './miniDiscLayout';
 
 /** 길게 누르기 동작 — 지금 보이는 화면이 등록 (지도: 다음 주변 곡) */
 export const useMiniDiscActions = create<{ onLongPress: (() => void) | null }>(() => ({ onLongPress: null }));
 
 const TABS = ['Map', 'Playlists', 'Profile'];
-const SIZE = 52;
-const RING = SIZE + 8;
+const SIZE = MINI_DISC_SIZE;
+const RING = MINI_DISC_RING;
 
 function useCurrentRouteName() {
   const [name, setName] = useState<string | undefined>(() => (navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : undefined));
@@ -104,7 +105,7 @@ export function MiniDisc() {
   const buffering = usePreviewStore(s => s.buffering);
   const paused = usePreviewStore(s => s.paused);
   // 지도는 하단 '가까운 드랍' 줄 위, 다른 탭은 하단 독 위 — 화면이 바뀌면 그 높이로 미끄러지듯
-  const target = insets.bottom + (route === 'Map' ? 262 : 112);
+  const target = insets.bottom + (route === 'Map' ? 262 : MINI_DISC_TAB_BOTTOM);
   const bottom = useSharedValue(target);
   const placed = useRef(false);
   useEffect(() => {

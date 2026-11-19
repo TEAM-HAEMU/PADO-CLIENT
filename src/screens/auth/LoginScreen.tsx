@@ -54,7 +54,8 @@ export default function LoginScreen({ navigation }: RootScreen<'Login'>) {
       <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.canGoBack() ? navigation.goBack : undefined} style={{ marginTop: insets.top + 12 }} />
       <AuthTitle title={'바닷속에 숨겨진\n보물을 찾으러 갈까요?'} style={{ marginTop: 39 }} />
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 16 }}>
-        <IntroArt page={AUTH_PAGES - 1} />
+        {/* 큰 글자에서 제목·버튼이 커져 남은 칸이 그림보다 작아지면 그림이 줄어든다 — 줄지 않으면 위아래로 넘쳐 제목을 덮었다 (QA U-04 c) */}
+        <IntroArt page={AUTH_PAGES - 1} style={{ flexShrink: 1 }} />
       </View>
 
       <View style={{ paddingHorizontal: 24, gap: 10 }}>
