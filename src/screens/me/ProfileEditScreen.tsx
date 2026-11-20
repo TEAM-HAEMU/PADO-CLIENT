@@ -14,6 +14,7 @@ import { qk, useMe } from '@/hooks/api';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
+import { clampText, textLength } from '@/utils/text';
 
 export default function ProfileEditScreen({ navigation }: RootScreen<'ProfileEdit'>) {
   const insets = useSafeAreaInsets();
@@ -90,7 +91,7 @@ export default function ProfileEditScreen({ navigation }: RootScreen<'ProfileEdi
             <MeGlyph name="camera" size={13} />
           </View>
         </Press>
-        <Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} help="지도와 드랍에 표시되는 이름이에요" error={err.username} right={<T v="caption" c="lineStrong">{username.length}/15</T>} />
+        <Field label="닉네임" value={username} onChangeText={t => setUsername(clampText(t, 15))} help="지도와 드랍에 표시되는 이름이에요" error={err.username} right={<T v="caption" c="lineStrong">{textLength(username)}/15</T>} />
         <Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={err.birth} />
         {/* 성별은 선택 항목 (App Store 5.1.1(v)) — 아직 안 정했으면 '선택 안 함'이 보이고, 고르지 않아도 저장된다.
             서버에 성별을 지우는 API는 없어서, 이미 정한 사람에겐 '선택 안 함'을 보여주지 않는다 */}

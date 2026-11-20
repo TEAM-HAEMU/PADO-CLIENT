@@ -23,9 +23,10 @@ import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { josa } from '@/utils/josa';
+import { clampText, textLength } from '@/utils/text';
 import { detailedOnly, track } from '@/services/analytics';
 
-const MAX = 255; // 명세: content 최대 255자
+const MAX = 255; // 명세: content 최대 255자 (서버는 UTF-16 길이로 센다 — utils/text)
 const SUGGEST = ['퇴근길에 딱', '여기 풍경이랑 잘 어울려요', '친구와 함께 듣고싶어요', '여기서 처음 들었어요'];
 
 export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
@@ -67,7 +68,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
     // 오차가 100m를 넘으면(대략적인 위치 등) 엉뚱한 자리에 남지 않게 막는다 — 오차를 모르면 그대로
     if (tooImpreciseToDrop(loc)) return dialog.alert(PRECISE_DROP_TITLE, preciseDropHint(), [{ text: '닫기', style: 'cancel' }, { text: '설정 열기', onPress: () => { Linking.openSettings(); } }]);
     const pos = coords;
-    const base = { content: text.trim(), latitude: pos.latitude, longitude: pos.longitude, address: (address || label || '현재 위치').slice(0, 200) };
+    const base = { content: text.trim(), latitude: pos.latitude, longitude: pos.longitude, address: clampText(address || label || '현재 위치', 200) };
     let body: CreateDropBody;
     if (draft.type === 'MUSIC' && draft.song) body = { ...base, type: 'MUSIC', songId: draft.song.id };
     else if (draft.type === 'VOTE') body = { ...base, type: 'VOTE', topic: draft.topic.trim(), options: draft.options.map(s => s.id) };
@@ -122,7 +123,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
         <View style={{ height: 206, borderRadius: 4, backgroundColor: '#FAFBFC', borderWidth: 1, borderColor: focus ? colors.primaryDeep : '#FAFBFC', paddingHorizontal: 12, paddingTop: 10, paddingBottom: 26 }}>
           <TextInput
             value={text}
-            onChangeText={t => setText(t.slice(0, MAX))}
+            onChangeText={t => setText(clampText(t, MAX))}
             onFocus={() => { setFocus(true); scroll.onFocus(); }}
             onBlur={() => setFocus(false)}
             multiline
@@ -132,12 +133,12 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
             maxFontSizeMultiplier={1.2}
             style={{ flex: 1, color: colors.ink, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, letterSpacing: -0.24, textAlignVertical: 'top', padding: 0 }}
           />
-          <T style={{ position: 'absolute', right: 12, bottom: 8, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, color: '#B4B9BE' }}>{text.length}/{MAX}</T>
+          <T style={{ position: 'absolute', right: 12, bottom: 8, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, color: '#B4B9BE' }}>{textLength(text)}/{MAX}</T>
         </View>
         <View style={{ gap: 20 }}>
           <T style={{ fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, letterSpacing: -0.26, color: '#090909' }}>이런 말은 어때요?</T>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 12 }}>
-            {SUGGEST.map(s => <Chip key={s} label={s} onPress={() => setText(t => (t ? `${t} ${s}` : s).slice(0, MAX))} />)}
+            {SUGGEST.map(s => <Chip key={s} label={s} onPress={() => setText(t => clampText(t ? `${t} ${s}` : s, MAX))} />)}
           </View>
         </View>
         <View style={{ flex: 1 }} />
