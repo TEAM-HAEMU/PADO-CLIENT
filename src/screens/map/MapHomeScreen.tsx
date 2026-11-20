@@ -20,6 +20,7 @@ import { Art, Icon, Press, T } from '@/components/ui';
 import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
+import { useReleasePickOnSongChange } from '@/hooks/useReleasePickOnSongChange';
 import { useDropLock } from '@/hooks/useDropLock';
 import { useMapLive } from '@/hooks/useMapLive';
 import { useStoreWhile } from '@/hooks/useStoreWhile';
@@ -324,6 +325,10 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   }, []);
   const selected = selectedId ? sorted.find(x => x.d.droppingId === selectedId) : undefined;
   useEffect(() => { if (!focused) clearSelection(); }, [focused, clearSelection]);
+  // 고른 곡이 끝나고 자동 재생·다음 곡으로 재생 곡이 바뀌면 고름을 푼다 — 고름 강조·말풍선이 재생 중이 아닌 곡에 남지 않게 (2026-11-20 TestFlight 제보).
+  // 재생 곡을 따라 고름을 옮기지는 않는다(지도가 저절로 움직이므로). 투표·플리·잠긴 드랍은 곡을 틀지 않으므로 보지 않는다
+  const pickedSong = selected && !selected.lock.locked && selected.d.type === 'MUSIC' ? selected.d.songId : null;
+  useReleasePickOnSongChange(selectedId, pickedSong, clearSelection);
   const { activeId, bubbleId } = selectionLook(selectedId, arrivedId, nearestId);
   const bubble = bubbleId ? selected : undefined;
   // 고른 핀은 그릴 핀 목록(보이는 영역·개수 제한) 밖이어도 늘 그린다 — 누르는 즉시 (카메라가 옮겨 가는 동안 마커를 미리 만든다)

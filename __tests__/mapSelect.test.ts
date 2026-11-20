@@ -1,7 +1,7 @@
 /* 지도에서 드랍 고르기 — 도착 영역 · 이동 중 다시 고르기 생략 · 도착 뒤 핀 크기·말풍선 · 거리 없는 핀 문구 */
 import type { DropSummary } from '@/api/types';
 import { needsRepick } from '@/utils/mapPins';
-import { alreadyThere, focusMove, pinSubtitle, regionOfBounds, repickWhileMoving, selectionLook } from '@/utils/mapSelect';
+import { alreadyThere, focusMove, pinSubtitle, regionOfBounds, repickWhileMoving, selectionLook, watchPick, type PickWatch } from '@/utils/mapSelect';
 
 const view = { latitude: 35.1575, longitude: 129.0604, latitudeDelta: 0.018, longitudeDelta: 0.012 };
 const pin = { latitude: 35.17, longitude: 129.07 };
@@ -111,5 +111,46 @@ describe('regionOfBounds — 지도에서 읽은 보이는 범위 → 영역 (�
     expect(regionOfBounds(null)).toBeNull();
     expect(regionOfBounds({ northEast: { latitude: NaN, longitude: 1 }, southWest: { latitude: 0, longitude: 0 } })).toBeNull();
     expect(regionOfBounds({ northEast: { latitude: 1, longitude: 1 }, southWest: { latitude: 1, longitude: 0 } })).toBeNull();
+  });
+});
+
+describe('watchPick — 고른 곡이 끝나고 다른 곡으로 넘어가면 고름을 푼다 (2026-11-20 TestFlight 제보)', () => {
+  const rude = { dropId: 'd-rude', songId: 'rude' };
+  /** 재생 곡(key)이 차례로 바뀔 때 고름이 풀리는 시점 — 풀리면 그 뒤로는 고른 게 없다 */
+  const run = (pick: { dropId: string; songId: string } | null, keys: (string | null)[]) => {
+    let w: PickWatch = null;
+    let cur = pick;
+    const out: boolean[] = [];
+    for (const k of keys) {
+      const r = watchPick(w, cur, k);
+      w = r.watch;
+      out.push(r.release);
+      if (r.release) cur = null;
+    }
+    return out;
+  };
+  test('직접 고른 RUDE!가 끝나고(재생 없음) 자동 재생이 Love Blur를 틀면 그때 푼다', () => {
+    expect(run(rude, ['rude', null, 'love'])).toEqual([false, false, true]);
+  });
+  test('이어 틀 곡으로 곧바로 넘어가거나 미니 디스크 길게 누르기(다음 곡)로 바뀌어도 푼다', () => {
+    expect(run(rude, ['rude', 'love'])).toEqual([false, true]);
+  });
+  test('고를 때 다른 곡이 나오고 있었으면 고른 곡이 시작될 때까지 그대로 (자동 재생 곡이 이어져도)', () => {
+    expect(run(rude, ['love', 'next', 'rude'])).toEqual([false, false, false]);
+  });
+  test('일시정지·같은 곡 다시 재생은 key가 그대로라 풀지 않는다. 끝나고 아무것도 안 나오면 그대로 둔다', () => {
+    expect(run(rude, ['rude', 'rude', null, null])).toEqual([false, false, false, false]);
+  });
+  test('미리듣기가 없어 고른 곡이 한 번도 안 나왔으면 다른 곡이 바뀌어도 고름과 상관없다', () => {
+    expect(run(rude, [null, 'love', 'next'])).toEqual([false, false, false]);
+  });
+  test('투표·플리·잠긴 드랍(pick 없음)은 무엇이 나와도 풀지 않는다', () => {
+    expect(run(null, ['rude', 'love', null, 'next'])).toEqual([false, false, false, false]);
+  });
+  test('다른 드랍을 새로 고르면 처음부터 센다 — 앞 드랍에서 들은 기록을 넘기지 않는다', () => {
+    const first = watchPick(null, rude, 'rude');
+    expect(first.watch).toEqual({ ...rude, aired: true });
+    const other = { dropId: 'd-love', songId: 'love' };
+    expect(watchPick(first.watch, other, 'rude')).toEqual({ watch: { ...other, aired: false }, release: false });
   });
 });
