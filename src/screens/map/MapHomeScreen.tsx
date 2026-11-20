@@ -7,9 +7,8 @@ import { AppState, Linking, Platform, ScrollView, View } from 'react-native';
 import MapView, { Polygon, PROVIDER_DEFAULT, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import LinearGradient from 'react-native-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import { useIsFocused } from '@react-navigation/native';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useShallow } from 'zustand/react/shallow';
+import { shallow } from 'zustand/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dropApi, regionApi } from '@/api/endpoints';
 import type { DropSummary, MusicDropSummary } from '@/api/types';
@@ -22,6 +21,8 @@ import { env } from '@/config';
 import { qk, useNearbyDrops } from '@/hooks/api';
 import { useNearbyAutoplay } from '@/hooks/useNearbyAutoplay';
 import { useDropLock } from '@/hooks/useDropLock';
+import { useMapLive } from '@/hooks/useMapLive';
+import { useStoreWhile } from '@/hooks/useStoreWhile';
 import { markScopeTipSeen, useDropRadius, useScopeTip } from '@/hooks/useDropRadius';
 import { ScopeTip } from '@/components/map/ScopeTip';
 import { SelectedDropBubble } from '@/components/map/DropBubble';
@@ -41,7 +42,7 @@ import type { TabParamList } from '@/navigation/types';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { formatAddress } from '@/utils/address';
 import type { RipplePin } from '@/utils/ambientMotion';
-import { alreadyThere, AUTO_MOVE_SLACK_MS, dropSub, focusMove, pinSubtitle, repickWhileMoving, selectionLook, type CameraMove } from '@/utils/mapSelect';
+import { alreadyThere, AUTO_MOVE_SLACK_MS, regionOfBounds, dropSub, focusMove, pinSubtitle, repickWhileMoving, selectionLook, type CameraMove } from '@/utils/mapSelect';
 import { clusterPoints, clusterZoomRegion, geocodeDue, idSetKey, needsRepick, pickPins, shouldCluster, singlePins, type GeocodeMark } from '@/utils/mapPins';
 
 export { dropSub };
@@ -96,14 +97,17 @@ let mapLoadTracked = false;
 export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabParamList, 'Map'>) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, askPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, askPermission: s.askPermission })));
+  // 지도가 보이는가 (useMapLive) — 다른 탭이나 위를 덮은 상세 화면 뒤에 있으면 GPS가 갱신돼도 이 화면을 다시 그리지 않는다(정렬·핀 고르기·카메라 따라가기·2분 폴링·영역 이벤트 모두 쉼).
+  // 위치 감시는 계속 돌고(드랍 만들기·푸시 지역 등이 쓴다), 다시 보이는 렌더에서 최신 위치를 한 번에 읽어 맞춘다.
+  // 투명 시트(핀 미리보기 등)가 위에 떠도 지도는 비쳐 보이므로 그대로 따라간다
+  const { focused, live } = useMapLive();
+  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, askPermission } = useStoreWhile(useLocation, s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, askPermission: s.askPermission }), live, shallow);
   // 위치를 받기 전엔 지난번 위치 근처에 카메라를 둔다 (처음 켤 때 엉뚱한 동네가 먼저 보이지 않게)
   const startHint = useRef(lastKnown()).current; // 한 번만 읽는다 (매번 새 객체면 아래 정렬·자동 재생이 계속 다시 돈다)
   const here = coords ?? startHint ?? FALLBACK;
-  const nearby = useNearbyDrops(coords);
+  const nearby = useNearbyDrops(coords, live);
   const drops = useMemo(() => nearby.data ?? [], [nearby.data]);
   const [watchKey, setWatchKey] = useState(0);
-  const focused = useIsFocused();
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   useEffect(() => { const sub = AppState.addEventListener('change', st => setAppActive(st === 'active')); return () => sub.remove(); }, []);
   // 이 화면은 미리듣기 상태를 구독하지 않는다 — 재생이 시작·멈출 때마다(드랍을 고르는 순간 포함) 지도 화면 전체가 다시 그려지지 않게.
@@ -174,8 +178,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const prefetchDrop = useCallback((id: string) => qc.prefetchQuery({ queryKey: qk.drop(id), queryFn: () => dropApi.get(id), staleTime: 30 * 60_000, gcTime: 30 * 60_000 }), [qc]);
 
   // 재생 반경 밖(내 드랍·좋아요한 드랍 제외)은 잠금 — 핀은 흐리게 곡·커버 없이, 눌러도 안 열리고, 자동 재생에서도 뺀다
-  const lockOf = useDropLock();
-  const radius = useDropRadius();
+  const lockOf = useDropLock(live);
+  const radius = useDropRadius(live);
   const sorted = useMemo<NearbyItem[]>(() => drops.map(d => ({ d, m: distanceM(here, d), lock: lockOf(d) })).sort((a, b) => a.m - b.m), [drops, here, lockOf]);
   // 말풍선 닉네임용 상세도 하단 목록(가까운 NEARBY_LIST개 중 열린 것)만큼 미리 받는다 — 고른 뒤 닉네임이 늦게 와서 말풍선을 다시 만들지 않게
   // (지도 핀은 누르는 순간 받기 시작한다 — 말풍선은 카메라가 도착한 뒤에 뜨므로 그동안 대개 받는다)
@@ -222,7 +226,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
     // 그사이 고르기를 풀었거나 다른 드랍을 골랐으면 그대로 둔다
     if (id && latestSel.current === id) setArrivedId(id);
   }, []);
+  // 가려진 지도가 보내는 영역 이벤트는 버린다 (2026-11-20 QA R-10). 드랍을 남기면 완료 화면 아래에 지도가 새로 마운트되는데,
+  // 창에 붙기 전의 iOS Google 지도는 첫 카메라(initialRegion)를 아직 받지 못한 기본 카메라(대서양 쪽, 줌 4)로 '멈춤' 이벤트를 보낸다.
+  // 그 영역으로 핀을 다시 고르고(핀이 전부 빠짐) 그 좌표로 지역 이름을 물었다. 돌아오면 내 위치로 다시 맞추며 새 영역이 온다
+  const liveRef = useRef(live);
+  liveRef.current = live;
   const onRegionChange = useCallback((r: Region, details?: { isGesture?: boolean }) => {
+    if (!liveRef.current) return;
     if (!movingRef.current) { movingRef.current = true; ripples.current?.hide(); }
     const auto = autoMove.current;
     // 앱이 옮기던 중에 사용자가 손으로 잡으면 그때부터는 보통 끌기처럼 (도착 표시는 손을 뗄 때)
@@ -233,11 +243,22 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   }, [drawAt]);
   const onRegionChangeComplete = useCallback((r: Region) => {
     movingRef.current = false;
+    if (autoMove.current) arrive(autoMove.current.arrive);
+    if (!liveRef.current) return;
     setView(r);
     drawAt(r);
-    if (autoMove.current) arrive(autoMove.current.arrive);
   }, [arrive, drawAt]);
   useEffect(() => () => clearTimeout(autoMove.current?.timer), []);
+  // 지도에서 지금 보이는 영역을 직접 읽어 view·그릴 핀을 맞춘다 — 가려진 동안 버린 영역 이벤트를 메우는 용도 (보일 때만)
+  const syncView = useCallback(() => {
+    if (!liveRef.current) return;
+    mapRef.current?.getMapBoundaries().then(b => {
+      const r = regionOfBounds(b);
+      if (!r || !liveRef.current || movingRef.current) return;
+      setView(r);
+      drawAt(r);
+    }).catch(() => {});
+  }, [drawAt]);
   /**
    * 앱이 카메라를 옮긴다 — 그릴 핀은 지금 고른 범위가 도착 영역을 못 덮을 때만 도착 영역으로 한 번 고르고, 움직이는 동안엔 다시 고르지 않는다.
    * (움직이는 중 200ms마다 다시 고르면 마커를 만들고 지우느라 이동이 끊긴다.) arriveId를 주면 도착한 뒤 그 드랍을 크게 그리고 말풍선을 띄운다
@@ -245,7 +266,13 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const moveCamera = (m: CameraMove, duration: number, arriveId: string | null = null) => {
     clearTimeout(autoMove.current?.timer);
     if (needsRepick(drawn.current.region, m.dest, drawn.current.clustered)) drawAt(m.dest);
-    autoMove.current = { until: Date.now() + duration + AUTO_MOVE_SLACK_MS, arrive: arriveId, timer: setTimeout(() => arrive(arriveId), duration + AUTO_MOVE_SLACK_MS) };
+    const move: NonNullable<typeof autoMove.current> = {
+      until: Date.now() + duration + AUTO_MOVE_SLACK_MS,
+      arrive: arriveId,
+      // 이동이 끝났다는 신호가 끝내 안 오면(이미 그 자리라 카메라가 움직이지 않음 등) 지도에서 지금 영역을 직접 읽어 맞춘다
+      timer: setTimeout(() => { if (autoMove.current === move) syncView(); arrive(arriveId); }, duration + AUTO_MOVE_SLACK_MS),
+    };
+    autoMove.current = move;
     if ('region' in m.camera) mapRef.current?.animateToRegion(m.camera.region, duration);
     else mapRef.current?.animateCamera({ center: m.camera.center }, { duration });
   };
@@ -353,7 +380,10 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   const latest = useRef({ sorted, pickDrop, selectedId });
   useEffect(() => { latest.current = { sorted, pickDrop, selectedId }; });
   const markerPressedAt = useRef(0);
-  const onListPick = useCallback((x: NearbyItem) => latest.current.pickDrop(x, 'list'), []);
+  const onListPick = useCallback((id: string) => {
+    const x = latest.current.sorted.find(p => p.d.droppingId === id);
+    if (x) latest.current.pickDrop(x, 'list');
+  }, []);
   const onPinPress = useCallback((id: string) => {
     markerPressedAt.current = Date.now();
     const x = latest.current.sorted.find(p => p.d.droppingId === id);
@@ -425,6 +455,16 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   };
   // Android는 지도가 준비되기 전에 부른 카메라 이동을 무시한다 → 준비된 뒤에 처음 위치로 옮긴다
   const [mapReady, setMapReady] = useState(false);
+  // 가려졌다가 다시 보이면 지금 영역으로 한 번 맞춘다 — 가려진 채 마운트된 지도(드랍 완료 화면 아래)는 첫 영역 이벤트를 버려 view가 비어 있고,
+  // 돌아와 내 위치로 옮겨도 이미 그 자리면 카메라가 움직이지 않아 새 이벤트가 오지 않는다 (화면이 창에 붙을 틈을 두고 읽는다)
+  const wasLive = useRef(live);
+  useEffect(() => {
+    const back = live && !wasLive.current;
+    wasLive.current = live;
+    if (!back || !mapReady) return;
+    const t = setTimeout(syncView, 400);
+    return () => clearTimeout(t);
+  }, [live, mapReady, syncView]);
   useEffect(() => {
     if (!coords || !mapReady) return;
     if (!centered.current) {
@@ -576,52 +616,64 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
 }
 
 /**
- * 하단 '가까운 드랍' 줄 — 재생 중인 곡 표시를 여기서만 구독한다 (재생이 바뀔 때 지도 화면 전체가 아니라 이 줄만 다시 그린다)
+ * 하단 '가까운 드랍' 줄 — 재생 중인 곡 표시를 여기서만 구독한다 (재생이 바뀔 때 지도 화면 전체가 아니라 이 줄만 다시 그린다).
+ * 걸을 때마다(GPS 갱신) 거리순 목록이 새 배열로 오지만, 칸마다 보이는 값(곡·잠금·거리 글자·고름·재생 중)이 그대로면 그 칸은 다시 그리지 않는다 (2026-11-20 QA R-17)
  */
-const NearbyList = memo(function NearbyListRow({ items, selectedId, onPick }: { items: readonly NearbyItem[]; selectedId: string | null; onPick: (x: NearbyItem) => void }) {
+const NearbyList = memo(function NearbyListRow({ items, selectedId, onPick }: { items: readonly NearbyItem[]; selectedId: string | null; onPick: (id: string) => void }) {
   const playingKey = usePreviewStore(st => st.key);
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, gap: 12 }}>
-      {items.map((x, i) => {
-        const { d, m, lock } = x;
-        const picked = d.droppingId === selectedId;
-        if (lock.locked) {
-          // 잠긴 드랍 — 곡·커버 대신 자물쇠와 거리만
-          return (
-            <Press key={d.droppingId} onPress={() => onPick(x)} accessibilityLabel={`잠긴 드랍 · ${formatDistance(m)}`} accessibilityState={{ selected: picked }} trackAs="주변 목록 잠긴 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: picked ? 1 : 0.6 }}>
-                <View style={{ width: 49, height: 49, borderRadius: 9, backgroundColor: colors.card2, alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name="lock" size={18} color={colors.ink3} />
-                </View>
-              </View>
-              <View style={{ alignSelf: 'stretch' }}>
-                <T v="caption" c="onPrimary" numberOfLines={1} style={{ textAlign: 'center' }}>{formatDistance(m)}</T>
-                <T v="tiny" numberOfLines={1} style={{ textAlign: 'center', color: '#98A2B8' }}>더 가까이</T>
-              </View>
-            </Press>
-          );
-        }
-        const fresh = i < 3;
-        const onAir = d.type === 'MUSIC' && !!playingKey && d.songId === playingKey;
-        return (
-          <Press key={d.droppingId} onPress={() => onPick(x)} accessibilityState={{ selected: picked }} trackAs="주변 목록 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
-            {/* Figma 'stay music' 아트: 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 (재생 중이면 시안 테두리 + 글로우) */}
-            <View style={[{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: onAir || picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: fresh || onAir || picked ? 1 : 0.6 }, onAir || picked || fresh ? glow(onAir || picked ? 0.9 : 0.5, 12) : null]}>
-              <Art uri={dropArt(d)} size={49} radius={9} />
-              {onAir ? (
-                <View style={{ position: 'absolute', right: -7, bottom: -7, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#040916' }}>
-                  <Icon name="wave" size={10} color={colors.ink} />
-                </View>
-              ) : null}
-            </View>
-            <View style={{ alignSelf: 'stretch' }}>
-              <T v="caption" c="onPrimary" numberOfLines={1} style={{ textAlign: 'center' }}>{dropTitle(d)}</T>
-              <T v="tiny" numberOfLines={1} style={{ textAlign: 'center', color: '#98A2B8' }}>{d.type === 'MUSIC' ? d.artist : dropSub(d)}</T>
-            </View>
-          </Press>
-        );
-      })}
+      {items.map(({ d, m, lock }, i) => (
+        <NearbyCell
+          key={d.droppingId}
+          d={d}
+          locked={lock.locked}
+          // 거리는 잠긴 칸에만 보인다 — 열린 칸은 걸어도 다시 그릴 게 없다
+          distance={lock.locked ? formatDistance(m) : ''}
+          picked={d.droppingId === selectedId}
+          fresh={i < 3}
+          onAir={d.type === 'MUSIC' && !!playingKey && d.songId === playingKey}
+          onPick={onPick}
+        />
+      ))}
     </ScrollView>
+  );
+});
+
+/** '가까운 드랍' 한 칸 — 원시값 props라 값이 같으면 다시 그리지 않는다 */
+const NearbyCell = memo(function NearbyCell({ d, locked, distance, picked, fresh, onAir, onPick }: { d: DropSummary; locked: boolean; distance: string; picked: boolean; fresh: boolean; onAir: boolean; onPick: (id: string) => void }) {
+  if (locked) {
+    // 잠긴 드랍 — 곡·커버 대신 자물쇠와 거리만
+    return (
+      <Press onPress={() => onPick(d.droppingId)} accessibilityLabel={`잠긴 드랍 · ${distance}`} accessibilityState={{ selected: picked }} trackAs="주변 목록 잠긴 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
+        <View style={{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: picked ? 1 : 0.6 }}>
+          <View style={{ width: 49, height: 49, borderRadius: 9, backgroundColor: colors.card2, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="lock" size={18} color={colors.ink3} />
+          </View>
+        </View>
+        <View style={{ alignSelf: 'stretch' }}>
+          <T v="caption" c="onPrimary" numberOfLines={1} style={{ textAlign: 'center' }}>{distance}</T>
+          <T v="tiny" numberOfLines={1} style={{ textAlign: 'center', color: '#98A2B8' }}>더 가까이</T>
+        </View>
+      </Press>
+    );
+  }
+  return (
+    <Press onPress={() => onPick(d.droppingId)} accessibilityState={{ selected: picked }} trackAs="주변 목록 드랍" style={{ width: 66, alignItems: 'center', gap: 6 }}>
+      {/* Figma 'stay music' 아트: 흰 바탕 · #FAFAFA 테두리 3 · 모서리 12 (재생 중이면 시안 테두리 + 글로우) */}
+      <View style={[{ width: 55, height: 55, borderRadius: 12, borderWidth: 3, borderColor: onAir || picked ? colors.accent : '#FAFAFA', backgroundColor: '#FFFFFF', opacity: fresh || onAir || picked ? 1 : 0.6 }, onAir || picked || fresh ? glow(onAir || picked ? 0.9 : 0.5, 12) : null]}>
+        <Art uri={dropArt(d)} size={49} radius={9} />
+        {onAir ? (
+          <View style={{ position: 'absolute', right: -7, bottom: -7, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#040916' }}>
+            <Icon name="wave" size={10} color={colors.ink} />
+          </View>
+        ) : null}
+      </View>
+      <View style={{ alignSelf: 'stretch' }}>
+        <T v="caption" c="onPrimary" numberOfLines={1} style={{ textAlign: 'center' }}>{dropTitle(d)}</T>
+        <T v="tiny" numberOfLines={1} style={{ textAlign: 'center', color: '#98A2B8' }}>{d.type === 'MUSIC' ? d.artist : dropSub(d)}</T>
+      </View>
+    </Press>
   );
 });
 

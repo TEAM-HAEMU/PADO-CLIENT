@@ -1,5 +1,5 @@
 /** React Query 훅 — 화면은 이 훅들만 쓴다 */
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { keepPreviousData, skipToken, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { commentApi, dropApi, likeApi, notificationApi, playlistApi, safetyApi, songApi, userApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
@@ -31,15 +31,22 @@ export const qk = {
   me: ['me'] as const,
 };
 
+/** 주변 드랍을 다시 받는 간격 — 지도가 보이는 동안 이보다 오래된 목록을 보여 주지 않는다 (가렸다 돌아오면 남은 시간만큼만 기다림) */
+export const NEARBY_POLL_MS = 120_000;
+/** 다시 보이게 된 순간 목록을 새로 받아야 하는가 — 마지막으로 받은 지 NEARBY_POLL_MS가 지났거나 아직 못 받음 */
+export const nearbyDueOnReturn = (dataUpdatedAt: number, now: number) => !dataUpdatedAt || now - dataUpdatedAt >= NEARBY_POLL_MS;
+
 /**
  * 주변 드랍 — 범위는 서버가 운영자 보기 설정으로 고른다(가까운 순, 최대 500개).
  * 거리 모드는 표시 반경(km), 전국·같은 지역 모드는 넓은 값을 보낸다. 같은 지역 모드는 지역이 바뀌면 다시 받는다.
  * 받은 영역 안에서 움직이는 동안은 같은 중심 그대로 — 반경의 1/10(5km면 500m)을 넘게 움직이면 지금 자리로 다시 받는다 (utils/nearbyArea).
  * 새로 생긴 남의 드랍은 2분마다 같은 중심으로 다시 받을 때 들어온다 (서 있을 때와 같은 신선도)
+ * live: 지도가 보이는가 — 가려진 동안엔 2분마다 다시 받지 않고(앱이 앞으로 와도), 다시 보이는 순간 목록이 2분보다 오래됐으면 곧바로 한 번 받는다.
+ * (가려진 동안 받은 영역을 벗어났으면 돌아온 렌더에서 중심이 바뀌어 어차피 새로 받는다 — 그 요청과 겹치지 않게 cancelRefetch: false)
  */
-export function useNearbyDrops(coords: Coords | null) {
+export function useNearbyDrops(coords: Coords | null, live = true) {
   const qc = useQueryClient();
-  const radius = useDropRadius();
+  const radius = useDropRadius(live);
   const km = searchKm(radius);
   const scope = [km, radius.mode, radius.regionUnit, radius.region?.code ?? null] as const;
   // 같은 입력이면 같은 결과라 렌더 중에 바꿔도 된다 (버려진 렌더가 있어도 다음 렌더가 같은 중심을 고른다)
@@ -47,7 +54,22 @@ export function useNearbyDrops(coords: Coords | null) {
   const prev = center.current;
   const covered = prev ? coveredMeters(prev, qc.getQueryData<DropSummary[]>([...qk.nearby(prev), ...scope]), km) : km * 1000;
   const at = (center.current = nextNearbyCenter(prev, coords, covered));
-  return useQuery({ queryKey: [...qk.nearby(at), ...scope], enabled: !!at, queryFn: () => dropApi.nearby(at!.latitude, at!.longitude, km), refetchInterval: 120_000, placeholderData: keepPreviousData });
+  const queryKey = [...qk.nearby(at), ...scope];
+  const q = useQuery({ queryKey, enabled: !!at, queryFn: () => dropApi.nearby(at!.latitude, at!.longitude, km), refetchInterval: live ? NEARBY_POLL_MS : false, refetchOnWindowFocus: live, placeholderData: keepPreviousData });
+  const wasLive = useRef(live);
+  useEffect(() => {
+    const back = live && !wasLive.current;
+    wasLive.current = live;
+    if (!back || !at) return;
+    // 받은 시각은 캐시에서 읽는다 — 결과의 dataUpdatedAt을 읽으면 같은 목록을 다시 받을 때마다 화면이 다시 그려진다(추적 속성)
+    const updatedAt = qc.getQueryState(queryKey)?.dataUpdatedAt ?? 0;
+    const now = Date.now();
+    if (nearbyDueOnReturn(updatedAt, now)) { q.refetch({ cancelRefetch: false }); return; }
+    // 아직 2분이 안 됐으면 남은 시간 뒤에 한 번 — 주기 타이머는 다시 보인 순간부터 2분을 새로 세므로, 두지 않으면 최대 4분 가까이 묵는다
+    const t = setTimeout(() => q.refetch({ cancelRefetch: false }), updatedAt + NEARBY_POLL_MS - now);
+    return () => clearTimeout(t);
+  }, [live]); // eslint-disable-line react-hooks/exhaustive-deps -- 다시 보이게 된 순간에만
+  return q;
 }
 
 export const useDrop = (id: UUID | undefined) => useQuery({ queryKey: qk.drop(id ?? ''), enabled: !!id, queryFn: () => dropApi.get(id!) });

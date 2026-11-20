@@ -5,7 +5,11 @@ const mockDropRadius = jest.fn();
 jest.mock('@/api/endpoints', () => ({ settingsApi: { dropRadius: (...a: unknown[]) => mockDropRadius(...a) } }));
 const store: Record<string, unknown> = {};
 jest.mock('@/store/storage', () => ({ kv: { get: (k: string, d: unknown) => (k in store ? store[k] : d), set: (k: string, v: unknown) => { store[k] = v; }, remove: (k: string) => { delete store[k]; } } }));
-jest.mock('@/services/location', () => ({ useLocation: (sel: (s: { coords: null }) => unknown) => sel({ coords: null }) }));
+// useDropRadius는 useStoreWhile로 위치 저장소를 구독한다 (지도가 가려진 동안 멈추기) — getState·subscribe까지 흉내 낸다
+jest.mock('@/services/location', () => {
+  const state = { coords: null };
+  return { useLocation: Object.assign((sel: (s: typeof state) => unknown) => sel(state), { getState: () => state, subscribe: () => () => {} }) };
+});
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@/api/errors';
