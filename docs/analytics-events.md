@@ -108,6 +108,7 @@
 | `drop_opened` | 드랍 상세(음악 미리보기·투표·플리)를 받아 보여 줌, 화면마다 한 번 | `drop_id`, `type`, `source`(`map_pin`·`map_list`·`notification`(알림 화면·푸시)·`profile`·`playlists`·`link`), `distance_m` | 예 |
 | `preview_started` | 새 곡 미리듣기 시작 | `song_id`, `title`, `artist`, `drop_id`(드랍에서 들으면), `autoplay` | 예 |
 | `preview_paused` / `preview_resumed` | 일시정지·이어 듣기 | `song_id`, `position` | |
+| `preview_interrupted` | 전화·다른 앱 소리(오디오 포커스)나 이어폰 분리로 멈춤. 잠깐 끊긴 뒤 이어 틀면 `preview_resumed`(`reason`)가 따라온다 | `song_id`, `position`, `reason`(`audio_focus`·`noisy`) | |
 | `preview_completed` | 30초 끝까지 | `song_id` | |
 | `nearby_autoplay_play` / `nearby_autoplay_next` | 주변 곡 자동 재생 | `drop_id`, `song_id`, `nearby_count`, `handoff` | |
 | `full_listen_clicked` | 전체 듣기(음악 앱) | `service`, `song_id`, `title`, `artist` | |
