@@ -25,8 +25,11 @@ const CLOSE = { duration: 220, easing: Easing.in(Easing.cubic) };
  * header: 카드 위로 겹쳐 올라오는 요소(예: 앨범 디스크). 카드 밖에 absolute로 띄우면 Android는 부모 영역 밖 터치를
  * 받지 않으므로, 시트 안의 별도 영역에 두고 headerOverlap만큼 카드와 겹친다.
  */
-/** dismissible=false: 배경 탭·뒤로가기로 닫히지 않음 (닫을 땐 close() 사용) — 반드시 확인이 필요한 안내용 */
-export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverlap = 0, dismissible = true, closeRef }: { children: React.ReactNode; style?: ViewStyle; onClose?: () => void; dim?: number; header?: React.ReactNode; headerOverlap?: number; dismissible?: boolean; closeRef?: React.MutableRefObject<(() => void) | null> }) {
+/**
+ * dismissible=false: 배경 탭·뒤로가기로 닫히지 않음 (닫을 땐 close() 사용) — 반드시 확인이 필요한 안내용
+ * confirmClose: 닫기 전에 물어볼 게 있으면(고른 것을 버리는지 등) false로 답해 닫기를 멈춘다. 배경 탭·쓸어내리기·뒤로가기·goBack 모두 여기를 거친다
+ */
+export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverlap = 0, dismissible = true, closeRef, confirmClose }: { children: React.ReactNode; style?: ViewStyle; onClose?: () => void; dim?: number; header?: React.ReactNode; headerOverlap?: number; dismissible?: boolean; closeRef?: React.MutableRefObject<(() => void) | null>; confirmClose?: () => Promise<boolean> }) {
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
   const close = onClose ?? (() => nav.goBack());
@@ -52,6 +55,12 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
   const allow = useRef(false); // 애니메이션 뒤 우리가 직접 보내는 제거 동작은 통과
   const unlocked = useRef(dismissible);
   if (closeRef) closeRef.current = () => { unlocked.current = true; nav.goBack(); };
+  const confirmRef = useRef(confirmClose);
+  confirmRef.current = confirmClose;
+  /** 확인 창을 띄운 동안 · 확인이 끝나 이번 닫기는 통과 */
+  const asking = useRef(false);
+  const confirmed = useRef(false);
+  const drag = useSharedValue(0); // 쓸어내린 거리 (아래 pan)
 
   useEffect(() => { progress.value = withTiming(1, OPEN); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -61,6 +70,20 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
     // 닫을 수 없는 시트 (Android 뒤로가기 포함) — 단 앱이 직접 스택을 재구성(reset)하는 건 막지 않는다
     if (!unlocked.current && e.data.action.type !== 'RESET') return;
     if (closing.current) return; // 닫히는 중 두 번째 닫기(배경 연타·뒤로가기)는 무시
+    // 닫기 전 확인 — 앱이 스택을 재구성(reset)하는 건 묻지 않는다. 취소하면 끌어내리던 시트를 제자리로
+    const ask = confirmRef.current;
+    if (ask && !confirmed.current && e.data.action.type !== 'RESET') {
+      if (asking.current) return;
+      asking.current = true;
+      const pending = e.data.action;
+      ask().catch(() => true).then(ok => {
+        asking.current = false;
+        if (!ok) { drag.value = withTiming(0, OPEN); return; }
+        confirmed.current = true;
+        nav.dispatch(pending);
+      });
+      return;
+    }
     closing.current = true;
     setClosingNow(true);
     const action = e.data.action;
@@ -78,11 +101,10 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
     };
     finishRef.current = finish;
     progress.value = withTiming(0, CLOSE, done => { if (done) scheduleOnRN(callJsCallback, finishId); });
-  }), [nav, progress, route.key, finishId]);
+  }), [nav, progress, route.key, finishId, drag]);
 
   const backdrop = useAnimatedStyle(() => ({ opacity: progress.value }));
   // 쓸어내리기 — 위로 끌거나 옆으로 밀면 무시 (안쪽 가로 스크롤·버튼 탭은 그대로)
-  const drag = useSharedValue(0);
   const pan = usePanGesture({
     enabled: dismissible,
     activeOffsetY: 12,
