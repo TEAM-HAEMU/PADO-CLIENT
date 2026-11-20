@@ -73,6 +73,26 @@ export function selectionLook(selectedId: string | null, arrivedId: string | nul
   };
 }
 
+/** 고른 음악 드랍의 재생 추적 — 그 곡이 한 번이라도 재생됐는지 (고른 드랍이 바뀌면 처음부터) */
+export type PickWatch = { dropId: string; songId: string; aired: boolean } | null;
+
+/**
+ * 고른 음악 드랍이 재생 곡과 어긋나면 고름을 푼다 (2026-11-20 TestFlight 제보: 직접 고른 곡이 끝나고 자동 재생이 다음 곡으로 넘어가도
+ * 고름 테두리·말풍선이 앞 곡에 남아 강조가 둘이 되고, 말풍선이 재생 중이 아닌 곡을 가리켰다).
+ *  · 고른 곡이 재생된 적이 있고, 재생 곡이 다른 곡으로 바뀌면 release — 자동 재생·미니 디스크 길게 누르기(다음 곡) 등 계기는 가리지 않는다
+ *  · 곡이 끝나 아무것도 안 나오는 동안(key 없음)·일시정지·같은 곡 다시 재생은 그대로 둔다
+ *  · 고른 곡이 아직 재생되기 전(불러오는 중·미리듣기 없음)에 다른 곡이 바뀌는 건 고름과 상관없다 — 그대로 둔다
+ *  · 음악이 아닌 드랍(투표·플리)과 잠긴 드랍은 처음부터 곡을 틀지 않으므로 pick을 null로 넘긴다 (추적하지 않음)
+ * 재생 곡을 따라 고름을 옮기지는 않는다 — 지도가 저절로 움직이게 되므로 풀기만 한다.
+ */
+export function watchPick(watch: PickWatch, pick: { dropId: string; songId: string } | null, key: string | null): { watch: PickWatch; release: boolean } {
+  if (!pick) return { watch: null, release: false };
+  const w = watch && watch.dropId === pick.dropId && watch.songId === pick.songId ? watch : { ...pick, aired: false };
+  if (key === pick.songId) return { watch: w.aired ? w : { ...w, aired: true }, release: false };
+  if (key && w.aired) return { watch: null, release: true };
+  return { watch: w, release: false };
+}
+
 /**
  * 핀 접근성 문구 둘째 줄 — 거리는 넣지 않는다.
  * 거리를 넣으면 GPS가 갱신될 때(2~4초)마다 바뀌어 지도 핀 100개의 memo가 다 깨지고 마커를 모두 다시 커밋한다 (거리는 하단 목록·말풍선에 있다)
