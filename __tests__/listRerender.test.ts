@@ -62,7 +62,7 @@ import AddSongsScreen from '@/screens/detail/AddSongsScreen';
 import CommentsScreen from '@/screens/player/CommentsScreen';
 import PlaylistDetailScreen from '@/screens/detail/PlaylistDetailScreen';
 import PlaylistDropScreen from '@/screens/detail/PlaylistDropScreen';
-import ProfileScreen from '@/screens/me/ProfileScreen';
+import ProfileScreen, { LIKE_FALLBACK_LIMIT } from '@/screens/me/ProfileScreen';
 const React = require('react') as typeof import('react');
 const TestRenderer = require('react-test-renderer') as typeof import('react-test-renderer');
 const { act } = TestRenderer;
@@ -190,25 +190,64 @@ test('M2 플리 드랍: 다른 곡으로 바뀌면 바뀐 두 행만 다시 그�
   expect(hosts(r, 'DiscRow').filter(n => n.props.active).map(n => n.props.title)).toEqual(['곡 2']);
 });
 
-test('H1 프로필: 드랍 50개의 좋아요 수가 하나씩 도착해도 행은 처음 한 번만 그린다', async () => {
-  const N = 50;
+const profileDrops = (n: number, likeCount?: (i: number) => number) => Array.from({ length: n }, (_, i) => ({ droppingId: `d${i}`, type: 'MUSIC', title: `드랍 ${i}`, artist: 'a', albumImageUrl: `https://img/${i}`, latitude: 35 + i / 1000, longitude: 129, placeName: '부산', ...(likeCount ? { likeCount: likeCount(i) } : {}) }));
+const likeBadges = (r: Renderer) => r.root.findAll((n: Node) => typeof n.type === 'string' && typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('좋아요 ')).map(n => n.props.accessibilityLabel);
+
+test('H1 프로필(예전 서버 — 목록에 likeCount 없음): 드랍 50개여도 좋아요 수는 위에서부터 상한만큼만 묻고, 도착해도 행은 처음 한 번만 그린다', async () => {
+  const N = 50, L = LIKE_FALLBACK_LIMIT;
   mockData.me = { username: '나' };
+  (likeApi.countForDrop as jest.Mock).mockClear();
   mockData.myLikes = [];
-  mockData.myDrops = Array.from({ length: N }, (_, i) => ({ droppingId: `d${i}`, type: 'MUSIC', title: `드랍 ${i}`, artist: 'a', albumImageUrl: `https://img/${i}`, latitude: 35 + i / 1000, longitude: 129, placeName: '부산' }));
+  mockData.myDrops = profileDrops(N);
   // 응답이 20ms 간격으로 하나씩 도착 (드랍 i의 좋아요 = i + 1)
   (likeApi.countForDrop as jest.Mock).mockImplementation((id: string) => { const i = Number(id.slice(1)); return new Promise(res => setTimeout(() => res(i + 1), (i + 1) * 20)); });
   startCount();
   const r = render(ProfileScreen);
   // 응답마다 따로 반영되게 (react-query 알림 묶음 setTimeout(0)을 다음 응답 전에 비운다)
-  for (let t = 0; t <= N; t++) { await act(async () => { jest.advanceTimersByTime(20); }); await act(async () => { jest.advanceTimersByTime(0); }); }
+  for (let t = 0; t <= L; t++) { await act(async () => { jest.advanceTimersByTime(20); }); await act(async () => { jest.advanceTimersByTime(0); }); }
   await act(async () => { jest.runOnlyPendingTimers(); });
-  report(`Profile 진입 (드랍 ${N}개)`, { rows: count('Art'), screen: count('Avatar'), commits });
-  expect(likeApi.countForDrop).toHaveBeenCalledTimes(N);
-  // 받은 좋아요 합계·행마다 숫자는 그대로
-  const total = (N * (N + 1)) / 2;
-  expect(hosts(r, 'T').some(n => n.props.children === total)).toBe(true);
-  const badges = r.root.findAll((n: Node) => typeof n.type === 'string' && typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('좋아요 '));
-  expect(badges.map(n => n.props.accessibilityLabel)).toEqual(Array.from({ length: N }, (_, i) => `좋아요 ${i + 1}개`));
+  report(`Profile 진입 예전 서버 (드랍 ${N}개)`, { requests: (likeApi.countForDrop as jest.Mock).mock.calls.length, rows: count('Art'), screen: count('Avatar'), commits });
+  expect(likeApi.countForDrop).toHaveBeenCalledTimes(L);
+  expect((likeApi.countForDrop as jest.Mock).mock.calls.map(c => c[0])).toEqual(Array.from({ length: L }, (_, i) => `d${i}`));
+  // 받은 좋아요 = 물어본 드랍만의 합계 + '+' (전부 세지 못했다는 표시)
+  expect(hosts(r, 'T').some(n => n.props.children === `${(L * (L + 1)) / 2}+`)).toBe(true);
+  expect(likeBadges(r)).toEqual(Array.from({ length: L }, (_, i) => `좋아요 ${i + 1}개`));
   expect(count('Art')).toBe(N);
   expect(count('Avatar')).toBeLessThanOrEqual(3);
+});
+
+test('H1 프로필(예전 서버): 드랍이 상한 이하면 전부 묻고 합계에 + 가 없다', async () => {
+  const N = 5;
+  mockData.me = { username: '나' };
+  (likeApi.countForDrop as jest.Mock).mockClear();
+  mockData.myLikes = [];
+  mockData.myDrops = profileDrops(N);
+  (likeApi.countForDrop as jest.Mock).mockImplementation(async (id: string) => Number(id.slice(1)) + 1);
+  const r = render(ProfileScreen);
+  for (let t = 0; t < 3; t++) await act(async () => { jest.advanceTimersByTime(0); });
+  expect(likeApi.countForDrop).toHaveBeenCalledTimes(N);
+  expect(hosts(r, 'T').some(n => n.props.children === 15)).toBe(true);
+});
+
+test('H1 프로필(새 서버 — 목록에 likeCount 있음): 드랍 200개여도 좋아요 수를 따로 묻지 않고, 목록이 채운 캐시로 합계·행 숫자를 그린다', async () => {
+  const N = 200;
+  mockData.me = { username: '나' };
+  (likeApi.countForDrop as jest.Mock).mockClear();
+  // 내가 내 드랍 d0에 누른 좋아요 1개는 '받은 좋아요'에서 뺀다
+  mockData.myLikes = [{ droppingId: 'd0' }];
+  mockData.myDrops = profileDrops(N, i => i % 3);
+  // useMyDrops가 목록을 받으며 하는 일 (seedLikeCounts) — 이 테스트는 훅을 목으로 바꿔서 직접 넣는다
+  (mockData.myDrops as { droppingId: string; likeCount: number }[]).forEach(d => client.setQueryData(['likeCount', d.droppingId], d.likeCount));
+  startCount();
+  const r = render(ProfileScreen);
+  await act(async () => { jest.runOnlyPendingTimers(); });
+  report(`Profile 진입 새 서버 (드랍 ${N}개)`, { requests: (likeApi.countForDrop as jest.Mock).mock.calls.length, rows: count('Art'), screen: count('Avatar'), commits });
+  expect(likeApi.countForDrop).not.toHaveBeenCalled();
+  const sum = Array.from({ length: N }, (_, i) => i % 3).reduce((a, b) => a + b, 0);
+  expect(hosts(r, 'T').some(n => n.props.children === sum - 1)).toBe(true);
+  expect(likeBadges(r)).toEqual(Array.from({ length: N }, (_, i) => `좋아요 ${i % 3}개`));
+  // 내가 좋아요를 누르면(useToggleLike의 낙관적 반영) 그 행 숫자와 합계가 바로 바뀐다
+  await act(async () => { client.setQueryData(['likeCount', 'd1'], 2); jest.advanceTimersByTime(0); });
+  expect(likeBadges(r)[1]).toBe('좋아요 2개');
+  expect(hosts(r, 'T').some(n => n.props.children === sum)).toBe(true);
 });

@@ -21,6 +21,7 @@ import { invalidateAfterDropRemoved, qk, useMe, useMyDrops, useMyLikeCount, useM
 import { likeApi } from '@/api/endpoints';
 import { dropPlace } from '@/utils/address';
 import { newestFirst } from '@/utils/dropOrder';
+import { hasLikeCounts } from '@/utils/dropLikeCount';
 import { dropArt, dropSub, dropTitle } from '@/screens/map/MapHomeScreen';
 import { toast } from '@/store/toast';
 import { googleMapStyle } from '@/theme/mapStyle';
@@ -65,8 +66,17 @@ export default function ProfileScreen() {
   // 탭 숫자는 아래 목록과 같아야 한다 — 서버 개수(/likes/count/user)는 사라진 드랍의 좋아요까지 세어 목록보다 클 수 있어, 목록을 받았으면 목록 길이로
   const likeTotal = likesQ.data ? likes.length : myLikeCount;
   // 내가 내 드랍에 누른 좋아요 수 ('받은 좋아요'에서 뺀다)
-  const myDropIds = new Set(drops.map(d => d.droppingId));
+  // 받은 좋아요 — 새 서버는 내 드랍 목록에 드랍별 수를 담아 준다(useMyDrops가 드랍별 캐시에 넣음 → 따로 묻지 않음).
+  // 예전 서버는 드랍마다 물어야 해서, 위에서부터 LIKE_FALLBACK_LIMIT개만 묻는다(드랍이 많을수록 요청이 늘지 않게). 그보다 많으면 합계에 '+'
+  const serverCounts = hasLikeCounts(drops);
+  const countedDrops = useMemo(() => (serverCounts ? drops : drops.slice(0, LIKE_FALLBACK_LIMIT)), [drops, serverCounts]);
+  const myDropIds = new Set(countedDrops.map(d => d.droppingId));
   const selfLikes = likes.filter(l => myDropIds.has(l.droppingId)).length;
+  // 새 서버에선 좋아요 수가 내 드랍 목록과 함께 온다 → 예전처럼 5분이 지나 이 화면에 돌아오면 목록(요청 1개)을 다시 받아 숫자를 새로 맞춘다
+  const { dataUpdatedAt: myDropsAt, refetch: refetchMyDrops } = myDropsQ;
+  useEffect(() => {
+    if (focused && myDropsAt && Date.now() - myDropsAt > LIKE_STALE) refetchMyDrops();
+  }, [focused]); // eslint-disable-line react-hooks/exhaustive-deps
   const playlists = useMyPlaylists().data ?? [];
   const unread = useUnreadCount().data ?? 0;
 
@@ -125,7 +135,7 @@ export default function ProfileScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 30, paddingHorizontal: 38 }}>
           <Stat n={drops.length} label="드랍" />
           <StatDivider />
-          <ReceivedLikesStat drops={drops} selfLikes={selfLikes} enabled={focused} />
+          <ReceivedLikesStat drops={countedDrops} selfLikes={selfLikes} fetch={focused && !serverCounts} partial={countedDrops.length < drops.length} />
           <StatDivider />
           <Stat n={playlists.length} label="플레이리스트" />
         </View>
@@ -203,7 +213,7 @@ function Address({ text }: { text?: string | null }) {
 }
 
 /** 숫자 한 칸 (숫자 20 + 회색 이름) */
-function Stat({ n, label }: { n: number; label: string }) {
+function Stat({ n, label }: { n: number | string; label: string }) {
   return (
     <View style={{ flex: 1, alignItems: 'center' }}>
       <T v="headline" style={{ fontSize: 20, lineHeight: 26, letterSpacing: -0.4, color: '#000000' }}>{n}</T>
@@ -214,17 +224,21 @@ function Stat({ n, label }: { n: number; label: string }) {
 const StatDivider = () => <View style={{ width: 1, height: 24, borderRadius: 1, backgroundColor: '#EBEBEB' }} />;
 
 const LIKE_STALE = 5 * 60_000;
+/** 예전 서버(내 드랍 목록에 likeCount 없음)에서 드랍별 좋아요 수를 묻는 드랍 수 상한 — 위에서부터. 첫 화면에 보이는 줄보다 넉넉히 */
+export const LIKE_FALLBACK_LIMIT = 20;
 const sumCounts = (rs: UseQueryResult<number>[]) => rs.reduce((a, q) => a + (q.data ?? 0), 0);
 
 /**
  * 디자인: '받은 좋아요' = 내 드랍들이 받은 좋아요 합계 (드랍별 좋아요 수 캐시를 공유) — 내가 내 드랍에 누른 좋아요는 빼고.
- * 드랍별 좋아요 수 요청은 여기서만 건다(행은 캐시만 읽음 — 행마다 요청하면 기본 신선도 30초로 앱 복귀 때마다 N개를 다시 받는다).
- * 합계만 구독(combine → 숫자)하는 작은 칸으로 따로 둬서, 응답이 하나 올 때마다 프로필 화면 전체(행 N개)가 아니라 이 칸과 그 행의 숫자만 다시 그린다.
- * 내가 좋아요를 누르면 useToggleLike가 해당 키를 바로 고치고 무효화하므로 5분 신선도여도 내 동작은 바로 보인다
+ * 새 서버: 숫자는 내 드랍 목록 응답으로 캐시에 들어와 있어 캐시만 읽는다(fetch=false).
+ * 예전 서버: 드랍별 요청은 여기서만 건다(fetch=true, drops는 상한까지만) — 행은 캐시만 읽는다. partial이면 일부만 센 합계라 '+'를 붙인다.
+ * 합계만 구독(combine → 숫자)하는 작은 칸으로 따로 둬서, 숫자가 하나 바뀔 때마다 프로필 화면 전체(행 N개)가 아니라 이 칸과 그 행의 숫자만 다시 그린다.
+ * 내가 좋아요를 누르면 useToggleLike가 해당 키를 바로 고치고 무효화하므로 내 동작은 바로 보인다
  */
-function ReceivedLikesStat({ drops, selfLikes, enabled }: { drops: readonly DropSummary[]; selfLikes: number; enabled: boolean }) {
-  const sum = useQueries({ queries: drops.map(d => ({ queryKey: qk.likeCount(d.droppingId), queryFn: () => likeApi.countForDrop(d.droppingId), staleTime: LIKE_STALE, enabled })), combine: sumCounts });
-  return <Stat n={Math.max(0, sum - selfLikes)} label="받은 좋아요" />;
+function ReceivedLikesStat({ drops, selfLikes, fetch, partial }: { drops: readonly DropSummary[]; selfLikes: number; fetch: boolean; partial: boolean }) {
+  const sum = useQueries({ queries: drops.map(d => ({ queryKey: qk.likeCount(d.droppingId), queryFn: () => likeApi.countForDrop(d.droppingId), staleTime: LIKE_STALE, enabled: fetch })), combine: sumCounts });
+  const n = Math.max(0, sum - selfLikes);
+  return <Stat n={partial ? `${n}+` : n} label="받은 좋아요" />;
 }
 
 /** 드랍 기록 한 줄 — memo. 좋아요 수는 오른쪽 숫자(LikeBadge)만 구독해 다른 행·화면은 다시 그리지 않는다 */
@@ -242,7 +256,7 @@ const DropRow = memo(function DropRowItem({ d, onOpen, onRemove }: { d: DropSumm
   );
 });
 
-/** 행의 좋아요 수 — 캐시만 읽는다(enabled: false, 요청은 ReceivedLikesStat이 건다). 응답이 오면 이 숫자만 다시 그린다 */
+/** 행의 좋아요 수 — 캐시만 읽는다(enabled: false — 새 서버는 내 드랍 목록이 채우고, 예전 서버는 ReceivedLikesStat이 상한까지 묻는다). 값이 오면 이 숫자만 다시 그린다 */
 function DropLikeBadge({ dropId }: { dropId: string }) {
   const n = useQuery({ queryKey: qk.likeCount(dropId), queryFn: () => likeApi.countForDrop(dropId), staleTime: LIKE_STALE, enabled: false }).data;
   return <LikeBadge n={n} />;

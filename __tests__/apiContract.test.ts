@@ -163,6 +163,8 @@ describe(`로그인 흐름 (${LIVE ? '실서버' : '목 서버'})`, () => {
     ag.forEach((a, i) => shape(a, { type: 'string', agreedVersion: 'string?', latestVersion: 'string', agreed: 'boolean' }, `agreements[${i}]`));
     const mine = await userApi.myDrops();
     expect(Array.isArray(mine)).toBe(true);
+    // 드랍별 받은 좋아요 수 — 새 서버만 준다(예전 서버는 없음 → 앱이 드랍마다 묻는다)
+    mine.forEach((d, i) => shape(d, { droppingId: 'uuid', likeCount: 'number?' }, `myDrops[${i}]`));
     const liked = await userApi.myLikes();
     expect(Array.isArray(liked)).toBe(true);
     expect(typeof (await likeApi.countMine())).toBe('number');

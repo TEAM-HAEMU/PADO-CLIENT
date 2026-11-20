@@ -163,6 +163,8 @@ interface DropSummaryBase {
   createdAt?: string | null;
   /** 같은 지역 재생 판정용 — 새 필드라 예전 서버·백필 안 된 드랍은 없거나 null (그러면 거리로만 판정) */
   regionCodes?: RegionCodes | null;
+  /** 받은 좋아요 수 — 내 드랍 목록(GET /users/my-drop)에만 온다. 새 필드라 예전 서버는 없다 → 프로필이 드랍마다 따로 묻는다(상한 있음) */
+  likeCount?: number | null;
 }
 
 export interface MusicDropSummary extends DropSummaryBase {
