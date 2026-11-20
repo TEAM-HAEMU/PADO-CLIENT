@@ -1,4 +1,4 @@
-import { expiryLabel, formatDuration, formatRelative, formatTotal } from '@/utils/format';
+import { expiryLabel, formatDuration, formatRelative, formatTotal, isUnlimitedExpiry } from '@/utils/format';
 
 const now = Date.parse('2026-09-27T12:00:00Z');
 
@@ -21,6 +21,18 @@ test('expiryLabel', () => {
   expect(expiryLabel('2026-09-27T12:30:00Z', now)).toBe('곧 사라져요');
   expect(expiryLabel('2026-09-27T17:00:00Z', now)).toBe('5시간 남음');
   expect(expiryLabel('2026-09-30T12:00:00Z', now)).toBe('3일 남음');
+  // 서버 표기(KST 오프셋)도 같다
+  expect(expiryLabel('2026-09-28T21:00:00.000+09:00', now)).toBe('1일 남음');
+});
+
+test('expiryLabel — 무제한(먼 미래 만료)이면 문구 없음', () => {
+  expect(expiryLabel('9999-12-31T23:59:59.000+09:00', now)).toBeNull();
+  expect(expiryLabel('2100-01-01T00:00:00Z', now)).toBeNull();
+  expect(expiryLabel('2099-12-31T00:00:00Z', now)).toBe(`${Math.floor((Date.parse('2099-12-31T00:00:00Z') - now) / 86_400_000)}일 남음`);
+  expect(expiryLabel(null, now)).toBeNull();
+  expect(expiryLabel('', now)).toBeNull();
+  expect(isUnlimitedExpiry('9999-12-31T23:59:59.000+09:00')).toBe(true);
+  expect(isUnlimitedExpiry('2026-09-30T12:00:00Z')).toBe(false);
 });
 
 import { validBirth } from '@/utils/birth';

@@ -65,7 +65,7 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
         <View style={{ gap: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <AddressPill address={dropPlace(d)} />
-            <T v="tiny" c="faint">{formatRelative(d.createdAt)} · {expiryLabel(d.expiryDate)}</T>
+            <T v="tiny" c="faint">{[formatRelative(d.createdAt), expiryLabel(d.expiryDate)].filter(Boolean).join(' · ')}</T>
           </View>
           <T style={{ fontFamily: fonts.semibold, fontSize: 20, lineHeight: 28, letterSpacing: -0.4, color: '#090909' }}>{d.topic}</T>
           {d.content ? <T v="captionStrong" c="ink2" style={{ fontFamily: fonts.regular }}>{d.content}</T> : null}

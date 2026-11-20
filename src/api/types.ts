@@ -201,6 +201,7 @@ export interface MusicDropDetail {
   /** 작성자 프로필 사진 — 없거나 탈퇴 처리된 작성자면 null. 비었거나 못 불러오면 이니셜로 보인다 */
   profileImageUrl?: string | null;
   content: string;
+  /** 만료 시각. 무제한 드랍은 먼 미래(9999-12-31) — expiryLabel이 문구를 숨긴다 */
   expiryDate: string;
   createdAt: string;
   albumImageUrl: string | null;
@@ -232,6 +233,7 @@ export interface VoteDropDetail {
   address: string;
   /** 서버가 찾은 드랍 자리의 장소 이름(카카오 — 가게·건물 등). 새 필드라 예전 서버·못 찾은 드랍은 없거나 null → 주소를 보여 준다 */
   placeName?: string | null;
+  /** 만료 시각. 무제한 드랍은 먼 미래(9999-12-31) — expiryLabel이 문구를 숨긴다 */
   expiryDate: string;
   createdAt: string;
   totalVotes: number;
@@ -261,6 +263,7 @@ export interface PlaylistDropDetail {
   address: string;
   /** 서버가 찾은 드랍 자리의 장소 이름(카카오 — 가게·건물 등). 새 필드라 예전 서버·못 찾은 드랍은 없거나 null → 주소를 보여 준다 */
   placeName?: string | null;
+  /** 만료 시각. 무제한 드랍은 먼 미래(9999-12-31) — expiryLabel이 문구를 숨긴다 */
   expiryDate: string;
   createdAt: string;
 }

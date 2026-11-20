@@ -61,7 +61,7 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
       <PlaylistHero
         images={d.songs.map(s => s.albumImagePath)}
         title={d.playlistName}
-        meta={`${d.songs.length}곡 · ${dropPlace(d)} · ${expiryLabel(d.expiryDate)}`}
+        meta={[`${d.songs.length}곡`, dropPlace(d), expiryLabel(d.expiryDate)].filter(Boolean).join(' · ')}
         onPlay={() => { const q = d.songs.map(s => s.songId); if (q.length) navigation.navigate('Player', { songId: q[0], dropId, queue: q, autoplay: true }); }}
         onShuffle={() => { const q = shuffled(d.songs.map(s => s.songId)); if (q.length) navigation.navigate('Player', { songId: q[0], dropId, queue: q, autoplay: true }); }}
       />
