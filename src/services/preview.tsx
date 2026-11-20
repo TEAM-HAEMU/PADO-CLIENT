@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { toast } from '@/store/toast';
 import { findPreview, noPreviewMessage, type PreviewSource } from './previewSource';
 import { currentDropId, track } from '@/services/analytics';
+import { interruptStep, type AudioInterrupt } from '@/utils/audioInterrupt';
 
 /** 잠금화면·알림에 보일 곡 정보 */
 /** dropId·autoplay는 분석용 (preview_started에 어느 드랍의 곡인지, 주변 자동 재생인지) */
@@ -106,6 +107,25 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
   },
 }));
 
+/**
+ * 오디오 포커스·이어폰 분리로 멈추기 (규칙은 utils/audioInterrupt) — 전화가 와도 계속 재생되던 문제(QA B-06).
+ * 포커스를 잠깐 잃어 멈춘 곡은 돌려받으면 이어서. 그 사이 사용자가 재생·일시정지하거나 다른 곡을 틀면 잊는다.
+ */
+let resumeOnFocus: string | null = null;
+let interrupting = false;
+usePreviewStore.subscribe((st, prev) => {
+  if (!interrupting && (st.paused !== prev.paused || st.key !== prev.key)) resumeOnFocus = null;
+});
+export function onAudioInterrupt(ev: AudioInterrupt) {
+  const st = usePreviewStore.getState();
+  const r = interruptStep({ key: st.key, paused: st.paused }, resumeOnFocus, ev);
+  resumeOnFocus = r.resumeKey;
+  if (r.paused === undefined || r.paused === st.paused) return;
+  track(r.paused ? 'preview_interrupted' : 'preview_resumed', { song_id: st.key, position: Math.round(st.position), reason: ev === 'noisy' ? 'noisy' : 'audio_focus' });
+  interrupting = true;
+  try { usePreviewStore.setState({ paused: r.paused }); } finally { interrupting = false; }
+}
+
 // UI 테스트는 `-PADO_MUTE YES` 실행 인자를 넘긴다 → 미리듣기를 무음으로 (화면 동작은 그대로)
 const MUTED = Platform.OS === 'ios' && Settings.get('PADO_MUTE') === 'YES';
 
@@ -135,6 +155,9 @@ export function PreviewHost() {
       onLoad={ready}
       onProgress={e => { if (e.currentTime > 0) ready(); _progress(e.currentTime, e.seekableDuration || e.playableDuration); }}
       onEnd={ended}
+      // 전화·다른 앱 소리(Android 오디오 포커스)와 이어폰 분리 — 멈추고 화면도 맞춘다
+      onAudioFocusChanged={e => onAudioInterrupt(e.hasAudioFocus ? 'focusGained' : 'focusLost')}
+      onAudioBecomingNoisy={() => onAudioInterrupt('noisy')}
       // 주소는 있는데 재생이 안 되면(만료·지역 제한 등) 조용히 멈추지 말고 알린다
       // 주변 자동 재생 곡은 사용자가 누른 재생이 아니라 알리지 않는다 (자동 재생이 쉬었다가 다음 곡으로)
       onError={() => { fail(); if (!meta?.autoplay) toast('미리듣기를 재생하지 못했어요. 잠시 후 다시 시도해주세요.', 'error'); }}
@@ -196,9 +219,9 @@ export function usePreview(song: PreviewSong | null | undefined, opts: { lazy?: 
   const setUrl = (u: string | null | false, adult?: boolean) => { if (song) setFound({ id: song.id, url: u, adult }); };
   const [looking, setLooking] = useState(false);
   const id = song?.id;
-  // 이 곡과 관련된 값만 구독 — 재생 중 진행률 갱신(250ms)이 다른 곡 행까지 다시 그리지 않게
-  const active = usePreviewStore(st => !!id && st.key === id);
-  const paused = usePreviewStore(st => st.paused);
+  // 이 곡과 관련된 값만 구독 — 재생 중 진행률 갱신(250ms)이나 다른 곡의 일시정지가 다른 곡 행까지 다시 그리지 않게
+  // (paused를 따로 구독하면 일시정지 한 번에 목록의 모든 행이 다시 그려진다 — QA R-15)
+  const playing = usePreviewStore(st => !!id && st.key === id && !st.paused);
   useEffect(() => {
     let alive = true;
     if (!song || opts.lazy) return;
@@ -213,7 +236,7 @@ export function usePreview(song: PreviewSong | null | undefined, opts: { lazy?: 
     loading: looking || (!opts.lazy && url === undefined),
     /** lazy면 눌러보기 전까지, 확인 불가(false)면 다시 누를 수 있게 '가능'으로 보여준다 */
     available: opts.lazy ? url !== null : url === false || !!url,
-    playing: active && !paused,
+    playing,
     toggle: async () => {
       if (!song) return;
       const st = usePreviewStore.getState();

@@ -8,6 +8,7 @@ jest.mock('@/services/analytics', () => ({
 jest.mock('@/services/monitoring', () => ({ setMonitoringMode: jest.fn(), reportError: jest.fn() }));
 jest.mock('@/services/preview', () => ({ usePreviewStore: { getState: () => ({ stop: jest.fn() }) } }));
 jest.mock('@/services/socialAuth', () => ({ signOutProviders: jest.fn() }));
+jest.mock('@/services/playQueue', () => ({ clearQueue: jest.fn() }));
 jest.mock('@/store/toast', () => ({ toast: jest.fn() }));
 
 import { setBeforeSignOut, useAuth } from '@/store/auth';
@@ -82,4 +83,10 @@ test('로그아웃하면 알림 설정을 기본값으로 되돌린다 (다음 �
   usePrefs.getState().applyNotify({ like: false, comment: false, nearby: true, notice: false, marketing: true });
   await useAuth.getState().signOut();
   expect(usePrefs.getState().notify).toEqual({ like: true, comment: true, nearby: false, notice: true, marketing: false });
+});
+
+test('로그아웃하면 전체 재생 대기열도 놓는다 — 건너뛰기 대기·곡 조회 중이어도 로그아웃 뒤에 다음 곡이 나오지 않게 (QA 리뷰 #52)', async () => {
+  const { clearQueue } = jest.requireMock('@/services/playQueue') as { clearQueue: jest.Mock };
+  await useAuth.getState().signOut({ callServer: false });
+  expect(clearQueue).toHaveBeenCalledTimes(1);
 });

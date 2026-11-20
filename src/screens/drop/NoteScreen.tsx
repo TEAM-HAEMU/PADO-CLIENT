@@ -1,8 +1,9 @@
 /** 3.3 한마디 남기기 — Figma 'B 3.3 한마디 남기기' (고른 곡 · 한마디 입력 · 추천 문구) → POST /droppings */
-import React, { useEffect, useMemo, useState } from 'react';
-import { Linking, ScrollView, TextInput, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { useIsMutating, useQueryClient } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
+import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { errorMessage } from '@/api/errors';
 import type { CreateDropBody } from '@/api/types';
@@ -14,6 +15,7 @@ import { Wave } from '@/components/ui/Wave';
 import { CREATE_DROP_KEY, useCreateDrop, useMyDrops } from '@/hooks/api';
 import { regionOf } from '@/utils/address';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
+import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { navigationRef } from '@/navigation/ref';
 import type { RootScreen } from '@/navigation/types';
 import { currentCoords, preciseDropHint, PRECISE_DROP_TITLE, tooImpreciseToDrop, useLocation } from '@/services/location';
@@ -23,9 +25,10 @@ import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { josa } from '@/utils/josa';
+import { clampText, textLength } from '@/utils/text';
 import { detailedOnly, track } from '@/services/analytics';
 
-const MAX = 255; // 명세: content 최대 255자
+const MAX = 255; // 명세: content 최대 255자 (서버는 UTF-16 길이로 센다 — utils/text)
 const SUGGEST = ['퇴근길에 딱', '여기 풍경이랑 잘 어울려요', '친구와 함께 듣고싶어요', '여기서 처음 들었어요'];
 
 export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
@@ -41,7 +44,12 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   // 드랍을 만드는 중 — 이 화면이 아니라 앱 전체 기준 (제출 중 뒤로 갔다 다시 들어온 새 화면에서도 두 번째 제출이 나가지 않게)
   const creating = useIsMutating({ mutationKey: CREATE_DROP_KEY }) > 0;
   const myDrops = useMyDrops().data;
-  const scroll = useFocusedInputScroll();
+  // 하단 고정 버튼 영역 높이 — 키보드가 뜨면 입력칸을 이 영역 위에 맞춘다
+  const footerH = useRef(0);
+  const scroll = useFocusedInputScroll(footerH);
+  const keyboard = useKeyboardVisible();
+  // iPhone SE·mini(높이 700pt 미만)는 묶음 사이 여백을 줄여 추천 문구 제목까지 첫 화면에 보이게
+  const compact = useWindowDimensions().height < 700;
   const art = draftArt(draft);
   // 'GANADARA를 고르셨군요! / 음악을 바다에 빠뜨려보세요.' — 조사는 곡·플리 이름 받침에 맞춘다
   const head = useMemo(() => {
@@ -67,7 +75,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
     // 오차가 100m를 넘으면(대략적인 위치 등) 엉뚱한 자리에 남지 않게 막는다 — 오차를 모르면 그대로
     if (tooImpreciseToDrop(loc)) return dialog.alert(PRECISE_DROP_TITLE, preciseDropHint(), [{ text: '닫기', style: 'cancel' }, { text: '설정 열기', onPress: () => { Linking.openSettings(); } }]);
     const pos = coords;
-    const base = { content: text.trim(), latitude: pos.latitude, longitude: pos.longitude, address: (address || label || '현재 위치').slice(0, 200) };
+    const base = { content: text.trim(), latitude: pos.latitude, longitude: pos.longitude, address: clampText(address || label || '현재 위치', 200) };
     let body: CreateDropBody;
     if (draft.type === 'MUSIC' && draft.song) body = { ...base, type: 'MUSIC', songId: draft.song.id };
     else if (draft.type === 'VOTE') body = { ...base, type: 'VOTE', topic: draft.topic.trim(), options: draft.options.map(s => s.id) };
@@ -103,12 +111,16 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       {/* Figma 'wave' 인스턴스 — 화면 아래쪽에 깔림 */}
       <Wave scale={1.2} style={{ position: 'absolute', left: -79, right: -79, bottom: -34 }} />
       <TopBar title="한마디 남기기" onBack={navigation.goBack} />
-      {/* 버튼은 바닥에 고정하지 않고 내용 흐름 끝에 둔다 — 키보드 위로 따라 올라와 입력칸을 가리지 않게. 키보드가 뜨면 입력칸에 맞춰 스크롤 */}
-      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: insets.bottom + 26, gap: 36 }} keyboardShouldPersistTaps="handled">
+      {/*
+        주요 버튼은 스크롤 밖 하단에 고정한다 — iPhone SE(667pt)에선 내용 흐름 끝에 두면 첫 화면에서 보이지 않았다 (QA 2026-11-20 U-01).
+        키보드가 뜨면 버튼이 키보드 바로 위로 올라오고 스크롤 영역이 그만큼 줄어든다(겹치지 않음) → 입력칸은 버튼 위에 맞춰 스크롤.
+        Android는 adjustResize로 창 자체가 줄어든다
+      */}
+      <ScrollView ref={scroll.ref} keyboardDismissMode="interactive" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: compact ? 12 : 20, paddingBottom: 24, gap: compact ? 24 : 36 }} keyboardShouldPersistTaps="handled">
         <View style={{ gap: 20 }}>
           {/* 곡 고르기에서 틀어 둔 미리듣기가 있으면 아트를 눌러 일시정지/재개 */}
           <DiscArt uri={art} size={100} mark={songLoaded} playing={songPlaying} onToggle={songLoaded ? () => usePreviewStore.getState().toggle() : undefined} style={{ alignSelf: 'flex-start' }} />
@@ -122,7 +134,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
         <View style={{ height: 206, borderRadius: 4, backgroundColor: '#FAFBFC', borderWidth: 1, borderColor: focus ? colors.primaryDeep : '#FAFBFC', paddingHorizontal: 12, paddingTop: 10, paddingBottom: 26 }}>
           <TextInput
             value={text}
-            onChangeText={t => setText(t.slice(0, MAX))}
+            onChangeText={t => setText(clampText(t, MAX))}
             onFocus={() => { setFocus(true); scroll.onFocus(); }}
             onBlur={() => setFocus(false)}
             multiline
@@ -132,24 +144,30 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
             maxFontSizeMultiplier={1.2}
             style={{ flex: 1, color: colors.ink, fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, letterSpacing: -0.24, textAlignVertical: 'top', padding: 0 }}
           />
-          <T style={{ position: 'absolute', right: 12, bottom: 8, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, color: '#B4B9BE' }}>{text.length}/{MAX}</T>
+          <T style={{ position: 'absolute', right: 12, bottom: 8, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, color: '#B4B9BE' }}>{textLength(text)}/{MAX}</T>
         </View>
         <View style={{ gap: 20 }}>
           <T style={{ fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, letterSpacing: -0.26, color: '#090909' }}>이런 말은 어때요?</T>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 12 }}>
-            {SUGGEST.map(s => <Chip key={s} label={s} onPress={() => setText(t => (t ? `${t} ${s}` : s).slice(0, MAX))} />)}
+            {SUGGEST.map(s => <Chip key={s} label={s} onPress={() => setText(t => clampText(t ? `${t} ${s}` : s, MAX))} />)}
           </View>
-        </View>
-        <View style={{ flex: 1 }} />
-        <View style={{ gap: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-            <PinGlyph height={13} />
-            <T v="captionStrong" c="ink2" numberOfLines={1} style={{ fontFamily: fonts.regular }}>지금 서 있는 {address || label || '이곳'}에 남겨져요</T>
-          </View>
-          <PrimaryButton label="여기 빠뜨리기" onPress={submit} loading={creating} />
         </View>
       </ScrollView>
-    </View>
+      {/* 키보드가 떠 있으면 위치 문구는 접어 입력칸 자리를 남긴다 (버튼만) */}
+      <View onLayout={e => { footerH.current = e.nativeEvent.layout.height; }} style={{ gap: keyboard ? 0 : 12, paddingHorizontal: 24, paddingTop: 12, paddingBottom: keyboard ? 12 : insets.bottom + 26 }}>
+        {/* 스크롤 끝이 버튼 영역에 잘려 보이지 않게 — 아래로 더 있다는 표시 겸 흐리게 이어 준다 (키보드가 뜨면 입력칸 글자 수를 가리지 않게 숨김) */}
+        <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0)', colors.page]} style={{ position: 'absolute', left: 0, right: 0, top: -28, height: 28, opacity: keyboard ? 0 : 1 }} />
+        {/*
+          뷰를 빼거나(조건부 렌더) display:none으로 숨기지 않고 높이 0·투명으로 접는다 — 키보드가 뜰 때 뷰 트리가 바뀌면(삽입·제거)
+          Reanimated 레이아웃 애니메이션 프록시가 'Indices are wrong in Remove mutation' 단언으로 앱을 멈췄다(디버그 빌드)
+        */}
+        <View collapsable={false} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, height: keyboard ? 0 : undefined, opacity: keyboard ? 0 : 1, overflow: 'hidden' }}>
+          <PinGlyph height={13} />
+          <T v="captionStrong" c="ink2" numberOfLines={1} style={{ fontFamily: fonts.regular }}>지금 서 있는 {address || label || '이곳'}에 남겨져요</T>
+        </View>
+        <PrimaryButton label="여기 빠뜨리기" onPress={submit} loading={creating} />
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 

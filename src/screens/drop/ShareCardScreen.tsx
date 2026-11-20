@@ -41,7 +41,9 @@ export default function ShareCardScreen({ navigation, route }: RootScreen<'Share
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [busy, setBusy] = useState<'story' | 'other' | null>(null);
   const shot = useRef<React.ComponentRef<typeof View>>(null);
-  const ready = useRef(false);
+  // 캡처용 카드가 앨범 아트까지 다 그려진 스타일 — 스타일을 바꾸면 그 스타일 카드가 새로 마운트되어 준비되면 바뀐다.
+  // 불리언(준비됨/안 됨)으로 두고 누를 때 끄면, 이미 고른 스타일을 다시 눌렀을 때 카드는 다시 마운트되지 않아(key 같음) 끝내 켜지지 않고 공유가 매번 3초 기다렸다
+  const readyFor = useRef<CardStyle | null>(null);
   // C 카드의 실제 지도 — 보이는 미리보기에서 한 번 찍어 두고 저장 이미지·썸네일에 같이 쓴다
   const [mapImage, setMapImage] = useState<string | null>(null);
   const mapRef = useRef<string | null>(null);
@@ -53,7 +55,7 @@ export default function ShareCardScreen({ navigation, route }: RootScreen<'Share
   const cardW = Math.floor(Math.min(box.w - 48, (box.h - 16) * (9 / 16)));
 
   const capture = async (result: 'tmpfile' | 'data-uri' = 'tmpfile') => {
-    for (let i = 0; i < 30 && !ready.current; i++) await new Promise<void>(r => setTimeout(() => r(), 100)); // 앨범 아트를 기다린다 (최대 3초)
+    for (let i = 0; i < 30 && readyFor.current !== variant; i++) await new Promise<void>(r => setTimeout(() => r(), 100)); // 앨범 아트를 기다린다 (최대 3초)
     // 지도 카드면 실제 지도 사진도 기다린다 (최대 5초 — 못 받으면 그린 지도로)
     if (variant === 'C' && wantsMap) for (let i = 0; i < 50 && !mapRef.current; i++) await new Promise<void>(r => setTimeout(() => r(), 100));
     if (variant === 'C' && wantsMap && mapRef.current) await new Promise<void>(r => setTimeout(() => r(), 150)); // 캡처용 카드에 사진이 그려질 틈
@@ -107,14 +109,14 @@ export default function ShareCardScreen({ navigation, route }: RootScreen<'Share
       {/* 캡처용 — 화면 밖에 실제 크기(1080px 폭)로 그린다 */}
       <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: 'absolute', left: -SHOT_W * 2, top: 0 }}>
         <View ref={shot} collapsable={false}>
-          <StoryCard key={variant} data={data} variant={variant} width={SHOT_W} mapImage={mapImage} onReady={() => { ready.current = true; }} />
+          <StoryCard key={variant} data={data} variant={variant} width={SHOT_W} mapImage={mapImage} onReady={() => { readyFor.current = variant; }} />
         </View>
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, paddingVertical: 18 }}>
         {STYLES.map(s => {
           const on = s.id === variant;
           return (
-            <Press key={s.id} accessibilityLabel={s.label} accessibilityState={{ selected: on }} onPress={() => { ready.current = false; pick(s.id); }}
+            <Press key={s.id} accessibilityLabel={s.label} accessibilityState={{ selected: on }} onPress={() => pick(s.id)}
               style={{ borderRadius: 10, borderWidth: 2, borderColor: on ? colors.primary : 'transparent', padding: 2 }}>
               <View pointerEvents="none" style={{ borderRadius: 7, overflow: 'hidden' }}>
                 <StoryCard data={data} variant={s.id} width={THUMB} mapImage={mapImage} />

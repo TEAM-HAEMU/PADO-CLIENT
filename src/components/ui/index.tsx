@@ -11,6 +11,7 @@ import { colors, fonts, glow } from '@/theme/tokens';
 import { Icon, type IconName } from './Icon';
 import { artUrl } from '@/utils/artUrl';
 import { trackTap } from '@/services/analytics';
+import { clampText } from '@/utils/text';
 
 // ── Typography — Pretendard (Figma 새 디자인 텍스트 스타일 text/* · B Deep/*)
 const ls = (size: number, pct: number) => (size * pct) / 100;
@@ -75,7 +76,7 @@ function textOf(node: React.ReactNode): string {
 export function Press({ style, children, onPressIn, onPressOut, onPress, onLongPress, accessibilityRole = 'button', trackAs, ...rest }: Omit<PressableProps, 'style' | 'children'> & { style?: StyleProp<ViewStyle>; children?: React.ReactNode; trackAs?: string }) {
   const [pressed, setPressed] = React.useState(false);
   // 분석: 모든 버튼 탭을 자동 기록 (라벨 → trackAs, 접근성 라벨, 테스트 ID, 없으면 버튼 안 글자 순). 숫자는 #으로 바뀐다
-  const label = () => trackAs || rest.accessibilityLabel || rest.testID || textOf(children).slice(0, 60);
+  const label = () => trackAs || rest.accessibilityLabel || rest.testID || clampText(textOf(children), 60);
   return (
     <Pressable
       {...rest}

@@ -1,5 +1,5 @@
 import Geolocation from '@react-native-community/geolocation';
-import { AppState, Platform, type AppStateStatus } from 'react-native';
+import { AppState, Linking, Platform, type AppStateStatus } from 'react-native';
 import { isLocationEnabled } from 'react-native-device-info';
 import { check, PERMISSIONS, request, requestMultiple, RESULTS } from 'react-native-permissions';
 import { create } from 'zustand';
@@ -7,6 +7,7 @@ import { clearAnalyticsLocation, setAnalyticsLocation, setAnalyticsRegion, track
 import { regionOf } from '@/utils/address';
 import { kv } from '@/store/storage';
 import type { Coords } from '@/utils/geo';
+import { clampText } from '@/utils/text';
 
 export type { Coords };
 
@@ -102,6 +103,13 @@ interface LocationState {
   setPlace: (label: string, address: string) => void;
   refreshPermission: () => Promise<PermState>;
   requestPermission: () => Promise<PermState>;
+  /** 마지막 권한 요청이 창 없이 막혔다 — iOS 거부, Android '다시 묻지 않음'. 이때는 설정 앱에서만 켤 수 있다 */
+  permissionBlocked: boolean;
+  /**
+   * '위치 권한이 꺼져 있어요' 카드를 눌렀을 때 — 다시 물을 수 있으면 권한을 요청하고, 막혀 있으면(permissionBlocked) 설정 앱을 연다.
+   * 허용되면 감시를 처음부터 다시. 반환: granted / denied(요청 창에서 거부) / settings(설정 앱을 엶)
+   */
+  askPermission: () => Promise<'granted' | 'denied' | 'settings'>;
   /** 위치 감시를 붙잡는다 (앱 전체에 감시는 하나). 돌려받은 함수로 놓고, 모두 놓으면 감시를 멈춘다. 이미 감시 중이면 그대로 둔다. 앱이 백그라운드인 동안은 멈췄다 돌아오면 다시 */
   start: () => () => void;
   /** 권한·GPS를 켠 뒤 등 — 감시를 처음부터 다시 (붙잡은 곳이 없거나 백그라운드면 아무것도 안 함) */
@@ -194,15 +202,31 @@ export const useLocation = create<LocationState>((set, get) => {
     set({ coords: c, accuracy: typeof acc === 'number' && acc > 0 ? acc : null, fixedAt: at || null, stale: true });
     kv.set(LAST_KEY, c);
   };
+  /** 위치 권한이 있는가 (확인 실패면 있다고 본다 — 예전처럼 감시 결과로 판단) */
+  const permitted = async () => (await get().refreshPermission().catch(() => 'granted' as const)) === 'granted';
+  /**
+   * 감시를 켜면서 권한도 바로 본다 — 없으면 시간 초과(15초)를 기다리지 않고 바로 '권한 꺼짐'으로.
+   * Android는 권한 없이 감시를 켜도 오류(코드 1)를 주지 않아, 예전엔 시간 초과 뒤 '위치 신호가 약해요'로 잘못 안내했다 (QA 2026-11-20 B-02).
+   * 권한 꺼짐이면 감시도 멈춘다(설정에서 켜고 돌아오면 포그라운드에서 처음부터). iOS 위치 서비스 꺼짐(UNAVAILABLE)은 'off' — 감시는 그대로
+   */
+  const gate = async (s: number) => {
+    if (await permitted()) return;
+    const reason = await reasonOf({ code: 1 });
+    if (s !== session || sessionFixed) return;
+    if (reason === 'denied') halt();
+    fail(reason, true);
+  };
   /**
    * 위치를 못 받음. 권한 거부·위치 서비스 꺼짐(확정 오류)이면 갖고 있던 좌표도 버린다 — 그 좌표로 드랍을 만들거나 잠금을 풀지 않게.
    * 신호 약함이면 믿을 만한 좌표가 있을 땐 그대로 두고(감시는 계속), 없으면 unavailable (낡은 좌표는 stale로 남겨 지도 카메라에만)
    */
   const giveUp = async (s: number, e?: PosError) => {
-    const hard = definitive(e);
+    let hard = definitive(e);
     if (!hard && fresh()) return;
     const at = get().fixedAt;
-    const reason = await reasonOf(e);
+    let reason = await reasonOf(e);
+    // 오류 없이 시간만 지났는데 권한이 없다 — 신호 약함이 아니라 권한 꺼짐 (Android는 권한 없이 감시를 켜도 코드 1을 주지 않는다)
+    if (reason === 'timeout' && !(await permitted())) { reason = await reasonOf({ code: 1 }); hard = true; }
     // 기다리는 사이 새 회차가 시작됐거나 새 위치가 왔으면 버린다
     if (s !== session || get().fixedAt !== at) return;
     if (!hard && fresh()) return;
@@ -283,6 +307,7 @@ export const useLocation = create<LocationState>((set, get) => {
     // 첫 위치를 FIX_TIMEOUT_MS 안에 못 받으면 '신호 약함'. 들고 있는 좌표가 아직 믿을 만하면 그 믿음이 끝날 때(STALE_MS)까지는 기다린다
     const trustLeft = get().coords && !get().stale ? confirmedAt + STALE_MS - Date.now() : 0;
     armTimeout(s, Math.max(FIX_TIMEOUT_MS, trustLeft));
+    gate(s);
   };
   /** 백그라운드로 가면 고정밀 감시를 멈추고(배터리), 돌아오면 다시 — 붙잡은 곳이 있을 때만 */
   const onAppState = (st: AppStateStatus) => {
@@ -306,10 +331,11 @@ export const useLocation = create<LocationState>((set, get) => {
     fix: 'locating',
     reason: null,
     permission: 'unknown',
+    permissionBlocked: false,
     label: '',
     address: '',
     setPlace: (label, address) => {
-      set({ label, address: address.slice(0, 200) });
+      set({ label, address: clampText(address, 200) });
       // 분석에는 시·군·구까지만 (동·번지는 보내지 않음)
       setAnalyticsRegion(regionOf(address));
     },
@@ -323,18 +349,28 @@ export const useLocation = create<LocationState>((set, get) => {
     },
     requestPermission: async () => {
       const ok = (r: string) => r === RESULTS.GRANTED || r === RESULTS.LIMITED;
-      let granted: boolean;
+      let results: string[];
       if (Platform.OS === 'android') {
         // Android 12+는 정밀·대략 위치를 함께 요청해야 '대략적인 위치'만 고를 수도 있다 (정밀만 요청하면 정책 위반 소지)
         const rs = await requestMultiple([PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION, PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION]);
-        granted = ok(rs[PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION]) || ok(rs[PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION]);
+        results = [rs[PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION], rs[PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION]];
       } else {
-        granted = ok(await request(PERM));
+        results = [await request(PERM)];
       }
+      const granted = results.some(ok);
       const p: PermState = granted ? 'granted' : 'denied';
       track('location_permission_result', { result: p, was: get().permission });
-      set({ permission: p });
+      set({ permission: p, permissionBlocked: !granted && results.some(r => r === RESULTS.BLOCKED) });
       return p;
+    },
+    askPermission: async () => {
+      if ((await get().refreshPermission()) !== 'granted' && (await get().requestPermission()) !== 'granted') {
+        if (!get().permissionBlocked) return 'denied';
+        await Linking.openSettings().catch(() => {});
+        return 'settings';
+      }
+      get().restart();
+      return 'granted';
     },
     start: () => {
       if (!appSub) {

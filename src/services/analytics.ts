@@ -19,6 +19,7 @@ import { env } from '@/config';
 import { kv } from '@/store/storage';
 import { createScreenTimer } from './screenTimer';
 import { isServerEvent, usageQueue } from './usageEvents';
+import { clampText } from '@/utils/text';
 
 export type AnalyticsMode = 'off' | 'basic' | 'detailed';
 
@@ -225,7 +226,7 @@ export function trackTap(label: string | undefined, extra?: Record<string, unkno
 }
 
 export function stableLabel(label: string | undefined) {
-  const l = (label ?? '').replace(/\d+([.,]\d+)?/g, '#').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const l = clampText((label ?? '').replace(/\d+([.,]\d+)?/g, '#').replace(/\s+/g, ' ').trim(), 60);
   return l || 'unlabeled';
 }
 

@@ -10,6 +10,7 @@ import { useAuth } from '@/store/auth';
 import type { Coords } from '@/services/location';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
+import { clampText } from '@/utils/text';
 
 const authed = () => useAuth.getState().status === 'authed';
 
@@ -41,7 +42,7 @@ export function useNearbyDrops(coords: Coords | null) {
 export const useDrop = (id: UUID | undefined) => useQuery({ queryKey: qk.drop(id ?? ''), enabled: !!id, queryFn: () => dropApi.get(id!) });
 export const useSong = (id: UUID | undefined | null, opts: { keepPrevious?: boolean } = {}) => useQuery({ queryKey: qk.song(id ?? ''), enabled: !!id, queryFn: () => songApi.get(id!), staleTime: Infinity, placeholderData: opts.keepPrevious ? keepPreviousData : undefined });
 // 명세: query 최대 100자
-export const useSongSearch = (q: string) => useQuery({ queryKey: ['search', q.trim().slice(0, 100)], enabled: q.trim().length > 0, queryFn: () => songApi.search(q.trim().slice(0, 100)), staleTime: 5 * 60_000 });
+export const useSongSearch = (q: string) => useQuery({ queryKey: ['search', clampText(q.trim(), 100)], enabled: q.trim().length > 0, queryFn: () => songApi.search(clampText(q.trim(), 100)), staleTime: 5 * 60_000 });
 
 export const useLikeCount = (id: UUID | undefined) => useQuery({ queryKey: qk.likeCount(id ?? ''), enabled: !!id && authed(), queryFn: () => likeApi.countForDrop(id!) });
 /** 내가 누른 좋아요 수 (GET /likes/count/user) */

@@ -9,6 +9,7 @@ const mockLoc = { coords: { latitude: 37.5, longitude: 127 } as { latitude: numb
 jest.mock('@/components/ui', () => require('./setup/screenEnv').mockHostModule());
 jest.mock('@/components/drop/glyphs', () => require('./setup/screenEnv').mockHostModule());
 jest.mock('@/components/drop/parts', () => require('./setup/screenEnv').mockHostModule());
+jest.mock('react-native-linear-gradient', () => () => null);
 jest.mock('@/hooks/useFocusedInputScroll', () => ({ useFocusedInputScroll: () => ({ ref: { current: null }, onFocus: () => {} }) }));
 jest.mock('@/hooks/api', () => {
   const { useMutation } = jest.requireActual('@tanstack/react-query');
@@ -153,4 +154,24 @@ test('낡은 좌표면 제출하지 않는다', async () => {
   expect(mockCreate).not.toHaveBeenCalled();
   expect(mockToast).toHaveBeenCalledWith(expect.stringContaining('위치'), 'error');
   act(() => { r.unmount(); });
+});
+
+/* QA 2026-11-20 U-01 — 작은 화면(iPhone SE)에서 '여기 빠뜨리기'가 첫 화면 밖으로 밀리지 않게 스크롤 밖 하단에 고정 */
+test('주요 버튼은 스크롤 영역 밖(하단 고정)에 있고, 키보드가 떠도 뷰를 빼지 않고 위치 문구만 접는다', () => {
+  const RN = require('react-native') as typeof import('react-native');
+  const listeners: Record<string, () => void> = {};
+  const spy = jest.spyOn(RN.Keyboard, 'addListener').mockImplementation(((ev: string, fn: () => void) => { listeners[ev] = fn; return { remove: () => {} }; }) as never);
+  const r = render();
+  const button = submitButton(r);
+  let p: Node | null = button.parent;
+  let insideScroll = false;
+  while (p) { if ((p.type as unknown) === RN.ScrollView) insideScroll = true; p = p.parent; }
+  expect(insideScroll).toBe(false);
+  // 키보드가 뜨면 위치 문구 줄은 높이 0으로 접힐 뿐 트리에서 빠지지 않는다 (뷰 트리가 바뀌면 Reanimated 단언에 걸렸다)
+  const count = () => r.root.findAll((n: Node) => typeof n.type === 'string').length;
+  const before = count();
+  act(() => { (listeners.keyboardWillShow ?? listeners.keyboardDidShow)?.(); });
+  expect(count()).toBe(before);
+  spy.mockRestore();
+  r.unmount();
 });
