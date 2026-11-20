@@ -1,0 +1,11 @@
+<resources>
+    <!--
+      Android 15+(targetSdk 35 이상)에서 TextView는 기본으로 글자 잉크 경계(bounding box)로 줄 폭을 잰다 (USE_BOUNDS_FOR_WIDTH).
+      React Native는 글자 폭을 advance(글자 칸) 기준으로 재서 뷰 크기를 정하므로, 자간(letterSpacing)이 0이 아닌 짧은 라벨은
+      그린 폭이 잰 폭보다 1px 남짓 넓어져 마지막 글자가 다음 줄로 넘어가고 한 줄 높이에 잘린다 ('저장' → '저', QA 2026-11-20 Z-03).
+      RN이 잰 폭과 같은 기준(advance)으로 그리게 되돌린다. Android 14 이하와 같은 동작이고, 디자인 자간은 그대로다.
+    -->
+    <style name="PadoTextView" parent="Widget.AppCompat.TextView">
+        <item name="android:useBoundsForWidth">false</item>
+    </style>
+</resources>

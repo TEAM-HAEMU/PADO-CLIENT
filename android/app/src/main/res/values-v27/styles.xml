@@ -6,5 +6,7 @@
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:enforceNavigationBarContrast">false</item>
         <item name="android:enforceStatusBarContrast">false</item>
+        <!-- values/styles.xml과 같게 — Android 15+ 글자 폭 기준은 values-v35의 PadoTextView -->
+        <item name="android:textViewStyle">@style/PadoTextView</item>
     </style>
 </resources>
