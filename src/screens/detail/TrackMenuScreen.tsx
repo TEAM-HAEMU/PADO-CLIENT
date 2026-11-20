@@ -2,13 +2,13 @@
 import React from 'react';
 import { Share, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
-import { playlistApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import { Art, Press, T } from '@/components/ui';
 import { Sheet } from '@/components/ui/Sheet';
 import { Glyph, type GlyphName } from '@/components/detail/glyphs';
 import type { RootScreen } from '@/navigation/types';
 import { openInService, SERVICES } from '@/services/musicLinks';
+import { removeSongWithUndo } from '@/services/playlistSongUndo';
 import { usePreviewStore } from '@/services/preview';
 import { findPreview, noPreviewMessage } from '@/services/previewSource';
 import { useDraft } from '@/store/draft';
@@ -37,11 +37,8 @@ export default function TrackMenuScreen({ navigation, route }: RootScreen<'Track
     if (removing.current) return;
     removing.current = true;
     try {
-      await playlistApi.removeSong(playlistId, song.id);
-      track('playlist_song_removed', { playlist_id: playlistId, song_id: song.id });
-      qc.invalidateQueries({ queryKey: ['playlist', playlistId] }); qc.invalidateQueries({ queryKey: ['playlists'] });
+      await removeSongWithUndo(qc, playlistId, song.id); // 토스트에 '되돌리기'가 달린다
       close();
-      toast('플레이리스트에서 뺐어요.');
     } catch (e) { toast(errorMessage(e), 'error'); } finally { removing.current = false; }
   };
 
