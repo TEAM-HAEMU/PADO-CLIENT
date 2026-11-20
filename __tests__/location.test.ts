@@ -15,7 +15,7 @@ jest.mock('react-native-permissions', () => ({
 jest.mock('react-native-device-info', () => ({ isLocationEnabled: jest.fn(async () => true) }));
 jest.mock('@/services/analytics', () => ({ track: jest.fn(), setAnalyticsLocation: jest.fn(), clearAnalyticsLocation: jest.fn(), setAnalyticsRegion: jest.fn() }));
 
-import { AppState, Platform, type AppStateStatus } from 'react-native';
+import { AppState, Linking, Platform, type AppStateStatus } from 'react-native';
 import { currentCoords, DROP_MAX_ACCURACY_M, FIX_TIMEOUT_MS, isRecentFix, RECENT_FIX_MS, recheckAction, STALE_MS, tooImpreciseToDrop, useLocation } from '@/services/location';
 
 const mockGeo = jest.requireMock('@react-native-community/geolocation').default as {
@@ -25,7 +25,7 @@ const mockGeo = jest.requireMock('@react-native-community/geolocation').default 
 };
 
 const mockAnalytics = jest.requireMock('@/services/analytics') as { track: jest.Mock; clearAnalyticsLocation: jest.Mock; setAnalyticsRegion: jest.Mock };
-const mockPerm = jest.requireMock('react-native-permissions') as { check: jest.Mock };
+const mockPerm = jest.requireMock('react-native-permissions') as { check: jest.Mock; request: jest.Mock; requestMultiple: jest.Mock };
 const mockDevice = jest.requireMock('react-native-device-info') as { isLocationEnabled: jest.Mock };
 /** location.ts가 처음 start() 때 단 AppState 리스너 */
 const appState = (s: AppStateStatus) => {
@@ -458,5 +458,114 @@ describe('Android', () => {
     expect(mockGeo.clearWatch).toHaveBeenCalledWith(mockGeo.watchPosition.mock.results[0].value);
     expect(mockGeo.watchPosition).toHaveBeenCalledTimes(2);
     expect(mockGeo.clearWatch.mock.invocationCallOrder[0]).toBeLessThan(mockGeo.watchPosition.mock.invocationCallOrder[1]);
+  });
+});
+
+/* QA 2026-11-20 B-02 — 권한을 거부했는데 '위치 신호가 약해요'로 안내하고, 카드를 눌러도 권한을 요청하지 않던 문제 */
+describe('권한 꺼짐', () => {
+  let openSettings: jest.SpyInstance;
+  beforeEach(() => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined as never);
+    mockPerm.request.mockReset();
+    mockPerm.requestMultiple.mockReset();
+  });
+  afterEach(() => { mockPerm.check.mockImplementation(async () => 'granted'); openSettings.mockRestore(); });
+
+  test.each(['ios', 'android'] as const)('%s: 권한 없이 감시를 켜면 시간 초과를 기다리지 않고 바로 denied, 감시도 멈춘다', async os => {
+    jest.replaceProperty(Platform, 'OS', os);
+    // Android는 거부해도 다시 물을 수 있으면 DENIED, iOS 거부는 BLOCKED
+    mockPerm.check.mockImplementation(async () => (os === 'ios' ? 'blocked' : 'denied'));
+    hold();
+    await flush();
+    expect(st()).toMatchObject({ fix: 'unavailable', reason: 'denied', coords: null });
+    // 감시도 멈춘다 — Android는 켜 둔 감시를 지우고, iOS는 예비 타이머로 감시를 켜지 않는다
+    if (os === 'android') expect(mockGeo.clearWatch).toHaveBeenCalled();
+    // 예전엔 여기서 시간 초과 → reasonOf(undefined) → 'timeout'('위치 신호가 약해요')으로 덮였다
+    const watches = mockGeo.watchPosition.mock.calls.length;
+    jest.advanceTimersByTime(FIX_TIMEOUT_MS * 3);
+    await flush();
+    expect(mockGeo.watchPosition.mock.calls.length).toBe(watches);
+    expect(st()).toMatchObject({ fix: 'unavailable', reason: 'denied' });
+    expect(mockAnalytics.track.mock.calls.filter(c => c[0] === 'location_unavailable')).toEqual([['location_unavailable', { reason: 'denied' }]]);
+  });
+
+  test('iOS 위치 서비스 꺼짐(UNAVAILABLE)은 off — 감시는 그대로 둔다', async () => {
+    mockPerm.check.mockImplementation(async () => 'unavailable');
+    hold();
+    await flush();
+    expect(st()).toMatchObject({ fix: 'unavailable', reason: 'off' });
+    expect(mockGeo.clearWatch).not.toHaveBeenCalled();
+  });
+
+  test('감시 중 오류 없이 시간만 지났는데 그사이 권한이 꺼졌으면 timeout이 아니라 denied', async () => {
+    hold();
+    await flush();
+    mockPerm.check.mockImplementation(async () => 'blocked');
+    jest.advanceTimersByTime(FIX_TIMEOUT_MS);
+    await flush();
+    expect(st()).toMatchObject({ fix: 'unavailable', reason: 'denied' });
+  });
+
+  test('권한이 있으면 그대로 시간 초과는 신호 약함(timeout)', async () => {
+    hold();
+    jest.advanceTimersByTime(FIX_TIMEOUT_MS);
+    await flush();
+    expect(st()).toMatchObject({ fix: 'unavailable', reason: 'timeout' });
+  });
+
+  test('카드를 누르면: 다시 물을 수 있으면 요청 창 — 거부하면 설정 앱은 열지 않는다', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    mockPerm.check.mockImplementation(async () => 'denied');
+    mockPerm.requestMultiple.mockResolvedValue({ 'a.fine': 'denied', 'a.coarse': 'denied' });
+    hold();
+    await flush();
+    expect(await st().askPermission()).toBe('denied');
+    expect(mockPerm.requestMultiple).toHaveBeenCalledTimes(1);
+    expect(openSettings).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['ios', () => mockPerm.request.mockResolvedValue('blocked')],
+    ['android', () => mockPerm.requestMultiple.mockResolvedValue({ 'a.fine': 'blocked', 'a.coarse': 'blocked' })],
+  ] as const)('%s: 거부가 굳었으면(iOS 거부·Android 다시 묻지 않음) 설정 앱을 연다', async (os, arrange) => {
+    jest.replaceProperty(Platform, 'OS', os);
+    mockPerm.check.mockImplementation(async () => (os === 'ios' ? 'blocked' : 'denied'));
+    arrange();
+    hold();
+    await flush();
+    expect(await st().askPermission()).toBe('settings');
+    expect(openSettings).toHaveBeenCalledTimes(1);
+  });
+
+  test('요청 창에서 허용하면 감시를 처음부터 다시 켜고 위치를 받는다', async () => {
+    mockPerm.check.mockImplementation(async () => 'denied');
+    mockPerm.request.mockResolvedValue('granted');
+    hold();
+    await flush();
+    expect(st().reason).toBe('denied');
+    mockPerm.check.mockImplementation(async () => 'granted');
+    const calls = mockGeo.getCurrentPosition.mock.calls.length;
+    expect(await st().askPermission()).toBe('granted');
+    expect(st().fix).toBe('locating');
+    expect(mockGeo.getCurrentPosition.mock.calls.length).toBe(calls + 1);
+    mockGeo.getCurrentPosition.mock.calls[calls][0](pos(35, 129));
+    expect(st()).toMatchObject({ fix: 'ok', coords: { latitude: 35, longitude: 129 } });
+    expect(openSettings).not.toHaveBeenCalled();
+  });
+
+  test('설정에서 허용하고 돌아오면(포그라운드) 바로 다시 위치를 잡는다', async () => {
+    mockPerm.check.mockImplementation(async () => 'blocked');
+    hold();
+    await flush();
+    expect(st().reason).toBe('denied');
+    appState('background');
+    mockPerm.check.mockImplementation(async () => 'granted');
+    const calls = mockGeo.getCurrentPosition.mock.calls.length;
+    appState('active');
+    await flush();
+    expect(st().fix).toBe('locating');
+    mockGeo.getCurrentPosition.mock.calls[calls][0](pos(35.2, 129));
+    expect(st()).toMatchObject({ fix: 'ok', reason: null });
   });
 });
