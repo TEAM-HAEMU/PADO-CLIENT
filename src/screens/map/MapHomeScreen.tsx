@@ -173,8 +173,9 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   // 마커 스냅샷 추적·앨범 아트 미리 받기는 마커마다 한다 (DropMarker)
   const dropIds = useMemo(() => idSetKey(drops.map(d => d.droppingId)), [drops]);
   // 투표·플리는 미리보기 시트 없이 바로 전체 화면으로 가서 상세를 기다리는 동안 빈 화면이 된다 → 주변 목록이 오면 미리 받아둔다
+  // 받아 둔 상세는 30분 동안 건너뛰고 지우지도 않는다 — 드랍을 하나 만들어 목록이 바뀌어도 새로 생긴 것만 받는다 (연 화면은 그 화면이 30초 기준으로 새로 받는다)
   const qc = useQueryClient();
-  const prefetchDrop = useCallback((id: string) => qc.prefetchQuery({ queryKey: qk.drop(id), queryFn: () => dropApi.get(id), staleTime: 30_000 }), [qc]);
+  const prefetchDrop = useCallback((id: string) => qc.prefetchQuery({ queryKey: qk.drop(id), queryFn: () => dropApi.get(id), staleTime: 30 * 60_000, gcTime: 30 * 60_000 }), [qc]);
 
   // 재생 반경 밖(내 드랍·좋아요한 드랍 제외)은 잠금 — 핀은 흐리게 곡·커버 없이, 눌러도 안 열리고, 자동 재생에서도 뺀다
   const lockOf = useDropLock(live);
