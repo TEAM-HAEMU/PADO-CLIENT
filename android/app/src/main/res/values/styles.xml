@@ -10,6 +10,10 @@
         <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
         <item name="android:enforceNavigationBarContrast">false</item>
         <item name="android:enforceStatusBarContrast">false</item>
+        <!-- 글자(TextView·RN Text) 기본 스타일 = AppCompat 기본 그대로. Android 15+ 글자 폭 기준은 values-v35 참고 -->
+        <item name="android:textViewStyle">@style/PadoTextView</item>
     </style>
+
+    <style name="PadoTextView" parent="Widget.AppCompat.TextView" />
 
 </resources>

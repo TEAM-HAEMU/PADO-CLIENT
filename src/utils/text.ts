@@ -79,3 +79,28 @@ export function clampText(s: string, max: number, useSegmenter = true): string {
   }
   return s.slice(0, end);
 }
+
+/** 줄바꿈 금지 문자 (WORD JOINER, U+2060) — 폭 0이고 그려지지 않는다 */
+export const WORD_JOINER = '⁠';
+const isHangul = (cp: number) =>
+  (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0x1100 && cp <= 0x11ff) || (cp >= 0x3130 && cp <= 0x318f) || (cp >= 0xa960 && cp <= 0xa97f) || (cp >= 0xd7b0 && cp <= 0xd7ff);
+const isSpace = (cp: number) => /\s/.test(String.fromCodePoint(cp));
+
+/**
+ * 한글 어절 안에서는 줄을 바꾸지 않게 — 한글이 낀 이웃 글자 사이에 WORD JOINER를 넣는다 ('들어/요.' → '들어요.' 통째로 다음 줄).
+ * Android 줄바꿈(ICU)은 한글을 글자마다 끊을 수 있다고 보고, iOS의 lineBreakStrategyIOS='hangul-word' 같은 옵션이 없다 (QA 2026-11-20 Z-05).
+ * 공백·줄바꿈 옆, 한 글자 덩어리 안, 한글이 아닌 글자끼리(이모지 묶음 포함)는 건드리지 않는다. 한 어절이 한 줄보다 길면 Android가 알아서 글자 단위로 끊는다.
+ */
+export function keepHangulWords(s: string): string {
+  const cps = Array.from(s);
+  let out = '';
+  for (let i = 0; i < cps.length; i++) {
+    out += cps[i];
+    const next = cps[i + 1];
+    if (next === undefined) break;
+    const a = cps[i].codePointAt(0)!, b = next.codePointAt(0)!;
+    // 결합 부호·첫가끝 중성/종성·ZWJ 앞뒤는 한 글자 덩어리라 끼우지 않는다
+    if ((isHangul(a) || isHangul(b)) && !isSpace(a) && !isSpace(b) && !isExtend(b) && a !== ZWJ && a !== 0x2060 && b !== 0x2060) out += WORD_JOINER;
+  }
+  return out;
+}
