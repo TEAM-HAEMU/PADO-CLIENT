@@ -5,7 +5,7 @@
  *  · 제자리에서 중간에 바꿔 끼우면 '넘긴 뒤 새 그림을 불러오는' 것처럼 보이고, 페이지와 똑같이 밀면 같은 캐릭터가 나갔다 들어오는 것처럼 보여서 이 사이로 잡음
  *  · 넘기는 동안엔 양쪽 장면 영상을 둘 다 재생해 멈춘 그림이 밀려가지 않게 한다
  */
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,6 +53,42 @@ export default function OnboardingScreen({ navigation }: RootScreen<'Onboarding'
   // 캐릭터 자리 = 첫 장의 그림 칸 위치 (페이지 안 위치 + 넘김 영역 위치)
   const [pagerY, setPagerY] = useState(0);
   const [art, setArt] = useState<{ y: number; h: number } | null>(null);
+  /** 보고 있는 장 — 폭이 바뀌는 동안 들어오는 스크롤 이벤트에 흔들리지 않게 따로 든다 */
+  const pageRef = useRef(0);
+  pageRef.current = page;
+  /** 스크롤 위치를 맞춘 폭 */
+  const laidWidth = useRef(width);
+  /** 폭이 바뀐 뒤 다시 맞출 장 — 맞추기 전까지 들어오는 스크롤 이벤트는 옛 위치라 장 계산에 쓰지 않는다 */
+  const realignTo = useRef<number | null>(null);
+  const realignTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realign = useCallback((p: number) => {
+    if (realignTimer.current) clearTimeout(realignTimer.current);
+    realignTimer.current = null;
+    realignTo.current = null;
+    pos.value = p;
+    pager.current?.scrollTo({ x: p * laidWidth.current, animated: false });
+  }, [pos]);
+
+  // 접기·펴기·분할 화면으로 폭이 바뀌면 가로 ScrollView는 옛 폭 기준 contentOffset(장 × 옛 폭)을 그대로 들고 있어
+  // 점은 2장인데 3장이 걸쳐 보이거나 빈 장(로그인 자리)이 보인다 (QA 2026-11-20 Z-01) → 보던 장의 새 위치로 옮긴다.
+  // 내용 폭이 아직 옛 값이면 scrollTo가 잘리므로, 새 폭으로 다시 잰 뒤(onContentSizeChange) 한 번 더 맞춘다
+  useLayoutEffect(() => {
+    if (laidWidth.current === width) return;
+    laidWidth.current = width;
+    const p = pageRef.current;
+    realignTo.current = p;
+    pos.value = p;
+    setSpan([p, p]);
+    pager.current?.scrollTo({ x: p * width, animated: false });
+    // 내용 폭 이벤트가 안 오더라도 넘김이 막히지 않게
+    if (realignTimer.current) clearTimeout(realignTimer.current);
+    realignTimer.current = setTimeout(() => { if (realignTo.current != null) realign(realignTo.current); }, 500);
+  }, [width, pos, realign]);
+  useEffect(() => () => { if (realignTimer.current) clearTimeout(realignTimer.current); }, []);
+  const onContentSize = (w: number) => {
+    const p = realignTo.current;
+    if (p != null && Math.abs(w - (PAGES.length + 1) * width) <= 1) realign(p);
+  };
 
   // 로그인은 쌓아서 연다 — 로그인 화면의 '뒤로'로 마지막 장에 돌아올 수 있게
   const finish = () => {
@@ -66,6 +102,8 @@ export default function OnboardingScreen({ navigation }: RootScreen<'Onboarding'
     setPage(i);
   };
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    // 폭이 바뀐 직후 옛 위치(잘린 위치 포함)로 들어오는 이벤트는 무시 — 위치는 위에서 다시 맞춘다
+    if (realignTo.current != null) return;
     // shared value를 JS 스레드에서 다시 읽지 않게 지역 변수로
     const p = e.nativeEvent.contentOffset.x / width;
     pos.value = p;
@@ -77,6 +115,7 @@ export default function OnboardingScreen({ navigation }: RootScreen<'Onboarding'
   // 마지막 장 뒤의 빈 장까지 넘기면 로그인으로 — 튕김(bounce)에 기대지 않아 Android·iOS 모두 보통 넘기듯 밀면 된다.
   // 로그인 화면에서 '뒤로' 오면 마지막 장이 보이게 제자리로 돌려 둔다
   const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (realignTo.current != null) return;
     if (e.nativeEvent.contentOffset.x < PAGES.length * width - width / 2) return;
     finish();
     setTimeout(() => pager.current?.scrollTo({ x: (PAGES.length - 1) * width, animated: false }), 400);
@@ -89,7 +128,7 @@ export default function OnboardingScreen({ navigation }: RootScreen<'Onboarding'
       <AuthHeader page={page} onBack={page > 0 ? () => go(page - 1) : undefined} onNext={() => go(page + 1)} style={{ marginTop: insets.top + 12 }} />
       <ScrollView
         ref={pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} bounces
-        onScroll={onScroll} scrollEventThrottle={16} onMomentumScrollEnd={onMomentumEnd} onLayout={e => setPagerY(e.nativeEvent.layout.y)} style={{ flex: 1 }}
+        onScroll={onScroll} scrollEventThrottle={16} onMomentumScrollEnd={onMomentumEnd} onContentSizeChange={onContentSize} onLayout={e => setPagerY(e.nativeEvent.layout.y)} style={{ flex: 1 }}
       >
         {PAGES.map((p, i) => (
           <View key={i} style={{ width, flex: 1 }} accessibilityElementsHidden={i !== page} importantForAccessibility={i === page ? 'auto' : 'no-hide-descendants'}>
