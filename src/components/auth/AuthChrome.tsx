@@ -6,12 +6,13 @@
  *  · 맨 아래 약관 안내 (10px #C7C7C7)
  */
 import React from 'react';
-import { ActivityIndicator, type StyleProp, View, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Platform, type StyleProp, View, type ViewStyle } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Icon, IconButton, Press, T } from '@/components/ui';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, fonts } from '@/theme/tokens';
+import { keepHangulWords } from '@/utils/text';
 
 /** 디자인의 설명 글자 회색 (팔레트에 없는 값 — 이 영역 설명 한 줄에만 씀) */
 export const SUBTLE = '#858585';
@@ -50,11 +51,15 @@ export function AuthHeader({ page, onBack, onNext, style }: { page?: number; onB
   );
 }
 
-/** 가운데 정렬 제목 + 설명 한 줄 */
+/**
+ * 가운데 정렬 제목 + 설명 한 줄.
+ * 제목은 어절 단위로만 줄을 바꾼다 — iOS는 T의 hangul-word, Android는 같은 옵션이 없어 어절 안에 줄바꿈 금지 문자를 넣는다
+ * (360dp 갤럭시에서 '들어/요.'처럼 끊기던 것, QA 2026-11-20 Z-05). 읽기 라벨은 원문 그대로
+ */
 export function AuthTitle({ title, desc, style }: { title: string; desc?: string; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[{ alignItems: 'center', gap: 18, paddingHorizontal: 24 }, style]}>
-      <T v="display" style={{ textAlign: 'center' }} accessibilityRole="header">{title}</T>
+      <T v="display" style={{ textAlign: 'center' }} accessibilityRole="header" accessibilityLabel={title}>{Platform.OS === 'android' ? keepHangulWords(title) : title}</T>
       {desc ? <T v="caption" style={{ color: SUBTLE, textAlign: 'center' }}>{desc}</T> : null}
     </View>
   );
