@@ -19,7 +19,7 @@ import Animated, { Easing, useAnimatedKeyboard, useAnimatedStyle, useSharedValue
 import { scheduleOnRN } from 'react-native-worklets';
 import { colors } from '@/theme/tokens';
 import { callJsCallback, useJsCallbackId } from '@/hooks/useJsCallbackId';
-import { overflows, sheetMaxHeight } from '@/utils/shortScreen';
+import { keyboardScrollTarget, overflows, sheetMaxHeight } from '@/utils/shortScreen';
 import { DialogHost } from './Dialog';
 
 const OPEN = { duration: 280, easing: Easing.out(Easing.cubic) };
@@ -46,6 +46,7 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
   const finishId = useJsCallbackId(() => finishRef.current());
   const progress = useSharedValue(0);
   const [height, setHeight] = useState(800);
+  const [sheetH, setSheetH] = useState(0);
   const route = useRoute();
   const closing = useRef(false);
   const [closingNow, setClosingNow] = useState(false);
@@ -67,17 +68,22 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
   const scrollY = useRef(0);
   const [viewH, setViewH] = useState(0);
   const [contentH, setContentH] = useState(0);
+  // 시트가 최대 높이에 닿아 있고(Android) 키보드가 떠 있으면 그 위 틈 높이
+  const capped = typeof maxHeight === 'number' && sheetH > 0 && sheetH >= maxHeight - 1;
+  const topFill = Platform.OS === 'android' && kb && capped ? Math.max(0, containerH - sheetH) : 0;
+  const contentHRef = useRef(0);
+  contentHRef.current = contentH;
   const canScroll = scrolls && overflows(contentH, viewH);
-  // 키보드가 떠서 보이는 곳이 줄면, 입력 중인 칸이 가려졌을 때만 그 칸이 보이게 스크롤
+  // 키보드가 떠서 보이는 곳이 줄면 — 입력 중인 칸은 반드시 보이게, 그 안에서 최대한 아래(만들기·확인 같은 주요 버튼 쪽)까지 스크롤
+  // (입력칸만 겨우 보이게 맞추면 바로 아래 버튼이 키보드 쪽으로 밀려 처음엔 안 보였다 — PR #63 재확인)
   const revealFocused = useCallback(() => {
     const input = TextInput.State.currentlyFocusedInput?.();
     const inner = scrollRef.current?.getInnerViewRef();
     if (!input || !inner || !(viewH > 0)) return;
     try {
       input.measureLayout(inner as never, (_x: number, y: number, _w: number, h: number) => {
-        const top = scrollY.current;
-        if (y >= top && y + h <= top + viewH) return;
-        scrollRef.current?.scrollTo({ y: Math.max(0, y + h + 12 - viewH), animated: true });
+        const target = keyboardScrollTarget(y, h, viewH, contentHRef.current);
+        if (Math.abs(target - scrollY.current) > 1) scrollRef.current?.scrollTo({ y: target, animated: true });
       }, () => {});
     } catch { /* 시트 밖 입력칸 */ }
   }, [viewH]);
@@ -161,7 +167,10 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
       </Animated.View>
       {/* maxHeight 같은 %값은 화면 기준이어야 하므로 래퍼에, 카드는 그 안에서 줄어든다 (상단 안전영역을 넘지 않게 숫자로 바꿔 둔 값) */}
       <GestureDetector gesture={pan}>
-      <Animated.View onLayout={e => setHeight(e.nativeEvent.layout.height + 40)} style={[{ maxHeight: maxHeight as ViewStyle['maxHeight'], height: style?.height }, panel]}>
+      <Animated.View onLayout={e => { setHeight(e.nativeEvent.layout.height + 40); setSheetH(e.nativeEvent.layout.height); }} style={[{ maxHeight: maxHeight as ViewStyle['maxHeight'], height: style?.height }, panel]}>
+        {/* (Android) 키보드로 창이 줄어 시트가 최대 높이에 닿으면, 시트 위 틈(상태 표시줄 자리)을 카드 색으로 채운다.
+            그 뒤의 지도는 줄어든 창에 맞춰 다시 그려져 아래 목록이 상태 표시줄 자리에 비쳤다 (PR #63 재확인). 시트와 함께 움직이게 시트 안에 둔다 */}
+        {topFill > 0 ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: -topFill, height: topFill + 40, backgroundColor: colors.page }} /> : null}
         {/* 헤더 줄은 화면 폭 전체라 카드 윗부분과 겹친다 → 헤더 요소 말고는 터치를 카드로 넘긴다 (예: 핀 미리보기 ⋯ 버튼) */}
         {header ? <View pointerEvents="box-none" style={{ alignItems: 'center', marginBottom: -headerOverlap, zIndex: 2, elevation: 2 }}>{header}</View> : null}
         <View style={[{ flexShrink: 1, backgroundColor: colors.page, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 16, paddingTop: 10, paddingBottom: Platform.OS === 'android' && kb ? 12 : baseBottom }, style, { maxHeight: undefined, height: undefined }, style?.height ? { flex: 1 } : null]}>

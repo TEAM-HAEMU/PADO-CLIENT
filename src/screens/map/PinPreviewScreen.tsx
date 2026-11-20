@@ -31,12 +31,11 @@ import { artUrl } from '@/utils/artUrl';
 import { capsuleLineWidth, capsulePillWidth } from '@/utils/capsule';
 import { Marquee } from '@/components/ui/Marquee';
 import { formatRelative } from '@/utils/format';
-import { overflows, pinCapsuleHeight, pinPlayTop } from '@/utils/shortScreen';
+import { overflows, pinCapsuleHeight, pinPlayTop, pinRingGap } from '@/utils/shortScreen';
 
 const SERVICE_ORDER: ServiceId[] = ['spotify', 'appleMusic', 'youtubeMusic'];
 // Figma 한마디 카드 뒤로 겹친 띠 (위에서부터)
 const STACK = ['#00C9FF', '#5DDCFF', '#B4EFFF'];
-const RING_GAP = 21; // 알약 바깥 → 링 (358 - 316) / 2
 const RING_STROKE = 7;
 const CAP_BORDER = 8; // 알약 흰 테두리 — 글자는 그 안쪽(capW − 16) 반원에 잘린다
 const TEXT_TOP = 20; // 주소 · 곡명 묶음 위치 (Figma)
@@ -88,8 +87,9 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   // 단 짧은 화면(높이 ≲ 630dp)에서도 최소 200은 지킨다 — 예전엔 ~560dp 아래부터 쪼그라들고 ~435dp 아래면 재생 버튼까지 사라졌다
   const capH = pinCapsuleHeight(height, insets.top);
   const capW = Math.round(capH * (316 / 421));
-  const ringW = capW + RING_GAP * 2;
-  const overlap = capH + RING_GAP - 34; // 카드는 알약 꼭대기에서 34 아래부터 시작 (알약·링은 카드 위에 겹침)
+  const ringGap = pinRingGap(capH); // 알약 바깥 → 링 (Figma 21, 작은 알약에선 같이 줄임)
+  const ringW = capW + ringGap * 2;
+  const overlap = capH + ringGap - 34; // 카드는 알약 꼭대기에서 34 아래부터 시작 (알약·링은 카드 위에 겹침)
   // 글자는 위쪽 반원 안 — 줄마다 그 높이에서 보이는 폭까지만 (넘치면 핀·첫 글자·…이 테두리에 잘린다)
   // 주소 칩은 양 끝이 둥글어 끝 반원이 안쪽에 들어오는 폭, 곡명 줄은 줄 위 끝의 현 − 양옆 12
   const innerW = capW - CAP_BORDER * 2;
@@ -111,8 +111,8 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
       style={{ paddingHorizontal: 22, borderTopLeftRadius: 50, borderTopRightRadius: 50, shadowColor: '#12214A', shadowOpacity: 0.15, shadowRadius: 40, shadowOffset: { width: 0, height: 0 }, elevation: 8 }}
       headerOverlap={overlap}
       header={
-        <View style={{ width: ringW, height: capH + RING_GAP, alignItems: 'center' }}>
-          {song.data ? <ProgressRing songId={song.data.id} width={ringW} height={ringW * (364 / 358)} top={capH + RING_GAP - ringW * (364 / 358)} /> : null}
+        <View style={{ width: ringW, height: capH + ringGap, alignItems: 'center' }}>
+          {song.data ? <ProgressRing songId={song.data.id} width={ringW} height={ringW * (364 / 358)} top={capH + ringGap - ringW * (364 / 358)} /> : null}
           <View style={{ width: capW, height: capH, borderRadius: capW / 2, borderWidth: CAP_BORDER, borderColor: '#FFFFFF', overflow: 'hidden', backgroundColor: colors.card2 }}>
             {art ? <Image source={{ uri: artUrl(art, capH)! }} style={{ position: 'absolute', left: 0, top: 0, width: innerW, height: capH - CAP_BORDER * 2 }} resizeMode="cover" /> : null}
             <LinearGradient pointerEvents="none" colors={['rgba(4,9,22,0.55)', 'rgba(4,9,22,0.25)', 'rgba(4,9,22,0)']} locations={[0, 0.55, 1]} style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 120 }} />

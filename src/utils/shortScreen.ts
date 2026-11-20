@@ -45,6 +45,36 @@ export function pinCapsuleHeight(windowH: number, insetTop: number): number {
   return Math.round(clamp(windowH - insetTop - PIN_RESERVED, PIN_CAP_MIN, PIN_CAP_MAX));
 }
 
+/** 알약 바깥 → 진행 링 간격. Figma (358 − 316) / 2 = 21 */
+export const PIN_RING_GAP = 21;
+/** 이 알약 높이(iPhone SE 계산값) 이상은 Figma 간격 그대로 */
+const PIN_RING_FULL_AT = 237;
+const PIN_RING_GAP_MIN = 10;
+
+/**
+ * 진행 링 간격 — 알약이 최소 크기(200) 쪽으로 줄면 간격도 같이 줄여 링이 알약에 붙어 보이게 한다.
+ * 간격을 21로 두면 폭 150 알약에선 링이 알약 반지름의 28%만큼 떨어져 따로 노는 원처럼 보였다 (Figma 비율은 13%).
+ * iPhone SE(237) 이상은 예전과 같다.
+ */
+export function pinRingGap(capH: number): number {
+  if (capH >= PIN_RING_FULL_AT) return PIN_RING_GAP;
+  const t = clamp((capH - PIN_CAP_MIN) / (PIN_RING_FULL_AT - PIN_CAP_MIN), 0, 1);
+  return Math.round(PIN_RING_GAP_MIN + t * (PIN_RING_GAP - PIN_RING_GAP_MIN));
+}
+
+/**
+ * 키보드가 떠서 시트 안이 스크롤될 때 맞출 위치 — 입력칸은 반드시 보이게 하고, 그 범위 안에서 최대한 아래(주요 버튼 쪽)까지.
+ * 입력칸만 겨우 보이게 맞추면 바로 아래 '만들기' 같은 버튼이 키보드 쪽으로 밀려 안 보였다.
+ * inputY·inputH: 스크롤 내용 기준 입력칸 위치·높이, viewH: 보이는 높이, contentH: 내용 전체 높이
+ */
+export function keyboardScrollTarget(inputY: number, inputH: number, viewH: number, contentH: number, pad = 12): number {
+  const end = Math.max(0, contentH - viewH);
+  const lo = inputY + inputH + pad - viewH; // 입력칸 아래 끝이 보이는 최소 스크롤
+  const hi = inputY - 8; // 입력칸 위 끝이 보이는 최대 스크롤
+  const target = Math.min(Math.max(end, lo), Math.max(lo, hi));
+  return clamp(Math.round(target), 0, end);
+}
+
 /**
  * 알약 안 재생 버튼의 위 끝 — 가운데가 기본이고, 알약이 작아 가운데가 위쪽 글자(주소 · 곡명)와 겹치면 글자 아래로 내린다.
  * innerH: 테두리 안쪽 높이, textBottom: 글자 묶음의 아래 끝(안쪽 기준)

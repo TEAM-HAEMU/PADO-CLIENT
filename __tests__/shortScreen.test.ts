@@ -2,7 +2,7 @@
  * 짧은 화면 크기 계산 (QA 2026-11-20 Z-02 · Z-04 · Z-06)
  * 높이: 411dp(플립 커버·분할 화면) · 533dp(아주 작은 폰) · 667pt(iPhone SE) · 780dp(흔한 갤럭시) · 882dp(폴드 커버)
  */
-import { overflows, pinCapsuleHeight, pinPlayTop, PIN_CAP_MAX, PIN_CAP_MIN, playerLayout, PLAYER_DISC_MIN, sheetMaxHeight } from '@/utils/shortScreen';
+import { keyboardScrollTarget, overflows, pinCapsuleHeight, pinPlayTop, pinRingGap, PIN_CAP_MAX, PIN_CAP_MIN, PIN_RING_GAP, playerLayout, PLAYER_DISC_MIN, sheetMaxHeight } from '@/utils/shortScreen';
 
 describe('sheetMaxHeight — 시트는 상단 안전영역 아래까지만', () => {
   it('화면 높이 − 안전영역 − 틈(8)', () => {
@@ -78,5 +78,33 @@ describe('playerLayout — 재생 화면 세로 배치', () => {
     const l = playerLayout(320, 533, 24, 24, 2);
     const avail = 533 - (24 + 4 + 44) - (24 + 8);
     expect(sum(l, l.bubbles)).toBeLessThanOrEqual(avail);
+  });
+});
+
+describe('pinRingGap — 진행 링 간격 (PR #63 재확인: 작은 알약에서 링이 떨어져 보임)', () => {
+  it('iPhone SE(237) 이상은 Figma 21 그대로', () => {
+    expect(pinRingGap(421)).toBe(PIN_RING_GAP);
+    expect(pinRingGap(346)).toBe(PIN_RING_GAP);
+    expect(pinRingGap(237)).toBe(PIN_RING_GAP);
+  });
+  it('최소 알약(200)에선 10, 그 사이는 이어지게', () => {
+    expect(pinRingGap(PIN_CAP_MIN)).toBe(10);
+    const g = pinRingGap(220);
+    expect(g).toBeGreaterThan(10);
+    expect(g).toBeLessThan(21);
+  });
+});
+
+describe('keyboardScrollTarget — 키보드가 뜬 시트에서 맞출 스크롤 위치', () => {
+  it('입력칸과 아래 버튼이 함께 들어가면 끝까지 내려 버튼도 보이게 (533dp 새 플리)', () => {
+    // 내용 400, 보이는 높이 250, 입력칸 y 200·h 40 → 끝(150)까지 내려도 입력칸(50~90)은 보인다
+    expect(keyboardScrollTarget(200, 40, 250, 400)).toBe(150);
+  });
+  it('둘 다 못 들어가면 입력칸이 우선 — 입력칸 위 끝이 보이는 데까지만', () => {
+    // 보이는 높이 60, 입력칸 y 200 → 192 (끝 340까지 가면 입력칸이 위로 사라짐)
+    expect(keyboardScrollTarget(200, 40, 60, 400)).toBe(192);
+  });
+  it('입력칸이 내용 맨 위 근처면 0 아래로 가지 않는다', () => {
+    expect(keyboardScrollTarget(0, 40, 300, 310)).toBe(0);
   });
 });
