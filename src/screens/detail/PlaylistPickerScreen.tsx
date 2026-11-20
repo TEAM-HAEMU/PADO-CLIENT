@@ -39,7 +39,7 @@ export default function PlaylistPickerScreen({ navigation, route }: RootScreen<'
   };
 
   return (
-    <Sheet style={{ maxHeight: '70%', paddingHorizontal: 25 }}>
+    <Sheet scroll={false} style={{ maxHeight: '70%', paddingHorizontal: 25 }}>
       <View style={{ marginBottom: 20 }}><SheetTitle title={excludeId ? '다른 플레이리스트에 담기' : '내 플레이리스트에 담기'} desc={`${song.title} · ${song.artist}`} /></View>
       {isLoading ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} /> : isError ? (
         <Empty icon="alert" title="플레이리스트를 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} />

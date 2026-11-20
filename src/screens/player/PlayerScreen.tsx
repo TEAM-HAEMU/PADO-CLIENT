@@ -3,7 +3,7 @@
  * 미리듣기가 마음에 들면 헤드폰(전체 듣기)으로 고른 음악 앱에 딥링크 (길게 누르면 재생 앱 바꾸기).
  */
 import React from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { ScrollView, useWindowDimensions, View } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BarProgress, Spin } from '@/components/anim';
@@ -23,6 +23,7 @@ import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { formatDuration } from '@/utils/format';
+import { overflows, playerLayout } from '@/utils/shortScreen';
 
 const SUB = '#BAB7B7'; // Figma 아티스트·시간 글자색
 const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -30,9 +31,7 @@ const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.l
 export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const compact = height < 760; // iPhone SE·mini 등 작은 화면
   const contentW = Math.min(width - 54, 400); // Figma 좌우 27
-  const disc = Math.round(Math.min(contentW, height * (compact ? 0.33 : 0.4)));
   const { songId, dropId, queue, autoplay } = route.params;
   const qIndex = queue ? queue.indexOf(songId) : -1;
   const nextId = queue && qIndex >= 0 ? queue[qIndex + 1] : undefined;
@@ -43,6 +42,12 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const menu = useDropMenu(dropId, drop?.userId, '드랍', drop && 'username' in drop ? drop.username : undefined, song);
   const likeCount = useLikeCount(dropId).data;
   const comments = useComments(dropId).data;
+  // 세로 배치 — iPhone SE·mini 등은 간격을 줄이고(compact), 분할 화면·플립 커버처럼 아주 짧으면 디스크를 남은 높이에 맞춘다(tight)
+  const layout = playerLayout(width, height, insets.top, insets.bottom, comments?.length ?? 0);
+  const { disc } = layout;
+  // 그래도 넘치면(더 짧은 창) 잘라 버리지 않고 스크롤 — 들어가면 예전처럼 가운데 고정
+  const [viewH, setViewH] = React.useState(0);
+  const [contentH, setContentH] = React.useState(0);
   const liked = useIsLiked(dropId);
   const toggleLike = useToggleLike(dropId ?? '');
   const authed = useAuth(s => s.status === 'authed');
@@ -93,7 +98,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
   const like = () => (authed ? toggleLike.toggle() : toast('로그인이 필요해요.'));
   const hole = disc * 0.153; // Figma 가운데 흰 구멍 53.5 / 349
   const halo = disc * 0.249; // 반투명 링 87 / 349
-  const bubbles = (comments ?? []).slice(0, compact ? 2 : 3);
+  const bubbles = (comments ?? []).slice(0, layout.bubbles);
 
   const headphones = (
     <Press onPress={listen} onLongPress={pickService} hitSlop={12} accessibilityLabel={listenLabel(service)} accessibilityHint="길게 누르면 재생 앱을 바꿔요" style={{ width: 20, height: 20 }}>
@@ -125,8 +130,15 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
         ) : <View style={{ width: 44 }} />}
       </View>
 
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-end', paddingHorizontal: (width - contentW) / 2, gap: compact ? 20 : 40, paddingBottom: insets.bottom + 8 }}>
-        <View style={{ alignSelf: 'stretch', alignItems: 'center', gap: compact ? 18 : 28 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        scrollEnabled={overflows(contentH, viewH)}
+        showsVerticalScrollIndicator={false}
+        onLayout={e => setViewH(e.nativeEvent.layout.height)}
+        onContentSizeChange={(_, h) => setContentH(h)}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'flex-end', paddingHorizontal: (width - contentW) / 2, gap: layout.gap, paddingBottom: insets.bottom + 8 }}
+      >
+        <View style={{ alignSelf: 'stretch', alignItems: 'center', gap: layout.innerGap }}>
           {/* disc — 앨범 아트 원 + 가운데 흰 구멍 (재생 중에만 돈다) */}
           <Spin paused={!preview.playing}>
             <View style={{ width: disc, height: disc, borderRadius: disc / 2, overflow: 'hidden' }}>
@@ -141,7 +153,7 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
             <T v="caption" numberOfLines={1} style={{ fontFamily: fonts.medium, color: SUB }}>{song.artist}</T>
           </View>
 
-          <PlayerProgress songId={song.id} width={contentW} compact={compact} available={preview.available} fullDuration={song.duration} song={song} />
+          <PlayerProgress songId={song.id} width={contentW} waveH={layout.waveH} available={preview.available} fullDuration={song.duration} song={song} />
 
           {/* controls — 좋아요 · 재생 · 전체 듣기 (플리 대기열이면 이전 · 재생 · 다음) */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 24 }}>
@@ -175,17 +187,17 @@ export default function PlayerScreen({ navigation, route }: RootScreen<'Player'>
             ))}
           </Press>
         ) : null}
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 /** 막대 파형 진행 바 + 시간 — 250ms마다 이 부분만 다시 그린다 (실제 미리듣기 위치/길이) */
-function PlayerProgress({ songId, width, compact, available, fullDuration, song }: { songId: string; width: number; compact: boolean; available: boolean; fullDuration: number; song: { title: string; artist: string } }) {
+function PlayerProgress({ songId, width, waveH, available, fullDuration, song }: { songId: string; width: number; waveH: number; available: boolean; fullDuration: number; song: { title: string; artist: string } }) {
   const { position, duration } = usePreviewProgress(songId);
   return (
     <View style={{ alignSelf: 'stretch', gap: 8 }}>
-      <BarProgress progress={duration ? position / duration : 0} width={width} height={compact ? 44 : 60} />
+      <BarProgress progress={duration ? position / duration : 0} width={width} height={waveH} />
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <T v="tiny" style={{ color: SUB }}>{formatDuration(position)}</T>
         {available ? <PreviewCredit song={song} /> : null}

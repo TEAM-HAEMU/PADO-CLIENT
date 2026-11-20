@@ -99,7 +99,7 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
   const renderItem = useCallback(({ item: c }: { item: Comment }) => <CommentRow c={c} mine={!!myName && c.username === myName} onMenu={menu} />, [myName, menu]);
 
   return (
-    <Sheet dim={0.55} style={{ paddingHorizontal: 0, maxHeight: '78%' }}>
+    <Sheet dim={0.55} scroll={false} style={{ paddingHorizontal: 0, maxHeight: '78%' }}>
       {/* Figma B 2.4 댓글 (시트): '댓글' SemiBold 16 + 시안 개수 · 34px 아바타 줄 · 아래 회색 알약 입력 + 남색 보내기 (가사는 표시하지 않음) */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 24, marginBottom: 20 }}>
         <T v="bodyLarge" style={{ fontFamily: fonts.semibold, color: '#000000' }}>댓글</T>

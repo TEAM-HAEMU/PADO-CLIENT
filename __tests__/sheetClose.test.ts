@@ -175,3 +175,47 @@ describe('confirmClose', () => {
     expect(rootView(r).props.pointerEvents).toBe('none');
   });
 });
+
+/* 높이 제한 (QA 2026-11-20 Z-04 — 짧은 화면에서 시트가 상태 표시줄 밑까지 올라가던 것) */
+describe('시트 최대 높이 · 넘치면 스크롤', () => {
+  function renderWith(props: Record<string, unknown>) {
+    act(() => { mounted = TestRenderer.create(React.createElement(Sheet, { ...props, children: React.createElement('Body') })); });
+    return mounted!;
+  }
+  const layout = (n: Node, height: number) => act(() => { (n.props.onLayout as (e: object) => void)({ nativeEvent: { layout: { x: 0, y: 0, width: 411, height } } }); });
+  /** 시트 래퍼 (maxHeight · 올라오는 애니메이션) */
+  const wrapper = (r: import('react-test-renderer').ReactTestRenderer) => r.root.findAll((n: Node) => (n.type as unknown) === 'Animated.View' && typeof n.props.onLayout === 'function')[0];
+  const flat = (s: unknown) => Object.assign({}, ...([s].flat(Infinity) as object[]).filter(Boolean));
+  const scrollers = (r: import('react-test-renderer').ReactTestRenderer) => r.root.findAll((n: Node) => typeof n.type === 'string' && typeof n.props.onContentSizeChange === 'function');
+
+  test('화면 높이를 알면 상단 안전영역 아래까지만 (411dp → 403)', () => {
+    const r = renderWith({});
+    layout(rootView(r), 411);
+    expect(flat(wrapper(r).props.style).maxHeight).toBe(403);
+  });
+
+  test('화면이 준 % 최대 높이는 화면 기준 숫자로 — 안전영역보다 크면 안전영역까지', () => {
+    const r = renderWith({ style: { maxHeight: '70%' } });
+    layout(rootView(r), 400);
+    expect(flat(wrapper(r).props.style).maxHeight).toBe(280);
+    const r2 = renderWith({ style: { maxHeight: '99%' } });
+    layout(rootView(r2), 400);
+    expect(flat(wrapper(r2).props.style).maxHeight).toBe(392);
+  });
+
+  test('내용이 들어가면 스크롤을 꺼 두고, 넘칠 때만 켠다', () => {
+    const r = renderWith({});
+    const [sv] = scrollers(r);
+    expect(sv.props.scrollEnabled).toBe(false);
+    layout(sv, 300);
+    act(() => { (sv.props.onContentSizeChange as (w: number, h: number) => void)(411, 280); });
+    expect(scrollers(r)[0].props.scrollEnabled).toBe(false);
+    act(() => { (sv.props.onContentSizeChange as (w: number, h: number) => void)(411, 520); });
+    expect(scrollers(r)[0].props.scrollEnabled).toBe(true);
+  });
+
+  test('자기 목록이 있는 시트(scroll={false})나 높이를 정한 시트는 감싸지 않는다', () => {
+    expect(scrollers(renderWith({ scroll: false }))).toHaveLength(0);
+    expect(scrollers(renderWith({ style: { height: '82%' } }))).toHaveLength(0);
+  });
+});

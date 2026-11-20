@@ -4,7 +4,7 @@
  * 투표/플리 드랍은 지도에서 바로 상세 화면으로 간다.
  */
 import React from 'react';
-import { Image, useWindowDimensions, View } from 'react-native';
+import { Image, ScrollView, useWindowDimensions, View } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
@@ -31,6 +31,7 @@ import { artUrl } from '@/utils/artUrl';
 import { capsuleLineWidth, capsulePillWidth } from '@/utils/capsule';
 import { Marquee } from '@/components/ui/Marquee';
 import { formatRelative } from '@/utils/format';
+import { overflows, pinCapsuleHeight, pinPlayTop } from '@/utils/shortScreen';
 
 const SERVICE_ORDER: ServiceId[] = ['spotify', 'appleMusic', 'youtubeMusic'];
 // Figma 한마디 카드 뒤로 겹친 띠 (위에서부터)
@@ -41,6 +42,8 @@ const CAP_BORDER = 8; // 알약 흰 테두리 — 글자는 그 안쪽(capW − 
 const TEXT_TOP = 20; // 주소 · 곡명 묶음 위치 (Figma)
 const ADDRESS_H = 18;
 const TEXT_GAP = 6;
+const SONG_LINE_H = 18; // 곡명 줄 (captionStrong 줄 높이)
+const PLAY = 58;
 
 export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinPreview'>) {
   // 듣던 곡은 화면을 닫아도 계속 (다른 곡을 틀 때만 바뀜)
@@ -67,6 +70,9 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const authed = useAuth(s => s.status === 'authed');
   const menu = useDropMenu(dropId, d?.userId, '드랍', d && 'username' in d ? d.username : undefined, song.data);
   const address = useDropPlace(dropId, d);
+  // 짧은 화면에서 알약 아래 내용이 시트 최대 높이를 넘으면 그 부분만 스크롤 (알약 · 재생 버튼은 늘 보이게)
+  const [viewH, setViewH] = React.useState(0);
+  const [contentH, setContentH] = React.useState(0);
   // 투표·플리 드랍은 넘겨받은 화면이 센다
   useDropOpenedEvent(dropId, 'MUSIC', music, source);
 
@@ -78,8 +84,9 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
     return <Sheet><View style={{ height: 320 }}>{failed ? <T v="body" c="ink2" style={{ textAlign: 'center', marginTop: 60 }}>{errorMessage(failed)}</T> : <Loading />}</View></Sheet>;
   }
 
-  // 알약 크기 — Figma 316×421, 시트 전체가 화면 위 지도 머리(동 이름)를 가리지 않게 줄인다
-  const capH = Math.round(Math.min(421, height - insets.top - 410));
+  // 알약 크기 — Figma 316×421, 시트 전체가 화면 위 지도 머리(동 이름)를 가리지 않게 줄인다.
+  // 단 짧은 화면(높이 ≲ 630dp)에서도 최소 200은 지킨다 — 예전엔 ~560dp 아래부터 쪼그라들고 ~435dp 아래면 재생 버튼까지 사라졌다
+  const capH = pinCapsuleHeight(height, insets.top);
   const capW = Math.round(capH * (316 / 421));
   const ringW = capW + RING_GAP * 2;
   const overlap = capH + RING_GAP - 34; // 카드는 알약 꼭대기에서 34 아래부터 시작 (알약·링은 카드 위에 겹침)
@@ -87,7 +94,11 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   // 주소 칩은 양 끝이 둥글어 끝 반원이 안쪽에 들어오는 폭, 곡명 줄은 줄 위 끝의 현 − 양옆 12
   const innerW = capW - CAP_BORDER * 2;
   const addressMaxW = capsulePillWidth(innerW, TEXT_TOP, ADDRESS_H);
-  const songMaxW = capsuleLineWidth(innerW, address ? TEXT_TOP + ADDRESS_H + TEXT_GAP : TEXT_TOP);
+  const songTop = address ? TEXT_TOP + ADDRESS_H + TEXT_GAP : TEXT_TOP;
+  const songMaxW = capsuleLineWidth(innerW, songTop);
+  // 재생 버튼은 알약 가운데 — 알약이 작아 글자와 겹치면 곡명 아래로
+  const playTop = pinPlayTop(capH - CAP_BORDER * 2, PLAY, songTop + SONG_LINE_H);
+  const scrolls = overflows(contentH, viewH);
   const art = music.albumImageUrl ?? song.data?.albumImagePath;
   const openPlayer = () => { if (song.data) navigation.replace('Player', { songId: song.data.id, dropId }); };
   // 전체 듣기 — 누른 음악 앱으로 바로 딥링크
@@ -96,6 +107,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
 
   return (
     <Sheet
+      scroll={false}
       style={{ paddingHorizontal: 22, borderTopLeftRadius: 50, borderTopRightRadius: 50, shadowColor: '#12214A', shadowOpacity: 0.15, shadowRadius: 40, shadowOffset: { width: 0, height: 0 }, elevation: 8 }}
       headerOverlap={overlap}
       header={
@@ -121,9 +133,9 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
             <Press
               onPress={preview.toggle}
               accessibilityLabel={preview.playing ? '미리듣기 일시정지' : '30초 미리듣기'}
-              style={{ position: 'absolute', left: (innerW - 58) / 2, top: (capH - CAP_BORDER * 2 - 58) / 2, width: 58, height: 58, opacity: preview.available ? 1 : 0.5, shadowColor: '#FFFFFF', shadowOpacity: 0.4, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } }}
+              style={{ position: 'absolute', left: (innerW - PLAY) / 2, top: playTop, width: PLAY, height: PLAY, opacity: preview.available ? 1 : 0.5, shadowColor: '#FFFFFF', shadowOpacity: 0.4, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } }}
             >
-              <PlayCircleGlyph size={58} playing={preview.playing} />
+              <PlayCircleGlyph size={PLAY} playing={preview.playing} />
             </Press>
           </View>
         </View>
@@ -135,6 +147,15 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
 
       {/* 알약 · 링 아래에서 내용 시작 (카드 위 패딩 10 + 손잡이 21 은 Sheet가 이미 줌) */}
       <View style={{ height: Math.max(0, overlap - 31) }} />
+      <ScrollView
+        style={{ flexGrow: 0 }}
+        scrollEnabled={scrolls}
+        showsVerticalScrollIndicator={scrolls}
+        bounces={false}
+        overScrollMode="never"
+        onLayout={e => setViewH(e.nativeEvent.layout.height)}
+        onContentSizeChange={(_, h) => setContentH(h)}
+      >
       {song.data && preview.available ? <View style={{ alignItems: 'center', marginTop: 6 }}><PreviewCredit song={song.data} /></View> : null}
 
       {/* 한마디 — 뒤로 겹친 시안 띠 세 장 + 앞 카드 */}
@@ -170,6 +191,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
           ))}
         </View>
       </View>
+      </ScrollView>
     </Sheet>
   );
 }
