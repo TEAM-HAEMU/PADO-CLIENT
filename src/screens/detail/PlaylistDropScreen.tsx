@@ -10,6 +10,7 @@ import { useCommentCount, useDrop, useLikeCount, useToggleLike, useIsLiked } fro
 import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
+import { useDropScreen } from '@/navigation/dropScreen';
 import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { startPreview, usePreviewStore } from '@/services/preview';
@@ -34,6 +35,8 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
   const insets = useSafeAreaInsets();
   const drop = useDrop(dropId);
   const d = drop.data && isPlaylistDetail(drop.data) ? drop.data : null;
+  // 다른 타입 드랍(링크를 잘못 만들었거나 오래된 링크)이면 맞는 화면으로 넘긴다
+  const shape = useDropScreen('PlaylistDrop', navigation, dropId, drop.data, source);
   useDropOpenedEvent(dropId, 'PLAYLIST', d, source);
   // 플리 드랍 핀을 누르면 첫 곡 미리듣기를 바로
   const first = d?.songs[0];
@@ -65,7 +68,7 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
     </View>
   ) : undefined, [d, dropId, navigation]);
 
-  if (!d) return <ScreenState title="플리 드랍" error={drop.error} onRetry={() => drop.refetch()} />;
+  if (!d) return <ScreenState title="플리 드랍" error={drop.error ?? shape.error} onRetry={() => drop.refetch()} />;
 
   const more = menu.open;
   const count = (n?: number) => (n ? <T style={{ fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, color: '#969696' }}>{n}</T> : null);
