@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Collage } from '@/components/music/Collage';
+import { MINI_DISC_CLEARANCE } from '@/components/music/miniDiscLayout';
 import type { PlaylistDropSummary } from '@/api/types';
 import { Art, Chip, Empty, Press, T, PrimaryButton } from '@/components/ui';
 import { listStatus } from '@/components/ui/ScreenState';
@@ -60,7 +61,7 @@ export default function PlaylistsScreen() {
           </Press>
         </View>
       </View>
-      <ScrollView contentContainerStyle={{ paddingTop: 16, paddingHorizontal: 24, paddingBottom: insets.bottom + 120, gap: 24 }}>
+      <ScrollView contentContainerStyle={{ paddingTop: 16, paddingHorizontal: 24, paddingBottom: insets.bottom + MINI_DISC_CLEARANCE, gap: 24 }}>
         <View style={{ flexDirection: 'row', gap: 12 }}>
           {TABS.map(([k, l]) => <Chip key={k} label={l} active={tab === k} onPress={() => setTab(k)} />)}
         </View>

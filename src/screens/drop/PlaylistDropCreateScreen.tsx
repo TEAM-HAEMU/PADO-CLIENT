@@ -18,6 +18,7 @@ import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { formatTotal } from '@/utils/format';
 import { playlistCover } from '@/utils/playlists';
+import { clampText } from '@/utils/text';
 
 /** 플리 카드 (Figma 높이 80 · 모서리 4) — 고르면 옅은 하늘 바탕 + 시안 동그라미 */
 const card = (on: boolean): ViewStyle => ({
@@ -97,7 +98,7 @@ export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'Pla
                 </View>
                 <RadioGlyph on />
               </View>
-              <Field value={newName} onChangeText={t => setNewName(t.slice(0, 30))} placeholder="플레이리스트 이름" accessibilityLabel="플레이리스트 이름" onFocus={scroll.onFocus} />
+              <Field value={newName} onChangeText={t => setNewName(clampText(t, 30))} placeholder="플레이리스트 이름" accessibilityLabel="플레이리스트 이름" onFocus={scroll.onFocus} />
               <AddLink label="곡 고르기" onPress={() => navigation.navigate('AddSongs', { picker: 'newPlaylist', existing: newSongs.map(s => s.id) })} />
             </View>
           ) : (

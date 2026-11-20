@@ -11,6 +11,7 @@ import { colors, fonts, glow } from '@/theme/tokens';
 import { Icon, type IconName } from './Icon';
 import { artUrl } from '@/utils/artUrl';
 import { trackTap } from '@/services/analytics';
+import { clampText } from '@/utils/text';
 
 // ── Typography — Pretendard (Figma 새 디자인 텍스트 스타일 text/* · B Deep/*)
 const ls = (size: number, pct: number) => (size * pct) / 100;
@@ -75,7 +76,7 @@ function textOf(node: React.ReactNode): string {
 export function Press({ style, children, onPressIn, onPressOut, onPress, onLongPress, accessibilityRole = 'button', trackAs, ...rest }: Omit<PressableProps, 'style' | 'children'> & { style?: StyleProp<ViewStyle>; children?: React.ReactNode; trackAs?: string }) {
   const [pressed, setPressed] = React.useState(false);
   // 분석: 모든 버튼 탭을 자동 기록 (라벨 → trackAs, 접근성 라벨, 테스트 ID, 없으면 버튼 안 글자 순). 숫자는 #으로 바뀐다
-  const label = () => trackAs || rest.accessibilityLabel || rest.testID || textOf(children).slice(0, 60);
+  const label = () => trackAs || rest.accessibilityLabel || rest.testID || clampText(textOf(children), 60);
   return (
     <Pressable
       {...rest}
@@ -181,9 +182,10 @@ export function Avatar({ uri, name, size = 36 }: { uri?: string | null; name?: s
 // ── Misc
 export const Divider = ({ style }: { style?: ViewStyle }) => <View style={[{ height: 1, backgroundColor: colors.line }, style]} />;
 
-export function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label?: string }) {
+/** disabled: 값은 그대로 보여 주되 흐리게(0.4, PrimaryButton과 같은 값) 하고 누름을 막는다 — 위 단계(예: 휴대폰 알림 권한)가 꺼져 있어 바꿔도 소용없을 때 */
+export function Toggle({ value, onChange, label, disabled }: { value: boolean; onChange: (v: boolean) => void; label?: string; disabled?: boolean }) {
   return (
-    <Press onPress={() => onChange(!value)} hitSlop={8} accessibilityRole="switch" accessibilityState={{ checked: value }} accessibilityLabel={label} style={{ width: 50, height: 30, borderRadius: 15, backgroundColor: value ? '#E8F9FF' : colors.card2, padding: 3, alignItems: value ? 'flex-end' : 'flex-start' }}>
+    <Press onPress={() => onChange(!value)} disabled={disabled} hitSlop={8} accessibilityRole="switch" accessibilityState={{ checked: value, disabled: !!disabled }} accessibilityLabel={label} style={{ width: 50, height: 30, borderRadius: 15, backgroundColor: value ? '#E8F9FF' : colors.card2, padding: 3, alignItems: value ? 'flex-end' : 'flex-start', opacity: disabled ? 0.4 : 1 }}>
       <View style={[{ width: 24, height: 24, borderRadius: 12, backgroundColor: value ? '#2BC3FF' : colors.faint }, value ? glow(0.5, 6) : null]} />
     </Press>
   );

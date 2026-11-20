@@ -17,6 +17,7 @@ import { colors, fonts } from '@/theme/tokens';
 import { track } from '@/services/analytics';
 import { formatRelative } from '@/utils/format';
 import { MoreGlyph, SendGlyph } from '@/components/player/glyphs';
+import { clampText } from '@/utils/text';
 
 const SEND = '#12214A'; // Figma 보내기 버튼 남색
 
@@ -116,8 +117,8 @@ export default function CommentsScreen({ navigation, route }: RootScreen<'Commen
         renderItem={renderItem}
       />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 24, paddingTop: 12 }}>
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 18, paddingRight: 8, height: 38, borderRadius: 99, backgroundColor: '#F7F7F7', borderWidth: editing ? 1 : 0, borderColor: colors.primaryDeep }}>
-          <TextInput value={text} onChangeText={t => setText(t.slice(0, 100))} placeholder={editing ? '댓글 수정' : `${target} 한마디`} placeholderTextColor="#BABABA" style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 14 }} onSubmitEditing={submit} returnKeyType="send" selectionColor={colors.primary} />
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 18, paddingRight: 8, minHeight: 38, borderRadius: 99, backgroundColor: '#F7F7F7', borderWidth: editing ? 1 : 0, borderColor: colors.primaryDeep }}>
+          <TextInput value={text} onChangeText={t => setText(clampText(t, 100))} placeholder={editing ? '댓글 수정' : `${target} 한마디`} placeholderTextColor="#BABABA" maxFontSizeMultiplier={1.2} style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 14 }} onSubmitEditing={submit} returnKeyType="send" selectionColor={colors.primary} />
           {editing ? <Press onPress={() => { setEditing(null); setText(''); }} hitSlop={8} accessibilityLabel="수정 취소"><Icon name="close" size={16} color={colors.ink3} /></Press> : null}
         </View>
         <Press onPress={submit} disabled={!text.trim() || busy} hitSlop={8} accessibilityLabel="보내기" style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: SEND, opacity: text.trim() ? 1 : 0.35, alignItems: 'center', justifyContent: 'center' }}>

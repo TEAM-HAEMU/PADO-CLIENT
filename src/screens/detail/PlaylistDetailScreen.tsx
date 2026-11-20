@@ -72,7 +72,7 @@ export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'
       const q = shuffle ? shuffled(ids) : ids;
       if (q.length) navigation.navigate('Player', { songId: q[0], queue: q, autoplay: true });
     };
-    return <View style={{ marginBottom: 20 }}><PlaylistHero images={p.songs.map(s => s.albumImagePath)} title={p.name} meta={`${p.songs.length}곡 · ${formatTotal(total)}`} onPlay={() => play(false)} onShuffle={() => play(true)} onService={() => p.songs[0] && navigation.navigate('ServicePicker', { song: p.songs[0] })} /></View>;
+    return <View style={{ marginBottom: 20 }}><PlaylistHero images={p.songs.map(s => s.albumImagePath)} title={p.name} meta={`${p.songs.length}곡 · ${formatTotal(total)}`} onPlay={() => play(false)} onShuffle={() => play(true)} onService={() => p.songs[0] && navigation.navigate('ServicePicker', { song: p.songs[0] })} empty={!p.songs.length} /></View>;
   }, [p, qc, navigation]);
 
   if (!p) return <ScreenState title="플레이리스트" error={error} onRetry={() => refetch()} />;

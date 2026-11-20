@@ -5,6 +5,7 @@
  * 위치는 주소가 아니라 좌표로 보낸다(서버가 행정구역을 판정).
  */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { ApiError } from '@/api/errors';
 import { create } from 'zustand';
 import { settingsApi } from '@/api/endpoints';
 import type { DropRadius } from '@/api/types';
@@ -59,6 +60,21 @@ async function fetchRadius(at: Coords | null) {
   return r;
 }
 
+/** 다시 묻는 주기 — 평소 10분 */
+export const RADIUS_REFRESH_MS = 10 * 60_000;
+/** 네트워크·서버(5xx) 오류로 실패했을 때 첫 재시도 간격 — 실패가 이어질 때마다 두 배, 10분까지 */
+export const RADIUS_RETRY_MS = 30_000;
+/**
+ * 다음에 다시 물을 때까지(ms). 마지막 요청이 네트워크·5xx로 실패했으면 짧게 다시 묻는다 —
+ * 첫 실행에서 한 번도 못 받았으면 그동안 기본값(거리 5km·재생 500m)이 10분 동안 남지 않게. 4xx·응답 모양 오류는 다시 해도 같으니 평소 주기
+ */
+export function radiusRefetchMs(state: { status: string; error: unknown; errorUpdateCount: number }) {
+  const e = state.error;
+  const transient = state.status === 'error' && e instanceof ApiError && (e.status === 0 || e.status >= 500);
+  if (!transient) return RADIUS_REFRESH_MS;
+  return Math.min(RADIUS_REFRESH_MS, RADIUS_RETRY_MS * 2 ** Math.max(0, state.errorUpdateCount - 1));
+}
+
 /** 앱 전체가 같이 쓰는 기준 좌표 — 위치가 300m 넘게 바뀔 때만 새 객체 */
 let anchor: Coords | null = null;
 const anchorOf = (c: Coords | null) => (anchor = nextAnchor(anchor, c));
@@ -75,10 +91,14 @@ export function useDropRadius(): DropRadius {
     initialData: () => cachedRadius() ?? undefined,
     initialDataUpdatedAt: 0,
     placeholderData: keepPreviousData,
-    staleTime: 10 * 60_000,
-    refetchInterval: 10 * 60_000,
+    staleTime: RADIUS_REFRESH_MS,
+    // 이 훅은 여러 화면이 같이 쓴다 — 새로 마운트될 때는 아직 한 번도 묻지 않았을 때만 받는다.
+    // 받기에 실패한 뒤(서버 장애·오프라인)에도 화면을 열 때마다 다시 묻지 않게: 다음 시도는 주기(radiusRefetchMs)·좌표 변경·오래 있다 돌아올 때
+    refetchOnMount: query => query.state.dataUpdateCount === 0 && query.state.errorUpdateCount === 0,
+    retryOnMount: false,
+    refetchInterval: query => radiusRefetchMs(query.state),
     gcTime: Infinity,
-    retry: 1,
+    // 재시도는 기본 정책(4xx는 안 함, 네트워크·5xx는 한 번 — hooks/queryClient)
   });
   return q.data ?? DEFAULT_RADIUS;
 }

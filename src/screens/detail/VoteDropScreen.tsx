@@ -13,6 +13,7 @@ import { qk, useComments, useDrop, useLikeCount, useToggleLike, useIsLiked } fro
 import { useDropOpenedEvent } from '@/hooks/useDropOpenedEvent';
 import { ScreenState } from '@/components/ui/ScreenState';
 import type { RootScreen } from '@/navigation/types';
+import { useDropScreen } from '@/navigation/dropScreen';
 import { useAuth } from '@/store/auth';
 import { toast } from '@/store/toast';
 import { useDropMenu } from '@/hooks/useDropMenu';
@@ -27,6 +28,8 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
   const qc = useQueryClient();
   const drop = useDrop(dropId);
   const d = drop.data && isVoteDetail(drop.data) ? drop.data : null;
+  // 다른 타입 드랍(링크를 잘못 만들었거나 오래된 링크)이면 맞는 화면으로 넘긴다
+  const shape = useDropScreen('VoteDrop', navigation, dropId, drop.data, source);
   useDropOpenedEvent(dropId, 'VOTE', d, source);
   const comments = useComments(dropId).data ?? [];
   const likeCount = useLikeCount(dropId).data;
@@ -50,7 +53,7 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
   const more = menu.open;
 
 
-  if (!d) return <ScreenState title="투표" error={drop.error} onRetry={() => drop.refetch()} />;
+  if (!d) return <ScreenState title="투표" error={drop.error ?? shape.error} onRetry={() => drop.refetch()} />;
   const total = d.totalVotes || 0;
   const voted = !!d.userVotedOption;
 

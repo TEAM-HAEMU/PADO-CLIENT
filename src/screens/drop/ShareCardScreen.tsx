@@ -16,6 +16,7 @@ import { track } from '@/services/analytics';
 import { kv } from '@/store/storage';
 import { toast } from '@/store/toast';
 import { colors } from '@/theme/tokens';
+import { shareFileName } from '@/utils/shareFileName';
 
 const STYLES: { id: CardStyle; label: string }[] = [
   { id: 'C', label: '지도 위 핀' },
@@ -40,7 +41,9 @@ export default function ShareCardScreen({ navigation, route }: RootScreen<'Share
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [busy, setBusy] = useState<'story' | 'other' | null>(null);
   const shot = useRef<React.ComponentRef<typeof View>>(null);
-  const ready = useRef(false);
+  // 캡처용 카드가 앨범 아트까지 다 그려진 스타일 — 스타일을 바꾸면 그 스타일 카드가 새로 마운트되어 준비되면 바뀐다.
+  // 불리언(준비됨/안 됨)으로 두고 누를 때 끄면, 이미 고른 스타일을 다시 눌렀을 때 카드는 다시 마운트되지 않아(key 같음) 끝내 켜지지 않고 공유가 매번 3초 기다렸다
+  const readyFor = useRef<CardStyle | null>(null);
   // C 카드의 실제 지도 — 보이는 미리보기에서 한 번 찍어 두고 저장 이미지·썸네일에 같이 쓴다
   const [mapImage, setMapImage] = useState<string | null>(null);
   const mapRef = useRef<string | null>(null);
@@ -51,18 +54,24 @@ export default function ShareCardScreen({ navigation, route }: RootScreen<'Share
   // 화면에 맞는 가장 큰 9:16
   const cardW = Math.floor(Math.min(box.w - 48, (box.h - 16) * (9 / 16)));
 
-  const capture = async () => {
-    for (let i = 0; i < 30 && !ready.current; i++) await new Promise<void>(r => setTimeout(() => r(), 100)); // 앨범 아트를 기다린다 (최대 3초)
+  const capture = async (result: 'tmpfile' | 'data-uri' = 'tmpfile') => {
+    for (let i = 0; i < 30 && readyFor.current !== variant; i++) await new Promise<void>(r => setTimeout(() => r(), 100)); // 앨범 아트를 기다린다 (최대 3초)
     // 지도 카드면 실제 지도 사진도 기다린다 (최대 5초 — 못 받으면 그린 지도로)
     if (variant === 'C' && wantsMap) for (let i = 0; i < 50 && !mapRef.current; i++) await new Promise<void>(r => setTimeout(() => r(), 100));
     if (variant === 'C' && wantsMap && mapRef.current) await new Promise<void>(r => setTimeout(() => r(), 150)); // 캡처용 카드에 사진이 그려질 틈
     // 크기를 넘기지 않는다 — 넘기면 찍은 뒤 늘려서 흐려진다. PNG로 한 번 덜 압축한다 (인스타가 어차피 다시 압축)
-    return captureRef(shot, { format: 'png', result: 'tmpfile', fileName: 'pado-drop' });
+    return captureRef(shot, { format: 'png', result, fileName: 'pado-drop' });
   };
 
   const toOthers = async (uri?: string) => {
-    const file = uri ?? await capture();
     // 사진만 보낸다 — 글을 붙이면 받는 앱에 따라 사진과 따로 가거나 사진이 빠진다
+    if (Platform.OS === 'ios') {
+      // iOS 공유 시트와 받는 앱은 파일 이름을 그대로 보여 준다. view-shot은 iOS에서 fileName을 무시하고 UUID 이름으로 저장해서,
+      // 이미지를 데이터로 받아 react-native-share가 임시 폴더에 'pado-<곡 제목>.png'로 써서 보내게 한다 (QA U-04 a)
+      await Share.open({ url: await capture('data-uri'), filename: shareFileName(data.title), type: 'image/png', failOnCancel: false });
+      return;
+    }
+    const file = uri ?? await capture();
     await Share.open({ url: file, type: 'image/png', failOnCancel: false });
   };
 
@@ -100,14 +109,14 @@ export default function ShareCardScreen({ navigation, route }: RootScreen<'Share
       {/* 캡처용 — 화면 밖에 실제 크기(1080px 폭)로 그린다 */}
       <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: 'absolute', left: -SHOT_W * 2, top: 0 }}>
         <View ref={shot} collapsable={false}>
-          <StoryCard key={variant} data={data} variant={variant} width={SHOT_W} mapImage={mapImage} onReady={() => { ready.current = true; }} />
+          <StoryCard key={variant} data={data} variant={variant} width={SHOT_W} mapImage={mapImage} onReady={() => { readyFor.current = variant; }} />
         </View>
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, paddingVertical: 18 }}>
         {STYLES.map(s => {
           const on = s.id === variant;
           return (
-            <Press key={s.id} accessibilityLabel={s.label} accessibilityState={{ selected: on }} onPress={() => { ready.current = false; pick(s.id); }}
+            <Press key={s.id} accessibilityLabel={s.label} accessibilityState={{ selected: on }} onPress={() => pick(s.id)}
               style={{ borderRadius: 10, borderWidth: 2, borderColor: on ? colors.primary : 'transparent', padding: 2 }}>
               <View pointerEvents="none" style={{ borderRadius: 7, overflow: 'hidden' }}>
                 <StoryCard data={data} variant={s.id} width={THUMB} mapImage={mapImage} />

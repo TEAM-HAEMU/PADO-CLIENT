@@ -96,7 +96,7 @@ let mapLoadTracked = false;
 export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabParamList, 'Map'>) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, requestPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission })));
+  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, askPermission } = useLocation(useShallow(s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, askPermission: s.askPermission })));
   // 위치를 받기 전엔 지난번 위치 근처에 카메라를 둔다 (처음 켤 때 엉뚱한 동네가 먼저 보이지 않게)
   const startHint = useRef(lastKnown()).current; // 한 번만 읽는다 (매번 새 객체면 아래 정렬·자동 재생이 계속 다시 돈다)
   const here = coords ?? startHint ?? FALLBACK;
@@ -138,10 +138,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       if (Platform.OS === 'android') return Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS').catch(() => Linking.openSettings());
       return Linking.openSettings();
     }
-    const p = await refreshPermission();
-    if (p === 'granted') return setWatchKey(k => k + 1);
-    if ((await requestPermission()) === 'granted') return setWatchKey(k => k + 1);
-    Linking.openSettings();
+    // 권한 꺼짐 — 다시 물을 수 있으면 요청 창, iOS 거부·Android '다시 묻지 않음'이면 설정 앱 (허용되면 감시를 다시)
+    await askPermission();
   };
   const locationHelp =
     fix === 'locating' ? '지금 있는 곳을 찾고 있어요…'
@@ -171,8 +169,9 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   // 마커 스냅샷 추적·앨범 아트 미리 받기는 마커마다 한다 (DropMarker)
   const dropIds = useMemo(() => idSetKey(drops.map(d => d.droppingId)), [drops]);
   // 투표·플리는 미리보기 시트 없이 바로 전체 화면으로 가서 상세를 기다리는 동안 빈 화면이 된다 → 주변 목록이 오면 미리 받아둔다
+  // 받아 둔 상세는 30분 동안 건너뛰고 지우지도 않는다 — 드랍을 하나 만들어 목록이 바뀌어도 새로 생긴 것만 받는다 (연 화면은 그 화면이 30초 기준으로 새로 받는다)
   const qc = useQueryClient();
-  const prefetchDrop = useCallback((id: string) => qc.prefetchQuery({ queryKey: qk.drop(id), queryFn: () => dropApi.get(id), staleTime: 30_000 }), [qc]);
+  const prefetchDrop = useCallback((id: string) => qc.prefetchQuery({ queryKey: qk.drop(id), queryFn: () => dropApi.get(id), staleTime: 30 * 60_000, gcTime: 30 * 60_000 }), [qc]);
 
   // 재생 반경 밖(내 드랍·좋아요한 드랍 제외)은 잠금 — 핀은 흐리게 곡·커버 없이, 눌러도 안 열리고, 자동 재생에서도 뺀다
   const lockOf = useDropLock();

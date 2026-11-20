@@ -14,6 +14,7 @@ import { Glyph } from '@/components/detail/glyphs';
 import { DiscRow, SheetTitle } from '@/components/detail/parts';
 import { ServiceGlyph } from '@/components/ui/Brand';
 import { Sheet } from '@/components/ui/Sheet';
+import { dialog } from '@/components/ui/Dialog';
 import { qk, useMyLikes, useSongSearch } from '@/hooks/api';
 import { useDebounced } from '@/hooks/useDebounced';
 import { useDropLock } from '@/hooks/useDropLock';
@@ -138,6 +139,19 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
   const pickedIds = useMemo(() => new Set(picked.map(x => x.id)), [picked]);
   const renderItem = useCallback(({ item: s }: { item: Song }) => <PickRow song={s} on={pickedIds.has(s.id)} inList={existing.has(s.id)} onToggle={toggle} />, [pickedIds, existing, toggle]);
 
+  // 이탈 방지 — 고른 곡이 있는데 닫으면(뒤로·배경 탭·쓸어내리기) 버릴지 묻는다. 완료로 닫을 때는 묻지 않는다
+  const pickedRef = useRef(picked);
+  pickedRef.current = picked;
+  const finished = useRef(false);
+  const confirmClose = useCallback(() => {
+    const n = pickedRef.current.length;
+    if (finished.current || !n) return Promise.resolve(true);
+    return new Promise<boolean>(resolve => dialog.alert(`고른 ${n}곡을 버릴까요?`, '나가면 고른 곡은 담기지 않아요.', [
+      { text: '계속 고르기', style: 'cancel', onPress: () => resolve(false) },
+      { text: '버리고 나가기', style: 'destructive', onPress: () => resolve(true) },
+    ]));
+  }, []);
+
   const submitting = React.useRef(false);
   const done = async () => {
     if (!picked.length) return navigation.goBack();
@@ -159,10 +173,12 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
         qc.invalidateQueries({ queryKey: ['playlist', playlistId] }); qc.invalidateQueries({ queryKey: ['playlists'] });
         track('playlist_songs_added', { playlist_id: playlistId, count: picked.length, source: 'add_songs' });
         toast(`${picked.length}곡을 담았어요.`, 'success');
+        finished.current = true;
         navigation.goBack();
       } catch (e) { toast(errorMessage(e), 'error'); } finally { setBusy(false); submitting.current = false; }
     } else {
       useDraft.getState().set({ picked });
+      finished.current = true;
       navigation.goBack();
     }
   };
@@ -176,12 +192,12 @@ export default function AddSongsScreen({ navigation, route }: RootScreen<'AddSon
   );
 
   return (
-    <Sheet style={{ height: '82%', paddingHorizontal: 26 }}>
+    <Sheet style={{ height: '82%', paddingHorizontal: 26 }} confirmClose={confirmClose}>
       <View style={{ gap: 20, flex: 1 }}>
         <SheetTitle title="곡 추가" desc={desc} right={<View style={{ flexDirection: 'row', gap: 4 }}>{tabIcon('liked', 'heart', '좋아요')}{tabIcon('nearby', 'drop', '주변 드랍')}</View>} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 40, paddingHorizontal: 16, borderRadius: 99, borderWidth: 1, borderColor: '#55B0FF' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40, paddingHorizontal: 16, borderRadius: 99, borderWidth: 1, borderColor: '#55B0FF' }}>
           <Glyph name="search" size={15} color="#55B0FF" />
-          <TextInput value={q} onChangeText={setQ} onFocus={() => setTab('search')} placeholder="곡을 검색하세요" placeholderTextColor="#B0B0B2" selectionColor={colors.primary} style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 13, letterSpacing: -0.065 }} autoFocus />
+          <TextInput value={q} onChangeText={setQ} onFocus={() => setTab('search')} placeholder="곡을 검색하세요" placeholderTextColor="#B0B0B2" selectionColor={colors.primary} maxFontSizeMultiplier={1.2} style={{ flex: 1, alignSelf: 'stretch', paddingVertical: 0, color: colors.ink, fontFamily: fonts.regular, fontSize: 13, letterSpacing: -0.065 }} autoFocus />
           <ServiceGlyph service="spotify" size={14} />
         </View>
         {tab !== 'search' ? <T style={{ marginTop: -8, fontFamily: fonts.medium, fontSize: 12, lineHeight: 17, color: colors.ink3 }}>{tab === 'liked' ? '좋아요한 음악 드랍' : '주변 드랍'}</T> : null}

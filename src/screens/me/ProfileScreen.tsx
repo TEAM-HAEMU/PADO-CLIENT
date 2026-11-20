@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dropApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import { type DropSummary, isPlaylistDetail } from '@/api/types';
+import { MINI_DISC_CLEARANCE } from '@/components/music/miniDiscLayout';
 import { Art, Avatar, Empty, Press, T, PrimaryButton } from '@/components/ui';
 import { MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
@@ -111,7 +112,8 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 120 }}>
+      {/* 아래 여백은 떠 있는 미니 플레이어 원 높이까지 — 맨 아래 줄·카드 모서리가 원에 가려지지 않게 (QA U-04 b) */}
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + MINI_DISC_CLEARANCE }}>
         {/* Figma: 프로필 사진 뒤로 wave(624×305)가 깔린다 */}
         <Wave scale={1.2} style={{ position: 'absolute', left: -73, right: 0, top: insets.top + 97 }} />
         {/* 오른쪽 위 아이콘 줄 (24px · 간격 4) — 알림(하단 바에서 옮겨옴) · 프로필 편집 · 설정 */}
