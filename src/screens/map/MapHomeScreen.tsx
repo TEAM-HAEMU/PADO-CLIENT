@@ -101,7 +101,7 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
   // 위치 감시는 계속 돌고(드랍 만들기·푸시 지역 등이 쓴다), 다시 보이는 렌더에서 최신 위치를 한 번에 읽어 맞춘다.
   // 투명 시트(핀 미리보기 등)가 위에 떠도 지도는 비쳐 보이므로 그대로 따라간다
   const { focused, live } = useMapLive();
-  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, requestPermission } = useStoreWhile(useLocation, s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, requestPermission: s.requestPermission }), live, shallow);
+  const { coords, fix, reason, label, setPlace, start, restart, recheck, refreshPermission, askPermission } = useStoreWhile(useLocation, s => ({ coords: s.coords, fix: s.fix, reason: s.reason, label: s.label, setPlace: s.setPlace, start: s.start, restart: s.restart, recheck: s.recheck, refreshPermission: s.refreshPermission, askPermission: s.askPermission }), live, shallow);
   // 위치를 받기 전엔 지난번 위치 근처에 카메라를 둔다 (처음 켤 때 엉뚱한 동네가 먼저 보이지 않게)
   const startHint = useRef(lastKnown()).current; // 한 번만 읽는다 (매번 새 객체면 아래 정렬·자동 재생이 계속 다시 돈다)
   const here = coords ?? startHint ?? FALLBACK;
@@ -142,10 +142,8 @@ export default function MapHomeScreen({ navigation }: BottomTabScreenProps<TabPa
       if (Platform.OS === 'android') return Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS').catch(() => Linking.openSettings());
       return Linking.openSettings();
     }
-    const p = await refreshPermission();
-    if (p === 'granted') return setWatchKey(k => k + 1);
-    if ((await requestPermission()) === 'granted') return setWatchKey(k => k + 1);
-    Linking.openSettings();
+    // 권한 꺼짐 — 다시 물을 수 있으면 요청 창, iOS 거부·Android '다시 묻지 않음'이면 설정 앱 (허용되면 감시를 다시)
+    await askPermission();
   };
   const locationHelp =
     fix === 'locating' ? '지금 있는 곳을 찾고 있어요…'

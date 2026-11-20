@@ -121,3 +121,57 @@ test('아래로 쓸어 닫기도 번호로 부르고, 시트가 사라지면 번
   mounted = undefined;
   expect(jsCallbackCount()).toBe(before);
 });
+
+/* 닫기 전 확인 (QA 2026-11-20 U-02 — 곡 추가 시트에서 고른 곡이 확인 없이 버려지던 것) */
+describe('confirmClose', () => {
+  const flush = () => act(async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); });
+  function renderWith(confirmClose: () => Promise<boolean>) {
+    act(() => { mounted = TestRenderer.create(React.createElement(Sheet, { confirmClose, children: React.createElement('Body') })); });
+    return mounted!;
+  }
+
+  test('취소하면 닫지 않고, 닫힘 애니메이션도 시작하지 않는다', async () => {
+    const ask = jest.fn(async () => false);
+    const r = renderWith(ask);
+    const prevent = beforeRemove('GO_BACK');
+    expect(prevent).toHaveBeenCalled();
+    await flush();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(mockNav.dispatch).not.toHaveBeenCalled();
+    expect(rootView(r).props.pointerEvents).toBe('auto');
+    // 다시 닫으려 하면 또 묻는다
+    beforeRemove('GO_BACK');
+    await flush();
+    expect(ask).toHaveBeenCalledTimes(2);
+  });
+
+  test('확인하면 원래 닫기를 다시 보내고, 그때는 묻지 않고 닫힘 애니메이션으로 간다', async () => {
+    const ask = jest.fn(async () => true);
+    const r = renderWith(ask);
+    beforeRemove('GO_BACK');
+    await flush();
+    expect(mockNav.dispatch).toHaveBeenCalledWith({ type: 'GO_BACK' });
+    beforeRemove('GO_BACK'); // 다시 보낸 닫기
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(rootView(r).props.pointerEvents).toBe('none');
+  });
+
+  test('묻는 동안 연타한 닫기는 한 번만 묻는다', async () => {
+    let answer!: (v: boolean) => void;
+    const ask = jest.fn(() => new Promise<boolean>(res => { answer = res; }));
+    renderWith(ask);
+    beforeRemove('GO_BACK');
+    beforeRemove('GO_BACK');
+    expect(ask).toHaveBeenCalledTimes(1);
+    answer(false);
+    await flush();
+  });
+
+  test('앱이 스택을 재구성(reset)할 때는 묻지 않는다', () => {
+    const ask = jest.fn(async () => false);
+    const r = renderWith(ask);
+    beforeRemove('RESET');
+    expect(ask).not.toHaveBeenCalled();
+    expect(rootView(r).props.pointerEvents).toBe('none');
+  });
+});

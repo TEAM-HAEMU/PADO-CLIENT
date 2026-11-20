@@ -24,6 +24,7 @@ import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
 import { colors, fonts } from '@/theme/tokens';
 import { firstSignupError, type SignupErrors, type SignupField, validateSignup, validEmail } from '@/utils/signupForm';
+import { clampText, textLength } from '@/utils/text';
 
 const FALLBACK_TERMS: Term[] = [
   { type: 'SERVICE', title: '서비스 이용약관', version: '', required: true },
@@ -44,7 +45,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
   const terms = useQuery({ queryKey: ['terms'], queryFn: authApi.terms }).data ?? FALLBACK_TERMS;
   const [email, setEmail] = useState(providerEmail ?? '');
   const [password, setPassword] = useState('');
-  const [username, setUsername] = useState((social?.profile?.username ?? '').slice(0, 15));
+  const [username, setUsername] = useState(clampText(social?.profile?.username ?? '', 15));
   const [birth, setBirth] = useState(social?.profile?.birthDate ?? '');
   const [gender, setGender] = useState<boolean | null>(social?.profile?.gender ?? null);
   // 전체 듣기 앱 — 기기에 이미 고른 앱이 있으면 그대로 보여줌. 가입 성공 후 저장
@@ -148,7 +149,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
           />
           </View>
           {!social && <View onLayout={at('password')}><Field label="비밀번호" value={password} onChangeText={setPassword} secure placeholder="비밀번호를 입력하세요" help="8~20자" error={errors.password} onFocus={scroll.onFocus} /></View>}
-          <View onLayout={at('username')}><Field label="닉네임" value={username} onChangeText={t => setUsername(t.slice(0, 15))} placeholder="지도에 표시될 이름" help="지도에 표시될 이름이에요 (최대 15자)" error={errors.username} onFocus={scroll.onFocus} right={<T v="caption" c="lineStrong">{username.length}/15</T>} /></View>
+          <View onLayout={at('username')}><Field label="닉네임" value={username} onChangeText={t => setUsername(clampText(t, 15))} placeholder="지도에 표시될 이름" help="지도에 표시될 이름이에요 (최대 15자)" error={errors.username} onFocus={scroll.onFocus} right={<T v="caption" c="lineStrong">{textLength(username)}/15</T>} /></View>
           <View onLayout={at('birth')}><Field label="생년월일" value={birth} onChangeText={t => setBirth(formatBirth(t))} keyboardType="number-pad" placeholder="YYYY-MM-DD" error={errors.birth} onFocus={scroll.onFocus} /></View>
           <GenderSelect optional value={gender} onChange={setGender} />
           <ListenAppSelect value={listenApp} onChange={setListenApp} />
