@@ -7,6 +7,7 @@ import { clearAnalyticsLocation, setAnalyticsLocation, setAnalyticsRegion, track
 import { regionOf } from '@/utils/address';
 import { kv } from '@/store/storage';
 import type { Coords } from '@/utils/geo';
+import { clampText } from '@/utils/text';
 
 export type { Coords };
 
@@ -309,7 +310,7 @@ export const useLocation = create<LocationState>((set, get) => {
     label: '',
     address: '',
     setPlace: (label, address) => {
-      set({ label, address: address.slice(0, 200) });
+      set({ label, address: clampText(address, 200) });
       // 분석에는 시·군·구까지만 (동·번지는 보내지 않음)
       setAnalyticsRegion(regionOf(address));
     },

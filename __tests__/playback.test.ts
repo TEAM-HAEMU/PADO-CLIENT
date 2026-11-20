@@ -19,6 +19,7 @@ function renderHook<T>(hook: () => T) {
   return { result };
 }
 
+declare const process: { env: Record<string, string | undefined> };
 const st = () => usePreviewStore.getState();
 const SONG = { id: 'song-1', title: 't', artist: 'a' };
 
@@ -83,4 +84,29 @@ test('곡 선택 시 바로 미리듣기 (startPreview) — 재생 / 미리듣�
   resolve({ previewUrl: 'https://x/y.m4a' });
   expect(await p).toBe('cancelled');
   expect(st().key).toBeNull();
+});
+
+test('일시정지·재개는 그 곡 행만 다시 그린다 — 다른 곡 행은 그대로 (QA R-15)', () => {
+  // 8곡 목록: 행마다 usePreview(lazy) — 곡 3을 재생 중
+  const renders: Record<string, number> = {};
+  const playing: Record<string, boolean> = {};
+  const Row = ({ id }: { id: string }) => {
+    const p = usePreview({ id, title: id, artist: 'a' }, { lazy: true });
+    renders[id] = (renders[id] ?? 0) + 1;
+    playing[id] = p.playing;
+    return null;
+  };
+  const ids = Array.from({ length: 8 }, (_, i) => `row-${i}`);
+  act(() => { TestRenderer.create(React.createElement(React.Fragment, null, ids.map(id => React.createElement(Row, { key: id, id })))); });
+  act(() => { st().play('row-3', 'https://x/3.m4a'); });
+  expect(playing['row-3']).toBe(true);
+  ids.forEach(id => { renders[id] = 0; });
+  act(() => { st().toggle(); }); // 일시정지
+  expect(playing['row-3']).toBe(false);
+  act(() => { st().toggle(); }); // 재개
+  expect(playing['row-3']).toBe(true);
+  const total = ids.reduce((a, id) => a + renders[id], 0);
+  if (process.env.PADO_RENDER_REPORT === '1') console.log(`[render] 일시정지+재개 8곡 ${JSON.stringify({ total, playingRow: renders['row-3'] })}`);
+  expect(renders['row-3']).toBe(2);
+  expect(total).toBe(2);
 });
