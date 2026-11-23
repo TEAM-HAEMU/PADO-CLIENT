@@ -239,10 +239,8 @@ describe('시트 폭', () => {
     expect(st).toMatchObject({ width: '100%', maxWidth: 600, alignSelf: 'center' });
   });
 
-  test('fullWidth(지도 위 핀 미리보기)는 최대 폭을 두지 않는다', () => {
-    const st = flat(wrapper(renderAt(673, { fullWidth: true })).props.style);
-    expect(st.maxWidth).toBeUndefined();
-    expect(st.width).toBeUndefined();
-    expect(st.alignSelf).toBeUndefined();
+  test('펼친 폴드(673)에서도 최대 600, 가운데 — 핀 미리보기와 그 위 댓글 시트가 같은 폭', () => {
+    const st = flat(wrapper(renderAt(673)).props.style);
+    expect(st).toMatchObject({ width: '100%', maxWidth: 600, alignSelf: 'center' });
   });
 });
