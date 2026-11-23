@@ -80,7 +80,8 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
   const failed = drop.error ?? shape.error;
 
   if (!music) {
-    return <Sheet><View style={{ height: 320 }}>{failed ? <T v="body" c="ink2" style={{ textAlign: 'center', marginTop: 60 }}>{errorMessage(failed)}</T> : <Loading />}</View></Sheet>;
+    // 지도 위 미리보기는 넓은 화면에서도 화면 폭 그대로 (지도·플레이어처럼 최대 폭을 두지 않는다 — Z-07)
+    return <Sheet fullWidth><View style={{ height: 320 }}>{failed ? <T v="body" c="ink2" style={{ textAlign: 'center', marginTop: 60 }}>{errorMessage(failed)}</T> : <Loading />}</View></Sheet>;
   }
 
   // 알약 크기 — Figma 316×421, 시트 전체가 화면 위 지도 머리(동 이름)를 가리지 않게 줄인다.
@@ -107,6 +108,7 @@ export default function PinPreviewScreen({ navigation, route }: RootScreen<'PinP
 
   return (
     <Sheet
+      fullWidth
       scroll={false}
       style={{ paddingHorizontal: 22, borderTopLeftRadius: 50, borderTopRightRadius: 50, shadowColor: '#12214A', shadowOpacity: 0.15, shadowRadius: 40, shadowOffset: { width: 0, height: 0 }, elevation: 8 }}
       headerOverlap={overlap}

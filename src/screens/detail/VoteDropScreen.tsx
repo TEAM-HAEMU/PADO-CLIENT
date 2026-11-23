@@ -7,6 +7,7 @@ import { dropApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import { isVoteDetail, type VoteOption } from '@/api/types';
 import { Avatar, IconButton, Press, T, TopBar } from '@/components/ui';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { Glyph, VoteFill, VOTE_FILL_W } from '@/components/detail/glyphs';
 import { AddressPill, BgWave, CommentBar, DiscRow } from '@/components/detail/parts';
 import { qk, useComments, useDrop, useLikeCount, useToggleLike, useIsLiked } from '@/hooks/api';
@@ -25,6 +26,7 @@ import { track } from '@/services/analytics';
 export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDrop'>) {
   const { dropId, source } = route.params;
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 내용만 가운데 600까지 (Z-07)
   const qc = useQueryClient();
   const drop = useDrop(dropId);
   const d = drop.data && isVoteDetail(drop.data) ? drop.data : null;
@@ -61,7 +63,7 @@ export default function VoteDropScreen({ navigation, route }: RootScreen<'VoteDr
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       <BgWave />
       <TopBar title="투표" onBack={navigation.goBack} right={<IconButton name="more" onPress={more} color="#C5C5C5" accessibilityLabel="더보기" />} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 22, paddingBottom: insets.bottom + 90 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24 + gutter, paddingTop: 22, paddingBottom: insets.bottom + 90 }}>
         <View style={{ gap: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <AddressPill address={dropPlace(d)} />

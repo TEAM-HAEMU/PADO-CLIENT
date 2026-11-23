@@ -1,6 +1,6 @@
 /** 4.5 플리 (탭) — 내 플레이리스트(전체) · 좋아요한 드랍 · 내가 드랍한 플리(바다에 떨어뜨린) (Figma 'B 4.3 플리 (탭)') */
 import React, { useState } from 'react';
-import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Collage } from '@/components/music/Collage';
 import { MINI_DISC_CLEARANCE } from '@/components/music/miniDiscLayout';
@@ -9,16 +9,18 @@ import { Art, Chip, Empty, Press, T, PrimaryButton } from '@/components/ui';
 import { listStatus } from '@/components/ui/ScreenState';
 import { Glyph } from '@/components/detail/glyphs';
 import { BgWave } from '@/components/detail/parts';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { useMyDrops, useMyLikes, useMyPlaylists, usePlaylistDetails } from '@/hooks/api';
 import { dropPlace } from '@/utils/address';
 import { playlistCover } from '@/utils/playlists';
+import { PLAYLIST_GRID_GAP, PLAYLIST_GRID_PAD, playlistGrid } from '@/utils/contentColumn';
 import { colors, fonts } from '@/theme/tokens';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 
 type Tab = 'mine' | 'liked' | 'dropped';
 const TABS: [Tab, string][] = [['mine', '전체'], ['liked', '좋아요'], ['dropped', '바다에 떨어뜨린']];
 
-/** 2열 격자 한 칸 — 정사각 커버(r18.9) + 이름 16 + 보조 12 */
+/** 격자 한 칸 (폰 2칸 · 넓은 화면 3칸) — 정사각 커버(r18.9) + 이름 16 + 보조 12 */
 function Cell({ size, cover, title, sub, onPress }: { size: number; cover: React.ReactNode; title: string; sub: string; onPress: () => void }) {
   return (
     <Press onPress={onPress} trackAs="플레이리스트 칸" style={{ width: size, gap: 10 }}>
@@ -32,8 +34,9 @@ function Cell({ size, cover, title, sub, onPress }: { size: number; cover: React
 }
 
 export default function PlaylistsScreen() {
-  const { width } = useWindowDimensions();
-  const cell = Math.floor((width - 48 - 14) / 2); // 좌우 여백 24 + 칸 사이 14
+  // 넓은 화면(펼친 폴드 · 태블릿)에선 내용을 가운데 600까지만 쓰고 3칸 — 2칸이면 카드가 290dp 정사각으로 커졌다 (Z-07)
+  const { width, gutter } = useContentColumn();
+  const { cell } = playlistGrid(width);
   const insets = useSafeAreaInsets();
   const nav = useNavigation();
   const [tab, setTab] = useState<Tab>('mine');
@@ -46,7 +49,7 @@ export default function PlaylistsScreen() {
   const likes = likesQ.data ?? [];
   const myDropsQ = useMyDrops();
   const droppedPlaylists = (myDropsQ.data ?? []).filter((d): d is PlaylistDropSummary => d.type === 'PLAYLIST');
-  const grid = { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 20 } as const;
+  const grid = { flexDirection: 'row', flexWrap: 'wrap', columnGap: PLAYLIST_GRID_GAP, rowGap: 20 } as const;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -61,7 +64,7 @@ export default function PlaylistsScreen() {
           </Press>
         </View>
       </View>
-      <ScrollView contentContainerStyle={{ paddingTop: 16, paddingHorizontal: 24, paddingBottom: insets.bottom + MINI_DISC_CLEARANCE, gap: 24 }}>
+      <ScrollView contentContainerStyle={{ paddingTop: 16, paddingHorizontal: PLAYLIST_GRID_PAD + gutter, paddingBottom: insets.bottom + MINI_DISC_CLEARANCE, gap: 24 }}>
         <View style={{ flexDirection: 'row', gap: 12 }}>
           {TABS.map(([k, l]) => <Chip key={k} label={l} active={tab === k} onPress={() => setTab(k)} />)}
         </View>

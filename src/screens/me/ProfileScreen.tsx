@@ -1,6 +1,6 @@
 /** 5.1 프로필 — 내 드랍 지도 · 드랍 기록 · 좋아요 (오른쪽 위 종 아이콘 → 알림) */
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, ScrollView, View, useWindowDimensions } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 import { dialog } from '@/components/ui/Dialog';
 import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useQuery, useQueryClient, useQueries, type UseQueryResult } from '@tanstack/react-query';
@@ -13,6 +13,7 @@ import { MINI_DISC_CLEARANCE } from '@/components/music/miniDiscLayout';
 import { Art, Avatar, Empty, Press, T, PrimaryButton } from '@/components/ui';
 import { MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { listStatus } from '@/components/ui/ScreenState';
 import { MarkerArt, markerArtTiles } from '@/components/map/DropPin';
 import { isMarkerImageReady, prefetchMarkerImage, useTracking } from '@/components/map/DropMarker';
@@ -39,7 +40,8 @@ const PIN_ANCHOR = { x: 0.5, y: 1 };
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  // 넓은 화면(펼친 폴드)에선 내용만 가운데 600까지 — 스크롤·파도는 화면 전체, 미니 지도 폭도 내용 폭 기준 (Z-07)
+  const { width, gutter } = useContentColumn();
   const nav = useNavigation();
   const qc = useQueryClient();
   // 프로필은 탭이라 늘 마운트돼 있다 → 드랍 수만큼 나가는 요청(좋아요 수·플리 상세)은 이 화면이 보일 때만 받는다
@@ -113,7 +115,7 @@ export default function ProfileScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       {/* 아래 여백은 떠 있는 미니 플레이어 원 높이까지 — 맨 아래 줄·카드 모서리가 원에 가려지지 않게 (QA U-04 b) */}
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + MINI_DISC_CLEARANCE }}>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + MINI_DISC_CLEARANCE, paddingHorizontal: gutter }}>
         {/* Figma: 프로필 사진 뒤로 wave(624×305)가 깔린다 */}
         <Wave scale={1.2} style={{ position: 'absolute', left: -73, right: 0, top: insets.top + 97 }} />
         {/* 오른쪽 위 아이콘 줄 (24px · 간격 4) — 알림(하단 바에서 옮겨옴) · 프로필 편집 · 설정 */}

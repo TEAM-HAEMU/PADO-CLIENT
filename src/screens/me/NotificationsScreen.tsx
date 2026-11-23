@@ -9,6 +9,7 @@ import { type AppNotification, type DropDetail, type DropSummary, isMusicDetail,
 import { Art, Avatar, Empty, Loading, Press, SecondaryButton, T, TopBar } from '@/components/ui';
 import { MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { errorMessage } from '@/api/errors';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
@@ -55,6 +56,7 @@ const SectionGap = () => <View style={{ height: 12 }} />;
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const nav = useNavigation<RootScreen<'Notifications'>['navigation']>();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 목록만 가운데 600까지 (Z-07)
   const qc = useQueryClient();
   const { data = [], isLoading, refetch, isRefetching, isError, error } = useNotifications();
   const refresh = () => qc.invalidateQueries({ queryKey: ['notifications'] });
@@ -108,7 +110,7 @@ export default function NotificationsScreen() {
           keyExtractor={n => n.id}
           onRefresh={refetch}
           refreshing={isRefetching}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: insets.bottom + 32 }}
+          contentContainerStyle={{ paddingHorizontal: 24 + gutter, paddingTop: 8, paddingBottom: insets.bottom + 32 }}
           stickySectionHeadersEnabled={false}
           ItemSeparatorComponent={ItemGap}
           SectionSeparatorComponent={SectionGap}

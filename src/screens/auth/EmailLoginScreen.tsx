@@ -11,6 +11,7 @@ import { AUTH_PAGES, AuthButton, AuthDisclaimer, AuthHeader, AuthTitle } from '@
 import { Field } from '@/components/ui/Field';
 import { Press, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { env } from '@/config';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
@@ -23,6 +24,7 @@ const MOCK_ACCOUNT: { email: string; password: string } = env.useMock ? require(
 
 export default function EmailLoginScreen({ navigation, route }: RootScreen<'EmailLogin'>) {
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 폼을 가운데 600까지 — 스크롤은 화면 전체 (Z-07)
   const signIn = useAuth(s => s.signIn);
   const [email, setEmail] = useState(route.params?.email ?? (env.useMock ? MOCK_ACCOUNT.email : ''));
   const [password, setPassword] = useState(env.useMock && !route.params?.email ? MOCK_ACCOUNT.password : '');
@@ -49,7 +51,7 @@ export default function EmailLoginScreen({ navigation, route }: RootScreen<'Emai
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <Wave always style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
       <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.goBack} style={{ marginTop: insets.top + 12 }} />
-      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: 24, paddingHorizontal: gutter }} keyboardShouldPersistTaps="handled">
         <AuthTitle title="다시 만나서 반가워요." desc="이메일로 로그인하고 내 주변의 바다를 탐색해요." />
         <View style={{ paddingHorizontal: 24, paddingTop: 34, gap: 16 }}>
           {notice && <T v="captionStrong" c="positive" accessibilityLiveRegion="polite">{notice}</T>}

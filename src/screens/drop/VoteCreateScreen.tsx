@@ -7,6 +7,7 @@ import type { Song } from '@/api/types';
 import { RemoveGlyph } from '@/components/drop/glyphs';
 import { AddLink, DiscArt, DropTopBar } from '@/components/drop/parts';
 import { Press, PrimaryButton, T } from '@/components/ui';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { Wave } from '@/components/ui/Wave';
 import type { RootScreen } from '@/navigation/types';
 import { usePreview } from '@/services/preview';
@@ -37,6 +38,7 @@ function OptionRow({ song, index, onRemove }: { song: Song; index: number; onRem
 
 export default function VoteCreateScreen({ navigation }: RootScreen<'VoteCreate'>) {
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 내용만 가운데 600까지 (Z-07)
   const { topic, options, picked, set } = useDraft();
 
   useFocusEffect(useCallback(() => {
@@ -58,7 +60,7 @@ export default function VoteCreateScreen({ navigation }: RootScreen<'VoteCreate'
       {/* Figma 'wave' 인스턴스 — 화면 아래쪽에 깔림 */}
       <Wave scale={1.2} style={{ position: 'absolute', left: -79, right: -79, bottom: -34 }} />
       <DropTopBar title="투표 드랍하기" onBack={navigation.goBack} onNext={next} nextEnabled={ready} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 20, paddingBottom: insets.bottom + 110, gap: 30 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 22 + gutter, paddingTop: 20, paddingBottom: insets.bottom + 110, gap: 30 }} keyboardShouldPersistTaps="handled">
         {/* 질문 카드 — #46BEFF 바탕 · 하늘빛 그림자 */}
         <View style={{ gap: 8, padding: 16, borderRadius: 16, backgroundColor: '#46BEFF', shadowColor: '#9BE7FF', shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 4 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -82,7 +84,7 @@ export default function VoteCreateScreen({ navigation }: RootScreen<'VoteCreate'
           {options.length < 5 ? <AddLink label="노래 추가" onPress={() => navigation.navigate('AddSongs', { picker: 'vote', existing: options.map(o => o.id) })} /> : null}
         </View>
       </ScrollView>
-      <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 26 }}>
+      <View style={{ position: 'absolute', left: 24 + gutter, right: 24 + gutter, bottom: insets.bottom + 26 }}>
         <PrimaryButton label="다음 한마디 남기기" onPress={next} disabled={!ready} />
       </View>
     </View>

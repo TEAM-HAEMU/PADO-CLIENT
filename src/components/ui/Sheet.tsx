@@ -9,6 +9,8 @@
  * 높이: 시트 꼭대기는 상단 안전영역(상태 표시줄) 아래까지만 — 짧은 화면(분할 화면·플립 커버)이나 키보드가 뜬 작은 화면에서
  *  내용이 더 길면 카드 안이 스크롤된다. 들어가면 스크롤을 꺼 두어 예전과 똑같다 (쓸어내려 닫기도 그대로).
  *  자기 목록(FlatList·ScrollView)이 있거나 높이를 직접 정하는 시트는 scroll={false} — 높이 제한만 받고 그 목록이 줄어든다.
+ * 폭: 넓은 화면(펼친 폴드 · 태블릿)에선 카드가 가운데 600(CONTENT_MAX_WIDTH)까지만 — 어두운 배경은 화면 전체 (QA 2026-11-20 Z-07).
+ *  폰에선 카드 폭 = 화면 폭 그대로. 지도 위 핀 미리보기처럼 화면 폭을 그대로 쓸 시트는 fullWidth
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, type ScrollViewInstance, TextInput, View, type ViewStyle } from 'react-native';
@@ -21,6 +23,7 @@ import { colors } from '@/theme/tokens';
 import { callJsCallback, useJsCallbackId } from '@/hooks/useJsCallbackId';
 import { keyboardScrollTarget, overflows, sheetMaxHeight } from '@/utils/shortScreen';
 import { DialogHost } from './Dialog';
+import { contentColumnStyle, useContentColumn } from './ContentColumn';
 
 const OPEN = { duration: 280, easing: Easing.out(Easing.cubic) };
 const CLOSE = { duration: 220, easing: Easing.in(Easing.cubic) };
@@ -35,10 +38,14 @@ const CLOSE = { duration: 220, easing: Easing.in(Easing.cubic) };
  */
 /**
  * scroll: 내용이 시트 최대 높이를 넘으면 카드 안을 스크롤 (기본 켬, style.height를 준 시트는 끔)
+ * fullWidth: 넓은 화면에서도 카드를 화면 폭 전체로 (기본은 가운데 최대 폭)
  */
-export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverlap = 0, dismissible = true, closeRef, confirmClose, scroll }: { children: React.ReactNode; style?: ViewStyle; onClose?: () => void; dim?: number; header?: React.ReactNode; headerOverlap?: number; dismissible?: boolean; closeRef?: React.MutableRefObject<(() => void) | null>; confirmClose?: () => Promise<boolean>; scroll?: boolean }) {
+export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverlap = 0, dismissible = true, closeRef, confirmClose, scroll, fullWidth }: { children: React.ReactNode; style?: ViewStyle; onClose?: () => void; dim?: number; header?: React.ReactNode; headerOverlap?: number; dismissible?: boolean; closeRef?: React.MutableRefObject<(() => void) | null>; confirmClose?: () => Promise<boolean>; scroll?: boolean; fullWidth?: boolean }) {
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
+  // 넓은 화면에서 카드 양옆 빈 폭 — 아래 상태 표시줄 자리 채움을 카드 밖까지 넓히는 데 쓴다
+  const column = useContentColumn();
+  const gutter = fullWidth ? 0 : column.gutter;
   const close = onClose ?? (() => nav.goBack());
   // 워클릿에는 함수 대신 번호만 넘긴다 (hooks/useJsCallbackId — 함수를 넘기면 UI 런타임이 붙잡아 이 시트 트리 전체가 JS 힙에 남는다)
   const closeId = useJsCallbackId(close);
@@ -167,10 +174,12 @@ export function Sheet({ children, style, onClose, dim = 0.6, header, headerOverl
       </Animated.View>
       {/* maxHeight 같은 %값은 화면 기준이어야 하므로 래퍼에, 카드는 그 안에서 줄어든다 (상단 안전영역을 넘지 않게 숫자로 바꿔 둔 값) */}
       <GestureDetector gesture={pan}>
-      <Animated.View onLayout={e => { setHeight(e.nativeEvent.layout.height + 40); setSheetH(e.nativeEvent.layout.height); }} style={[{ maxHeight: maxHeight as ViewStyle['maxHeight'], height: style?.height }, panel]}>
+      <Animated.View onLayout={e => { setHeight(e.nativeEvent.layout.height + 40); setSheetH(e.nativeEvent.layout.height); }} style={[fullWidth ? null : contentColumnStyle, { maxHeight: maxHeight as ViewStyle['maxHeight'], height: style?.height }, panel]}>
         {/* (Android) 키보드로 창이 줄어 시트가 최대 높이에 닿으면, 시트 위 틈(상태 표시줄 자리)을 카드 색으로 채운다.
             그 뒤의 지도는 줄어든 창에 맞춰 다시 그려져 아래 목록이 상태 표시줄 자리에 비쳤다 (PR #63 재확인). 시트와 함께 움직이게 시트 안에 둔다 */}
         {topFill > 0 ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: -topFill, height: topFill + 40, backgroundColor: colors.page }} /> : null}
+        {/* 넓은 화면에선 카드 양옆도 시트 꼭대기까지만 채운다 (카드 옆으로 흰 띠가 내려오지 않게) */}
+        {topFill > 0 && gutter > 0 ? <View pointerEvents="none" style={{ position: 'absolute', left: -gutter, right: -gutter, top: -topFill, height: topFill, backgroundColor: colors.page }} /> : null}
         {/* 헤더 줄은 화면 폭 전체라 카드 윗부분과 겹친다 → 헤더 요소 말고는 터치를 카드로 넘긴다 (예: 핀 미리보기 ⋯ 버튼) */}
         {header ? <View pointerEvents="box-none" style={{ alignItems: 'center', marginBottom: -headerOverlap, zIndex: 2, elevation: 2 }}>{header}</View> : null}
         <View style={[{ flexShrink: 1, backgroundColor: colors.page, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 16, paddingTop: 10, paddingBottom: Platform.OS === 'android' && kb ? 12 : baseBottom }, style, { maxHeight: undefined, height: undefined }, style?.height ? { flex: 1 } : null]}>

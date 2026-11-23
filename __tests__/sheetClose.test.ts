@@ -40,6 +40,9 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: (fn: (...a: unknown[]) => void, ...a: unknown[]) => { mockScheduled.push({ fn, args: a }); fn(...a); } }));
 jest.mock('react-native-gesture-handler', () => ({ GestureDetector: ({ children }: { children: unknown }) => children, usePanGesture: (cfg: typeof mockPan.cfg) => { mockPan.cfg = cfg; return {}; } }));
 jest.mock('@/components/ui/Dialog', () => ({ DialogHost: () => null }));
+// 창 폭 (넓은 화면 최대 폭 테스트용 — 기본은 흔한 폰 폭)
+let mockWinWidth = 360;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({ __esModule: true, default: () => ({ width: mockWinWidth, height: 800, scale: 2, fontScale: 1 }) }));
 
 import { Sheet } from '@/components/ui/Sheet';
 import { callJsCallback, jsCallbackCount } from '@/hooks/useJsCallbackId';
@@ -217,5 +220,29 @@ describe('시트 최대 높이 · 넘치면 스크롤', () => {
   test('자기 목록이 있는 시트(scroll={false})나 높이를 정한 시트는 감싸지 않는다', () => {
     expect(scrollers(renderWith({ scroll: false }))).toHaveLength(0);
     expect(scrollers(renderWith({ style: { height: '82%' } }))).toHaveLength(0);
+  });
+});
+
+/* 넓은 화면 최대 폭 (QA 2026-11-20 Z-07 — 펼친 폴드에서 시트가 화면 끝까지 늘어나던 것) */
+describe('시트 폭', () => {
+  afterEach(() => { mockWinWidth = 360; });
+  const wrapper = (r: import('react-test-renderer').ReactTestRenderer) => r.root.findAll((n: Node) => (n.type as unknown) === 'Animated.View' && typeof n.props.onLayout === 'function')[0];
+  const flat = (s: unknown) => Object.assign({}, ...([s].flat(Infinity) as object[]).filter(Boolean));
+  function renderAt(width: number, props: Record<string, unknown> = {}) {
+    mockWinWidth = width;
+    act(() => { mounted = TestRenderer.create(React.createElement(Sheet, { ...props, children: React.createElement('Body') })); });
+    return mounted!;
+  }
+
+  test('카드는 화면 폭(100%)을 쓰되 최대 600, 가운데 — 폰에선 늘이기와 같은 폭', () => {
+    const st = flat(wrapper(renderAt(360)).props.style);
+    expect(st).toMatchObject({ width: '100%', maxWidth: 600, alignSelf: 'center' });
+  });
+
+  test('fullWidth(지도 위 핀 미리보기)는 최대 폭을 두지 않는다', () => {
+    const st = flat(wrapper(renderAt(673, { fullWidth: true })).props.style);
+    expect(st.maxWidth).toBeUndefined();
+    expect(st.width).toBeUndefined();
+    expect(st.alignSelf).toBeUndefined();
   });
 });

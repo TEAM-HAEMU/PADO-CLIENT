@@ -8,6 +8,7 @@ import { PickGlyph, SearchGlyph } from '@/components/drop/glyphs';
 import { DiscArt, DropTopBar } from '@/components/drop/parts';
 import { Empty, Icon, Loading, Press, PrimaryButton, T, SecondaryButton } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { useSongSearch } from '@/hooks/api';
 import { useDebounced } from '@/hooks/useDebounced';
 import { useStableCallback } from '@/hooks/useStableCallback';
@@ -42,6 +43,8 @@ const ResultRow = memo(function ResultRowItem({ song, selected, playing, onPick,
 
 export default function SongSearchScreen({ navigation }: RootScreen<'SongSearch'>) {
   const insets = useSafeAreaInsets();
+  // 넓은 화면에선 검색칸·결과·다음 버튼을 가운데 600까지 (Z-07)
+  const { gutter } = useContentColumn();
   const draft = useDraft();
   const [q, setQ] = useState('');
   const query = useDebounced(q);
@@ -72,7 +75,7 @@ export default function SongSearchScreen({ navigation }: RootScreen<'SongSearch'
       {/* Figma 'wave' 인스턴스 — 화면 아래쪽에 깔림 */}
       <Wave scale={1.2} style={{ position: 'absolute', left: -79, right: -79, bottom: -34 }} />
       <DropTopBar title="음악 고르기" onBack={navigation.goBack} onNext={next} nextEnabled={!!picked} />
-      <View style={{ marginHorizontal: 24, marginTop: 20, height: 36, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 14, backgroundColor: '#FDFDFD', borderWidth: 1, borderColor: '#F0F0F0' }}>
+      <View style={{ marginHorizontal: 24 + gutter, marginTop: 20, height: 36, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 14, backgroundColor: '#FDFDFD', borderWidth: 1, borderColor: '#F0F0F0' }}>
         <SearchGlyph />
         <TextInput
           autoFocus
@@ -98,14 +101,14 @@ export default function SongSearchScreen({ navigation }: RootScreen<'SongSearch'
             data={search.data}
             keyExtractor={s => s.id}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: insets.bottom + 100, gap: 20 }}
+            contentContainerStyle={{ paddingHorizontal: 24 + gutter, paddingTop: 16, paddingBottom: insets.bottom + 100, gap: 20 }}
             ListEmptyComponent={<Empty title="검색 결과가 없어요" desc="다른 검색어로 찾아보세요." />}
             renderItem={renderItem}
           />
         )}
       </View>
       {picked ? (
-        <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 26 }}>
+        <View style={{ position: 'absolute', left: 24 + gutter, right: 24 + gutter, bottom: insets.bottom + 26 }}>
           <PrimaryButton label="다음" onPress={next} />
         </View>
       ) : null}

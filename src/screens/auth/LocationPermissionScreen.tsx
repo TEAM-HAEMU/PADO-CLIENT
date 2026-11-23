@@ -6,6 +6,7 @@ import { Ripples } from '@/components/anim';
 import { AuthTitle } from '@/components/auth/AuthChrome';
 import { Icon, PrimaryButton } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
+import { ContentColumn } from '@/components/ui/ContentColumn';
 import type { RootScreen } from '@/navigation/types';
 import { useLocation } from '@/services/location';
 import { useDropRadius } from '@/hooks/useDropRadius';
@@ -51,10 +52,10 @@ export default function LocationPermissionScreen({ navigation }: RootScreen<'Loc
           <Icon name="pin" size={28} color={colors.primary} />
         </View>
       </View>
-      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 20 }}>
+      <ContentColumn style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 20 }}>
         {/* 안내 다음엔 항상 시스템 권한 창으로 — 허용 유도 문구·건너뛰기 버튼 금지 (App Store 5.1.1(iv)) */}
         <PrimaryButton label="계속" style={{ alignSelf: 'stretch' }} onPress={allow} />
-      </View>
+      </ContentColumn>
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { FlatList, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isPlaylistDetail, type PlaylistDropSong } from '@/api/types';
 import { IconButton, Press, T } from '@/components/ui';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { Glyph } from '@/components/detail/glyphs';
 import { BgWave, DiscRow, PlaylistHero } from '@/components/detail/parts';
 import { useCommentCount, useDrop, useLikeCount, useToggleLike, useIsLiked } from '@/hooks/api';
@@ -33,6 +34,7 @@ const DropSongRow = memo(function DropSongRowItem({ song: s, onOpen }: { song: P
 export default function PlaylistDropScreen({ navigation, route }: RootScreen<'PlaylistDrop'>) {
   const { dropId, source } = route.params;
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 내용만 가운데 600까지 (Z-07)
   const drop = useDrop(dropId);
   const d = drop.data && isPlaylistDetail(drop.data) ? drop.data : null;
   // 다른 타입 드랍(링크를 잘못 만들었거나 오래된 링크)이면 맞는 화면으로 넘긴다
@@ -102,7 +104,7 @@ export default function PlaylistDropScreen({ navigation, route }: RootScreen<'Pl
       <FlatList
         data={d.songs}
         keyExtractor={s => s.songId}
-        contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 40, paddingHorizontal: 24, gap: 20 }}
+        contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 40, paddingHorizontal: 24 + gutter, gap: 20 }}
         ListHeaderComponent={header}
         renderItem={renderItem}
       />
