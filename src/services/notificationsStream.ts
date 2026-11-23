@@ -1,6 +1,9 @@
 /**
  * 인앱 알림 SSE (GET /notifications/subscribe).
- * 명세: 연결 타임아웃 60분 → 끊기면 재연결. 이벤트: dropping-created / like-created / comment-created
+ * 명세: 연결 타임아웃 60분 → 끊기면 재연결.
+ * 이벤트: like-created / comment-created (알림함에 저장된 알림 — 목록 새로고침 + 토스트)
+ *        my-dropping-created / dropping-created (내 드랍이 생김 — 지도 새로고침 신호만. utils/notifications)
+ *  - dropping-created는 예전 서버가 본인 알림함에 저장하며 보내던 이름. '근처 새 드랍'이 아니라 토스트를 띄우지 않는다
  */
 import { AppState } from 'react-native';
 import EventSource from 'react-native-sse';
@@ -10,9 +13,11 @@ import { queryClient } from '@/hooks/queryClient';
 import { useAuth } from '@/store/auth';
 import { usePrefs } from '@/store/prefs';
 import { toast } from '@/store/toast';
+import { hiddenNotifications, REFRESH_SIGNAL_EVENTS } from '@/utils/notifications';
 import { pushActive } from './push';
 
-type Events = 'connect' | 'like-created' | 'comment-created' | 'dropping-created';
+type NotificationEvents = 'like-created' | 'comment-created';
+type Events = 'connect' | NotificationEvents | (typeof REFRESH_SIGNAL_EVENTS)[number];
 let es: EventSource<Events> | null = null;
 let retry: ReturnType<typeof setTimeout> | undefined;
 let rotate: ReturnType<typeof setTimeout> | undefined;
@@ -24,10 +29,9 @@ let appStateSub: { remove: () => void } | null = null;
 const ROTATE_MS = 55 * 60_000;
 const MAX_BACKOFF = 5 * 60_000;
 
-const TEXT: Record<string, (d: Record<string, unknown>) => string> = {
+const TEXT: Record<NotificationEvents, (d: Record<string, unknown>) => string> = {
   'like-created': d => `${(d.likerUsername as string) || '누군가'}님이 내 드랍을 좋아해요`,
   'comment-created': d => `${(d.commenterUsername as string) || (d.username as string) || '누군가'}님이 댓글을 남겼어요`,
-  'dropping-created': () => '근처에 새 드랍이 생겼어요',
 };
 
 function connect() {
@@ -41,18 +45,23 @@ function connect() {
     // (오류는 아래 error 리스너가 직접 백오프로 처리)
     pollingInterval: 3_000,
   });
-  const onEvent = (name: Events) => (e: { data?: string | null }) => {
+  const onEvent = (name: NotificationEvents) => (e: { data?: string | null }) => {
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
     try {
       const payload = JSON.parse(e.data ?? '{}');
       const prefs = usePrefs.getState().notify;
-      const allowed = name === 'like-created' ? prefs.like : name === 'comment-created' ? prefs.comment : prefs.nearby;
+      const allowed = name === 'like-created' ? prefs.like : prefs.comment;
       // 이 기기로 푸시를 받는 중이면 같은 소식이 시스템 배너로도 오므로 토스트는 띄우지 않는다
-      if (allowed && TEXT[name] && !pushActive()) toast(TEXT[name](payload.data ?? {}));
-      if (name === 'dropping-created') queryClient.invalidateQueries({ queryKey: ['nearby'] });
+      if (allowed && !pushActive()) toast(TEXT[name](payload.data ?? {}));
     } catch {}
   };
-  (['like-created', 'comment-created', 'dropping-created'] as const).forEach(n => es!.addEventListener(n, onEvent(n)));
+  const onRefresh = (name: (typeof REFRESH_SIGNAL_EVENTS)[number]) => () => {
+    queryClient.invalidateQueries({ queryKey: ['nearby'] });
+    // 예전 서버는 이 신호와 함께 본인 알림함에 기록을 남긴다 — 안 읽음 수를 다시 세며 거른다
+    if (name === 'dropping-created') { hiddenNotifications.mayExist = true; queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] }); }
+  };
+  (['like-created', 'comment-created'] as const).forEach(n => es!.addEventListener(n, onEvent(n)));
+  REFRESH_SIGNAL_EVENTS.forEach(n => es!.addEventListener(n, onRefresh(n)));
   es.addEventListener('open', () => { backoff = 5_000; });
   es.addEventListener('close', () => scheduleReconnect(false));
   // 라이브러리는 error 이벤트를 보낸 '뒤에' 자체 재연결 타이머를 건다 → 다음 틱에 닫아야 close()가 그 타이머까지 지운다
@@ -89,6 +98,7 @@ function closeCurrent() {
 
 export function startNotificationStream() {
   wanted = true;
+  hiddenNotifications.mayExist = true; // 로그인한 계정이 바뀌었을 수 있다 — 첫 안 읽음 수는 다시 거른다
   backoff = 5_000;
   if (!appStateSub) {
     appStateSub = AppState.addEventListener('change', st => {

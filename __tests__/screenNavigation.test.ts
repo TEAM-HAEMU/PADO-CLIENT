@@ -1,4 +1,4 @@
-/* 화면 이동이 스택에 화면을 새로 쌓지 않는지 — 비밀번호 재설정 완료 · 알림에서 지도로 (React Navigation 7의 navigate는 push한다) */
+/* 화면 이동이 스택에 화면을 새로 쌓지 않는지 — 비밀번호 재설정 완료 · 알림에서 드랍 미리보기 (React Navigation 7의 navigate는 push한다) */
 import './setup/screenEnv';
 
 const mockNav = { navigate: jest.fn(), popTo: jest.fn(), goBack: jest.fn() };
@@ -17,7 +17,7 @@ jest.mock('@/hooks/api', () => ({
   useDrop: () => ({ data: undefined }),
   useSong: () => ({ data: undefined }),
   useNotifications: () => ({
-    data: [{ id: 'n1', eventName: 'dropping-created', data: { songId: 'gone' }, readAt: '2026-11-14T00:00:00Z', createdAt: new Date().toISOString() }],
+    data: [{ id: 'n1', eventName: 'like-created', data: { likerUsername: '둘째', droppingId: 'd1' }, readAt: '2026-11-14T00:00:00Z', createdAt: new Date().toISOString() }],
     isLoading: false, isRefetching: false, isError: false, error: null, refetch: jest.fn(),
   }),
 }));
@@ -58,11 +58,11 @@ test('비밀번호를 바꾸면 있던 로그인 화면으로 돌아간다 (popT
   expect(mockNav.navigate).not.toHaveBeenCalled();
 });
 
-test('근처에 없는 새 드랍 알림을 누르면 탭(지도)으로 돌아간다 (popTo — 탭을 한 벌 더 쌓지 않음)', async () => {
+test('알림을 누르면 그 드랍 미리보기를 연다 (지도 탭을 다시 쌓지 않음)', async () => {
   const r = render(React.createElement(NotificationsScreen as never));
   const row = byType(r, 'Press').find(n => n.props.trackAs === '알림 항목')!;
   await act(async () => { await row.props.onPress(); });
-  expect(mockToast).toHaveBeenCalledWith('이 드랍은 지금 근처에 없거나 사라졌어요.');
-  expect(mockNav.popTo).toHaveBeenCalledWith('Tabs', { screen: 'Map' });
-  expect(mockNav.navigate).not.toHaveBeenCalled();
+  expect(mockNav.navigate).toHaveBeenCalledWith('PinPreview', { dropId: 'd1', source: 'notification' });
+  expect(mockNav.popTo).not.toHaveBeenCalled();
+  expect(mockToast).not.toHaveBeenCalled();
 });

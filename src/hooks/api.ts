@@ -13,6 +13,7 @@ import type { Coords } from '@/services/location';
 import { track } from '@/services/analytics';
 import { toast } from '@/store/toast';
 import { clampText } from '@/utils/text';
+import { hiddenNotifications, splitNotifications, visibleUnreadCount } from '@/utils/notifications';
 
 const authed = () => useAuth.getState().status === 'authed';
 
@@ -109,8 +110,29 @@ export const useMyLikes = () => useQuery({ queryKey: qk.myLikes, enabled: authed
 export const useAgreements = () => useQuery({ queryKey: ['agreements'], enabled: authed(), queryFn: userApi.agreements, staleTime: USER_DATA_STALE });
 export const useBlocks = () => useQuery({ queryKey: ['blocks'], enabled: authed(), queryFn: safetyApi.blocks, staleTime: USER_DATA_STALE });
 
-export const useNotifications = () => useQuery({ queryKey: ['notifications', 'list'], enabled: authed(), queryFn: () => notificationApi.list(50) });
-export const useUnreadCount = () => useQuery({ queryKey: ['notifications', 'unread'], enabled: authed(), queryFn: notificationApi.unreadCount, refetchInterval: 120_000 });
+/** 알림 목록 — 본인 드랍 생성 기록(utils/notifications)은 뺀다. 새 서버는 처음부터 빼고 주고, 예전 서버가 주면 여기서 거른다 */
+export const useNotifications = () => useQuery({
+  queryKey: ['notifications', 'list'],
+  enabled: authed(),
+  queryFn: async () => splitNotifications(await notificationApi.list(50)).visible,
+});
+
+/**
+ * 프로필 종 아이콘의 안 읽음 점 — 새 서버는 숨김 기록을 빼고 센다.
+ * 예전 서버면 서버 수에서 최근 목록(50개)의 안 읽은 숨김 기록을 뺀다 (기록은 읽음으로 바꾸지 않는다 — 운영 데이터는 그대로)
+ */
+export const useUnreadCount = () => useQuery({
+  queryKey: ['notifications', 'unread'],
+  enabled: authed(),
+  refetchInterval: 120_000,
+  queryFn: async () => {
+    const count = await notificationApi.unreadCount();
+    if (!count || !hiddenNotifications.mayExist) return count;
+    const { hiddenUnread } = splitNotifications(await notificationApi.list(50));
+    if (!hiddenUnread.length) { hiddenNotifications.mayExist = false; return count; }
+    return visibleUnreadCount(count, hiddenUnread.length);
+  },
+});
 
 export const useMyPlaylists = () => useQuery({ queryKey: ['playlists'], enabled: authed(), queryFn: playlistApi.mine });
 export const usePlaylist = (id: UUID | undefined) => useQuery({ queryKey: ['playlist', id], enabled: !!id && authed(), queryFn: () => playlistApi.get(id!) });
@@ -198,7 +220,8 @@ export function useCreateDrop() {
   return useMutation({
     mutationKey: CREATE_DROP_KEY,
     mutationFn: (body: CreateDropBody) => dropApi.create(body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['nearby'] }); qc.invalidateQueries({ queryKey: ['myDrops'] }); },
+    // 예전 서버는 이때 본인 알림함에 생성 기록을 남긴다 — 안 읽음 수를 셀 때 다시 거른다
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['nearby'] }); qc.invalidateQueries({ queryKey: ['myDrops'] }); hiddenNotifications.mayExist = true; },
   });
 }
 
