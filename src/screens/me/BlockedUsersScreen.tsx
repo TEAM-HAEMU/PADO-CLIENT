@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { safetyApi } from '@/api/endpoints';
 import { errorMessage } from '@/api/errors';
 import { Avatar, Empty, Loading, Press, T, SecondaryButton, TopBar } from '@/components/ui';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { Wave } from '@/components/ui/Wave';
 import { useBlocks } from '@/hooks/api';
 import type { RootScreen } from '@/navigation/types';
@@ -16,6 +17,7 @@ import { track } from '@/services/analytics';
 
 export default function BlockedUsersScreen({ navigation }: RootScreen<'BlockedUsers'>) {
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 내용만 가운데 600까지 (Z-07)
   const qc = useQueryClient();
   const { data = [], isLoading, isError, refetch } = useBlocks();
   const [pending, setPending] = React.useState<string | null>(null);
@@ -28,7 +30,7 @@ export default function BlockedUsersScreen({ navigation }: RootScreen<'BlockedUs
         <FlatList
           data={data}
           keyExtractor={b => b.userId}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: insets.bottom + 32 }}
+          contentContainerStyle={{ paddingHorizontal: 24 + gutter, paddingTop: 12, paddingBottom: insets.bottom + 32 }}
           ListEmptyComponent={isError ? <Empty icon="alert" title="차단 목록을 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} /> : <Empty icon="block" title="차단한 사용자가 없어요" desc="차단하면 그 사람의 드랍과 댓글이 보이지 않아요." />}
           ListFooterComponent={data.length ? <T v="captionStrong" style={{ fontFamily: fonts.regular, color: '#C1C6D2' }}>차단하면 그 사람의 드랍과 댓글이 보이지 않아요.</T> : undefined}
           renderItem={({ item: b }) => (

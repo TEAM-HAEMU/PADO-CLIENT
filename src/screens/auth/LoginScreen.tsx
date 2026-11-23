@@ -10,6 +10,7 @@ import { IntroArt } from '@/components/auth/IntroArt';
 import { AppleSymbol, GoogleSymbol, KakaoSymbol } from '@/components/ui/Brand';
 import { Icon, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
+import { ContentColumn } from '@/components/ui/ContentColumn';
 import { env } from '@/config';
 import type { RootScreen } from '@/navigation/types';
 import { appleSignInAvailable, getProviderCredential, SocialCancelled } from '@/services/socialAuth';
@@ -58,7 +59,8 @@ export default function LoginScreen({ navigation }: RootScreen<'Login'>) {
         <IntroArt page={AUTH_PAGES - 1} style={{ flexShrink: 1 }} />
       </View>
 
-      <View style={{ paddingHorizontal: 24, gap: 10 }}>
+      {/* 넓은 화면(펼친 폴드)에선 버튼이 화면 끝까지 늘지 않게 가운데 600까지 (Z-07) */}
+      <ContentColumn style={{ paddingHorizontal: 24, gap: 10 }}>
         <AuthButton strong bg={colors.kakao} fg={KAKAO_INK} icon={<KakaoSymbol color={KAKAO_INK} />} label="카카오로 계속하기" loading={busy === 'kakao'} disabled={!!busy} onPress={() => social('kakao')} />
         {/* Apple 로그인 (가이드라인 4.8) — HIG: 검정 바탕 + 흰 Apple 로고 */}
         {appleSignInAvailable() ? (
@@ -66,7 +68,7 @@ export default function LoginScreen({ navigation }: RootScreen<'Login'>) {
         ) : null}
         <AuthButton strong bg="#FFFFFF" fg="#000000" border={colors.line} icon={<GoogleSymbol />} label="Google로 계속하기" loading={busy === 'google'} disabled={!!busy} onPress={() => social('google')} />
         <AuthButton strong icon={<Icon name="mail" size={20} color={colors.onPrimary} />} label="이메일로 계속하기" disabled={!!busy} onPress={() => navigation.navigate('EmailLogin')} />
-      </View>
+      </ContentColumn>
       {env.useMock ? <T v="micro" c="warning" style={{ textAlign: 'center', marginTop: 8 }}>목 서버 모드 (USE_MOCK=true)</T> : null}
       <AuthDisclaimer style={{ paddingTop: 30, paddingBottom: insets.bottom + 16 }} />
     </View>

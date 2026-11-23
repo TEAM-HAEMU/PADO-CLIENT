@@ -10,6 +10,7 @@ import { Field, formatBirth, GenderSelect, validBirth } from '@/components/ui/Fi
 import { Avatar, Press, T, TopBar } from '@/components/ui';
 import { MeGlyph } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { qk, useMe } from '@/hooks/api';
 import type { RootScreen } from '@/navigation/types';
 import { toast } from '@/store/toast';
@@ -18,6 +19,7 @@ import { clampText, textLength } from '@/utils/text';
 
 export default function ProfileEditScreen({ navigation }: RootScreen<'ProfileEdit'>) {
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 입력칸이 화면 끝까지 늘지 않게 가운데 600까지 (Z-07)
   const qc = useQueryClient();
   const me = useMe().data;
   const [username, setUsername] = useState('');
@@ -83,7 +85,7 @@ export default function ProfileEditScreen({ navigation }: RootScreen<'ProfileEdi
           <T v="caption" c="primary" style={{ fontFamily: fonts.medium, letterSpacing: -0.24 }}>{busy ? '저장 중' : '저장'}</T>
         </Press>
       } />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: insets.bottom + 40, gap: 20 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24 + gutter, paddingTop: 40, paddingBottom: insets.bottom + 40, gap: 20 }} keyboardShouldPersistTaps="handled">
         <Press onPress={pick} style={{ alignSelf: 'center', marginBottom: 30, width: 120, height: 120, borderRadius: 60, shadowColor: '#C0EEFF', shadowOpacity: 1, shadowRadius: 50, shadowOffset: { width: 0, height: 0 } }} accessibilityLabel="프로필 사진 변경">
           <Avatar uri={image ?? me?.profileImageUrl} name={username} size={120} />
           {/* Figma 카메라 배지 — #4FD1FF 원 · 테두리 #EBF9FE · 아이콘 13 */}

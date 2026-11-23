@@ -9,6 +9,7 @@ import { ServiceGlyph } from '@/components/ui/Brand';
 import { Avatar, Press, T, Toggle, TopBar } from '@/components/ui';
 import { Chevron, MeGlyph, type MeGlyphName } from '@/components/me/MeIcons';
 import { Wave } from '@/components/ui/Wave';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { env } from '@/config';
 import { OPERATOR } from '@/content/terms';
 import { useMe } from '@/hooks/api';
@@ -73,6 +74,8 @@ const APP_VERSION = getVersion();
 
 export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
   const insets = useSafeAreaInsets();
+  // 넓은 화면(펼친 폴드)에선 줄이 화면 끝까지 늘지 않게 가운데 600까지 — 스크롤·파도는 화면 전체 (Z-07)
+  const { gutter } = useContentColumn();
   const me = useMe().data;
   const prefs = usePrefs();
   const signOut = useAuth(s => s.signOut);
@@ -102,7 +105,7 @@ export default function SettingsScreen({ navigation }: RootScreen<'Settings'>) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       <TopBar title="설정" onBack={navigation.goBack} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, gap: 20, paddingBottom: insets.bottom + 32 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24 + gutter, paddingTop: 12, gap: 20, paddingBottom: insets.bottom + 32 }}>
         {/* Figma: 설정 가운데쯤(안전·약관 뒤)에 wave가 깔린다 */}
         <Wave scale={1.2} style={{ position: 'absolute', left: -78, right: 0, top: 770 }} />
         <Press onPress={() => navigation.navigate('ProfileEdit')} trackAs="프로필 편집" style={{ flexDirection: 'row', alignItems: 'center', gap: 18, height: 80, paddingHorizontal: 6 }}>

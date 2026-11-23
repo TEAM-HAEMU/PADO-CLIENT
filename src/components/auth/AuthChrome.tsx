@@ -10,6 +10,7 @@ import { ActivityIndicator, Platform, type StyleProp, View, type ViewStyle } fro
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Icon, IconButton, Press, T } from '@/components/ui';
+import { contentColumnStyle } from '@/components/ui/ContentColumn';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, fonts } from '@/theme/tokens';
 import { keepHangulWords } from '@/utils/text';
@@ -55,10 +56,11 @@ export function AuthHeader({ page, onBack, onNext, style }: { page?: number; onB
  * 가운데 정렬 제목 + 설명 한 줄.
  * 제목은 어절 단위로만 줄을 바꾼다 — iOS는 T의 hangul-word, Android는 같은 옵션이 없어 어절 안에 줄바꿈 금지 문자를 넣는다
  * (360dp 갤럭시에서 '들어/요.'처럼 끊기던 것, QA 2026-11-20 Z-05). 읽기 라벨은 원문 그대로
+ * 넓은 화면(펼친 폴드 · 태블릿)에선 가운데 600 안에서 줄을 바꾼다 (Z-07)
  */
 export function AuthTitle({ title, desc, style }: { title: string; desc?: string; style?: StyleProp<ViewStyle> }) {
   return (
-    <View style={[{ alignItems: 'center', gap: 18, paddingHorizontal: 24 }, style]}>
+    <View style={[contentColumnStyle, { alignItems: 'center', gap: 18, paddingHorizontal: 24 }, style]}>
       <T v="display" style={{ textAlign: 'center' }} accessibilityRole="header" accessibilityLabel={title}>{Platform.OS === 'android' ? keepHangulWords(title) : title}</T>
       {desc ? <T v="caption" style={{ color: SUBTLE, textAlign: 'center' }}>{desc}</T> : null}
     </View>
@@ -90,7 +92,7 @@ export function AuthDisclaimer({ style }: { style?: StyleProp<ViewStyle> }) {
   const navigation = useNavigation<Nav>();
   const link = { textDecorationLine: 'underline' as const };
   return (
-    <View style={[{ alignItems: 'center', paddingHorizontal: 24 }, style]}>
+    <View style={[contentColumnStyle, { alignItems: 'center', paddingHorizontal: 24 }, style]}>
       <T v="tiny" c="faint" style={{ textAlign: 'center' }}>
         {'서비스 이용을 위해 로그인이 필요합니다.\n로그인 시 '}
         <T v="tiny" c="faint" style={link} onPress={() => navigation.navigate('TermsView', { type: 'SERVICE' })} accessibilityRole="link">이용약관</T>

@@ -10,6 +10,7 @@ import type { CreateDropBody } from '@/api/types';
 import { PinGlyph } from '@/components/drop/glyphs';
 import { DiscArt } from '@/components/drop/parts';
 import { Chip, PrimaryButton, T, TopBar } from '@/components/ui';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { dialog } from '@/components/ui/Dialog';
 import { Wave } from '@/components/ui/Wave';
 import { CREATE_DROP_KEY, useCreateDrop, useMyDrops } from '@/hooks/api';
@@ -33,6 +34,7 @@ const SUGGEST = ['퇴근길에 딱', '여기 풍경이랑 잘 어울려요', '�
 
 export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 내용만 가운데 600까지 (Z-07)
   const draft = useDraft();
   const { address, label } = useLocation(useShallow(s => ({ address: s.address, label: s.label })));
   const [text, setText] = useState(draft.content);
@@ -120,7 +122,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
         키보드가 뜨면 버튼이 키보드 바로 위로 올라오고 스크롤 영역이 그만큼 줄어든다(겹치지 않음) → 입력칸은 버튼 위에 맞춰 스크롤.
         Android는 adjustResize로 창 자체가 줄어든다
       */}
-      <ScrollView ref={scroll.ref} keyboardDismissMode="interactive" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: compact ? 12 : 20, paddingBottom: 24, gap: compact ? 24 : 36 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll.ref} keyboardDismissMode="interactive" contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24 + gutter, paddingTop: compact ? 12 : 20, paddingBottom: 24, gap: compact ? 24 : 36 }} keyboardShouldPersistTaps="handled">
         <View style={{ gap: 20 }}>
           {/* 곡 고르기에서 틀어 둔 미리듣기가 있으면 아트를 눌러 일시정지/재개 */}
           <DiscArt uri={art} size={100} mark={songLoaded} playing={songPlaying} onToggle={songLoaded ? () => usePreviewStore.getState().toggle() : undefined} style={{ alignSelf: 'flex-start' }} />
@@ -154,7 +156,7 @@ export default function NoteScreen({ navigation }: RootScreen<'Note'>) {
         </View>
       </ScrollView>
       {/* 키보드가 떠 있으면 위치 문구는 접어 입력칸 자리를 남긴다 (버튼만) */}
-      <View onLayout={e => { footerH.current = e.nativeEvent.layout.height; }} style={{ gap: keyboard ? 0 : 12, paddingHorizontal: 24, paddingTop: 12, paddingBottom: keyboard ? 12 : insets.bottom + 26 }}>
+      <View onLayout={e => { footerH.current = e.nativeEvent.layout.height; }} style={{ gap: keyboard ? 0 : 12, paddingHorizontal: 24 + gutter, paddingTop: 12, paddingBottom: keyboard ? 12 : insets.bottom + 26 }}>
         {/* 스크롤 끝이 버튼 영역에 잘려 보이지 않게 — 아래로 더 있다는 표시 겸 흐리게 이어 준다 (키보드가 뜨면 입력칸 글자 수를 가리지 않게 숨김) */}
         <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0)', colors.page]} style={{ position: 'absolute', left: 0, right: 0, top: -28, height: 28, opacity: keyboard ? 0 : 1 }} />
         {/*

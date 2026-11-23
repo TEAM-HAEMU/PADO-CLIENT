@@ -8,6 +8,7 @@ import { RadioGlyph } from '@/components/drop/glyphs';
 import { AddLink, DropTopBar } from '@/components/drop/parts';
 import { Collage } from '@/components/music/Collage';
 import { Empty, Loading, Press, PrimaryButton, T, SecondaryButton } from '@/components/ui';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { Field } from '@/components/ui/Field';
 import { Wave } from '@/components/ui/Wave';
 import { useMyPlaylists, usePlaylistDetails } from '@/hooks/api';
@@ -32,6 +33,7 @@ const META = { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18, letterSp
 
 export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'PlaylistDropCreate'>) {
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 내용만 가운데 600까지 (Z-07)
   const scroll = useFocusedInputScroll();
   const { playlist, picked, set } = useDraft();
   const { data: mine, isLoading, isError, refetch } = useMyPlaylists();
@@ -68,7 +70,7 @@ export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'Pla
       {/* Figma 'wave' 인스턴스 — 화면 아래쪽에 깔림 */}
       <Wave scale={1.2} style={{ position: 'absolute', left: -79, right: -79, bottom: -34 }} />
       <DropTopBar title="플리 드랍하기" onBack={navigation.goBack} onNext={next} nextEnabled={ready} />
-      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: insets.bottom + 110, gap: 30 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingHorizontal: 24 + gutter, paddingTop: 20, paddingBottom: insets.bottom + 110, gap: 30 }} keyboardShouldPersistTaps="handled">
         <T style={{ fontFamily: fonts.semibold, fontSize: 20, lineHeight: 28, letterSpacing: -0.4, color: '#090909' }}>{'바다에 떨어뜨릴\n플리를 골라요.'}</T>
         <View style={{ gap: 20 }}>
           {isLoading ? <Loading style={{ height: 120 }} /> : isError ? <Empty icon="alert" title="플레이리스트를 불러오지 못했어요" action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} /> : !mine?.length ? <Empty icon="playlist" title="아직 플레이리스트가 없어요" desc="아래에서 새 플리를 만들어 바로 드랍할 수 있어요." /> : null}
@@ -106,7 +108,7 @@ export default function PlaylistDropCreateScreen({ navigation }: RootScreen<'Pla
           )}
         </View>
       </ScrollView>
-      <View style={{ position: 'absolute', left: 24, right: 24, bottom: insets.bottom + 26 }}>
+      <View style={{ position: 'absolute', left: 24 + gutter, right: 24 + gutter, bottom: insets.bottom + 26 }}>
         <PrimaryButton label="다음 한마디 남기기" disabled={!ready} onPress={next} />
       </View>
     </View>

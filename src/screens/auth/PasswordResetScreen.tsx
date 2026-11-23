@@ -8,6 +8,7 @@ import { AuthButton, AuthHeader, AuthTitle } from '@/components/auth/AuthChrome'
 import { Field } from '@/components/ui/Field';
 import { Press, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { env } from '@/config';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
@@ -29,6 +30,7 @@ const COPY: Record<Step, { title: string; body: (email: string) => string }> = {
 
 export default function PasswordResetScreen({ navigation, route }: RootScreen<'PasswordReset'>) {
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 폼을 가운데 600까지 — 스크롤은 화면 전체 (Z-07)
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState(route.params?.email ?? '');
   const [code, setCode] = useState('');
@@ -100,7 +102,7 @@ export default function PasswordResetScreen({ navigation, route }: RootScreen<'P
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <Wave always style={{ position: 'absolute', left: 0, right: 0, top: '40%' }} />
       <AuthHeader onBack={back} style={{ marginTop: insets.top + 12 }} />
-      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: insets.bottom + 16 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: insets.bottom + 16, paddingHorizontal: gutter }} keyboardShouldPersistTaps="handled">
         <AuthTitle title={title} desc={body(email)} />
         <View style={{ paddingHorizontal: 24, paddingTop: 34, gap: 16 }}>
           {step === 'email' && (

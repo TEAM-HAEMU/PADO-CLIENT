@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/endpoints';
 import { Empty, T, TopBar } from '@/components/ui';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { Wave } from '@/components/ui/Wave';
 import { TERMS, termTitle } from '@/content/terms';
 import type { RootScreen } from '@/navigation/types';
@@ -15,6 +16,7 @@ const HEADING = /^(제\d+조|■ |부칙$|# )/;
 
 export default function TermsViewScreen({ navigation, route }: RootScreen<'TermsView'>) {
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 내용만 가운데 600까지 (Z-07)
   const { type } = route.params;
   const server = useQuery({ queryKey: ['terms'], queryFn: authApi.terms }).data?.find(t => t.type === type);
   const doc = TERMS[type];
@@ -24,7 +26,7 @@ export default function TermsViewScreen({ navigation, route }: RootScreen<'Terms
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
       <Wave scale={1.2} style={{ position: 'absolute', left: -110, right: 0, bottom: -103 }} />
       <TopBar title={title} onBack={navigation.goBack} />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 28, paddingTop: 12, paddingBottom: insets.bottom + 32, gap: 8 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 28 + gutter, paddingTop: 12, paddingBottom: insets.bottom + 32, gap: 8 }}>
         {version ? <T v="caption" style={{ fontSize: 13, color: '#BFBFBF' }}>시행일 {version}</T> : null}
         {doc?.body ? (
           <View>

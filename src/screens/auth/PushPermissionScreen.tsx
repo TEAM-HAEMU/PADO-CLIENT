@@ -13,6 +13,7 @@ import { Ripples } from '@/components/anim';
 import { AuthTitle, CheckBox } from '@/components/auth/AuthChrome';
 import { Icon, Press, PrimaryButton, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
+import { ContentColumn } from '@/components/ui/ContentColumn';
 import type { RootScreen } from '@/navigation/types';
 import { openNotificationSettings, usePush } from '@/services/push';
 import { changeMarketingConsent } from '@/services/pushSettings';
@@ -64,7 +65,7 @@ export default function PushPermissionScreen({ navigation, route }: RootScreen<'
           <Icon name="bell" size={28} color={colors.primary} />
         </View>
       </View>
-      <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 24, gap: 16 }}>
+      <ContentColumn style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 24, gap: 16 }}>
         {existing || alreadyAgreed ? null : (
           <Press onPress={() => setMarketing(v => !v)} trackAs="혜택·소식 알림 체크" accessibilityRole="checkbox" accessibilityState={{ checked: marketing }} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <CheckBox on={marketing} small />
@@ -72,7 +73,7 @@ export default function PushPermissionScreen({ navigation, route }: RootScreen<'
           </Press>
         )}
         <PrimaryButton label="계속" style={{ alignSelf: 'stretch' }} onPress={allow} loading={busy} />
-      </View>
+      </ContentColumn>
     </View>
   );
 }

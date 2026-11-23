@@ -13,6 +13,7 @@ import { Field, formatBirth, GenderSelect, ListenAppSelect } from '@/components/
 import { AUTH_PAGES, AuthButton, AuthHeader, AuthTitle, CheckBox } from '@/components/auth/AuthChrome';
 import { Icon, Press, T } from '@/components/ui';
 import { Wave } from '@/components/ui/Wave';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import { useFocusedInputScroll } from '@/hooks/useFocusedInputScroll';
 import type { RootScreen } from '@/navigation/types';
 import { useAuth } from '@/store/auth';
@@ -35,6 +36,7 @@ const FALLBACK_TERMS: Term[] = [
 
 export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>) {
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 폼을 가운데 600까지 — 스크롤은 화면 전체 (Z-07)
   const signIn = useAuth(s => s.signIn);
   const p = route.params;
   const social = p.mode === 'social' ? p : null;
@@ -136,7 +138,7 @@ export default function SignupScreen({ navigation, route }: RootScreen<'Signup'>
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <AuthHeader page={AUTH_PAGES - 1} onBack={navigation.goBack} style={{ marginTop: insets.top + 12 }} />
-      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: insets.bottom + 16 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll.ref} automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: 39, paddingBottom: insets.bottom + 16, paddingHorizontal: gutter }} keyboardShouldPersistTaps="handled">
         {/* 파도는 입력칸 뒤에 깔린 채 함께 스크롤 (디자인 474/1140) */}
         <Wave always style={{ position: 'absolute', left: 0, right: 0, top: 377 }} />
         <AuthTitle title={title} desc={social ? '몇 가지만 확인하면 바로 시작할 수 있어요.' : '몇 가지만 알려주면 바로 시작할 수 있어요.'} />

@@ -14,6 +14,7 @@ import { Empty, Icon, IconButton, Press } from '@/components/ui';
 import { AddSongRow, BgWave, DiscRow, PlaylistHero } from '@/components/detail/parts';
 import { usePlaylist } from '@/hooks/api';
 import { ScreenState } from '@/components/ui/ScreenState';
+import { useContentColumn } from '@/components/ui/ContentColumn';
 import type { RootScreen } from '@/navigation/types';
 import { usePreviewStore } from '@/services/preview';
 import { findPreview } from '@/services/previewSource';
@@ -46,6 +47,7 @@ const SongRow = memo(function SongRowItem({ song: s, onOpen, onMenu }: { song: S
 export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'PlaylistDetail'>) {
   const { playlistId } = route.params;
   const insets = useSafeAreaInsets();
+  const { gutter } = useContentColumn(); // 넓은 화면에선 곡 줄이 화면 끝까지 늘지 않게 가운데 600까지 (Z-07)
   const qc = useQueryClient();
   const { data: p, error, refetch } = usePlaylist(playlistId);
   // 위쪽 몇 곡은 미리듣기 주소를 미리 찾아 둔다 — 처음 누를 때 몇 초 기다리지 않게 (요청 한도를 아끼려 3곡만, 순서대로)
@@ -97,7 +99,7 @@ export default function PlaylistDetailScreen({ navigation, route }: RootScreen<'
       <FlatList
         data={p.songs}
         keyExtractor={s => s.id}
-        contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 40, paddingHorizontal: 24, gap: 20 }}
+        contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 40, paddingHorizontal: 24 + gutter, gap: 20 }}
         ListHeaderComponent={header}
         ListEmptyComponent={<Empty icon="playlist" title="아직 담긴 곡이 없어요" desc="아래 곡 추가로 채워보세요." />}
         renderItem={renderItem}
