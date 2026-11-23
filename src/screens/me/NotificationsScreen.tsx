@@ -1,4 +1,7 @@
-/** 5.3 알림 — 좋아요 · 댓글 · 주변 새 드랍, 모두 읽음 (스택 화면: 프로필 오른쪽 위 종 아이콘으로 연다) */
+/**
+ * 5.3 알림 — 좋아요 · 댓글, 모두 읽음 (스택 화면: 프로필 오른쪽 위 종 아이콘으로 연다)
+ * 예전 서버가 남긴 본인 드랍 생성 기록(dropping-created)은 목록에 없다 (hooks/api useNotifications · utils/notifications)
+ */
 import React from 'react';
 import { SectionList, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -23,12 +26,14 @@ import { formatRelative } from '@/utils/format';
 /** Figma 알림 카드 — 안 읽음: #F2FCFF + 테두리 #D8F5FF / 읽음: 흰 60% */
 const UNREAD_BG = '#F2FCFF';
 const UNREAD_LINE = '#D8F5FF';
-/** Figma 아바타 배지 — 좋아요 #D9316C · 댓글 #47C831 · 새 드랍 #3A31D9 */
-const META: Record<string, { glyph: MeGlyphName; tone: string; text: (d: Record<string, unknown>) => string; who: (d: Record<string, unknown>) => string }> = {
+type Meta = { glyph: MeGlyphName; tone: string; text: (d: Record<string, unknown>) => string; who: (d: Record<string, unknown>) => string };
+/** Figma 아바타 배지 — 좋아요 #D9316C · 댓글 #47C831 */
+const META: Record<string, Meta> = {
   'like-created': { glyph: 'badgeHeart', tone: '#D9316C', text: d => `${(d.likerUsername as string) || '누군가'}님이 내 드랍을 좋아해요`, who: d => (d.likerUsername as string) || '' },
   'comment-created': { glyph: 'badgeComment', tone: '#47C831', text: d => `${(d.commenterUsername as string) || (d.username as string) || '누군가'}님이 댓글을 남겼어요`, who: d => (d.commenterUsername as string) || (d.username as string) || '' },
-  'dropping-created': { glyph: 'badgeDrop', tone: '#3A31D9', text: () => '근처에 새 드랍이 생겼어요', who: d => (d.username as string) || '' },
 };
+/** 이 앱이 모르는 새 종류 — 내용을 짐작하지 않는다 */
+const OTHER: Meta = { glyph: 'badgeDrop', tone: '#3A31D9', text: () => '새 알림이 있어요', who: () => '' };
 
 /** 드랍 대표 그림 — 음악은 앨범 아트, 투표·플리는 첫 곡 아트 */
 const dropArt = (d: DropDetail) =>
@@ -37,8 +42,7 @@ const dropArt = (d: DropDetail) =>
 const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 
 /**
- * 알림 왼쪽 그림 — 보낸 사람 이름이 있으면 이니셜 아바타, 없으면 드랍(또는 곡)의 앨범 아트.
- * 실서버의 '새 드랍' 알림은 이름·droppingId 없이 userId·songId만 와서 곡 아트를 불러온다 (못 불러오면 음표 자리표시)
+ * 알림 왼쪽 그림 — 보낸 사람 이름이 있으면 이니셜 아바타, 없으면 드랍(또는 곡)의 앨범 아트 (못 불러오면 음표 자리표시)
  */
 function NotifThumb({ name, data }: { name: string; data: Record<string, unknown> }) {
   const dropId = name ? undefined : str(data.droppingId);
@@ -68,31 +72,17 @@ export default function NotificationsScreen() {
   const lockOf = useDropLock();
   const radius = useDropRadius();
   const open = async (n: AppNotification) => {
-    track('notification_opened', { event: n.eventName, unread: !n.readAt, has_drop: !!(str(n.data.droppingId) ?? findNearbyDrop(n.data)) });
+    const dropId = str(n.data.droppingId);
+    track('notification_opened', { event: n.eventName, unread: !n.readAt, has_drop: !!dropId });
     if (!n.readAt) notificationApi.read(n.id).then(refresh).catch(() => {});
-    const dropId = str(n.data.droppingId) ?? findNearbyDrop(n.data);
-    // 주변 새 드랍도 재생 반경 밖이면 지도와 같이 열지 않는다 (위치를 아는 드랍만 — 내 드랍·좋아요한 드랍은 열림)
+    // 재생 반경 밖이면 지도와 같이 열지 않는다 (위치를 아는 드랍만 — 내 드랍·좋아요한 드랍은 열림)
     const known = dropId ? cachedSummary(dropId) : undefined;
     const lock = known ? lockOf(known) : null;
     if (lock?.locked) { track('drop_locked_tap', { drop_id: dropId, type: known?.type, source: 'notification', remaining_m: lock.remainingM == null ? null : Math.round(lock.remainingM) }); toast(lockMessage(lock, radius)); }
     else if (dropId) nav.navigate('PinPreview', { dropId, source: 'notification' });
-    else if (n.eventName === 'dropping-created') {
-      // 이미 사라졌거나 지금 주변(반경 밖)에 없으면 — 말없이 지도로 보내면 고장처럼 보이니 이유를 알린다
-      toast('이 드랍은 지금 근처에 없거나 사라졌어요.');
-      // navigate는 탭(지도)을 한 벌 더 쌓는다 — 지도 화면이 둘이 되어 위치 감시·자동 재생이 겹친다. 맨 아래 탭으로 돌아간다
-      nav.popTo('Tabs', { screen: 'Map' });
-    }
   };
 
   const cachedSummary = (id: string) => [['nearby'], ['myDrops']].flatMap(key => qc.getQueriesData<DropSummary[]>({ queryKey: key }).flatMap(([, list]) => (Array.isArray(list) ? list : []))).find(x => x.droppingId === id);
-
-  /** '새 드랍' 알림엔 droppingId가 없어 지금 불러온 주변 드랍·내 드랍 중 같은 사람·같은 곡을 찾는다 */
-  const findNearbyDrop = (d: Record<string, unknown>) => {
-    const songId = str(d.songId);
-    if (!songId) return undefined;
-    const all = [['nearby'], ['myDrops']].flatMap(key => qc.getQueriesData<DropSummary[]>({ queryKey: key }).flatMap(([, list]) => (Array.isArray(list) ? list : [])));
-    return all.find(x => x.type === 'MUSIC' && x.songId === songId && (!d.userId || x.userId === d.userId))?.droppingId;
-  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page, paddingTop: insets.top }}>
@@ -115,7 +105,7 @@ export default function NotificationsScreen() {
           ListEmptyComponent={isError ? <Empty icon="alert" title="알림을 불러오지 못했어요" desc={errorMessage(error)} action={<SecondaryButton label="다시 시도" onPress={() => refetch()} style={{ marginTop: 8 }} />} /> : <Empty icon="bell" title="아직 알림이 없어요" desc="내 드랍에 좋아요나 댓글이 달리면 여기에 모여요." />}
           renderSectionHeader={({ section }) => <T v="label" c="ink2" style={{ paddingTop: section.title === sections[0]?.title ? 0 : 18 }}>{section.title}</T>}
           renderItem={({ item: n }) => {
-            const m = META[n.eventName] ?? META['dropping-created'];
+            const m = META[n.eventName] ?? OTHER;
             const unread = !n.readAt;
             return (
               <Press onPress={() => open(n)} trackAs="알림 항목" style={{ flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 10, paddingVertical: 9, borderRadius: 12, backgroundColor: unread ? UNREAD_BG : 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: unread ? UNREAD_LINE : 'transparent' }}>

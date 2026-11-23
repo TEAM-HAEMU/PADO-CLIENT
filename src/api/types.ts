@@ -319,12 +319,13 @@ export interface Comment {
 }
 
 // ── 알림
-export type NotificationEvent = 'like-created' | 'comment-created' | 'dropping-created';
+/** 알림 목록에 보이는 알림. 예전 서버가 남긴 dropping-created(본인 드랍 생성 기록)는 목록에서 뺀다 (utils/notifications) */
+export type NotificationEvent = 'like-created' | 'comment-created';
 
 export interface AppNotification {
   id: UUID;
   eventName: NotificationEvent | string;
-  /** 이벤트마다 다름. like-created: likerUserId, likerUsername, droppingOwnerUserId, droppingId · dropping-created(실서버): userId, songId 뿐 (droppingId·이름 없음) */
+  /** 이벤트마다 다름. like-created: likerUserId, likerUsername, droppingOwnerUserId, droppingId · comment-created: commenterUserId, commenterUsername, droppingId, commentContent */
   data: Record<string, unknown>;
   createdAt: string;
   readAt: string | null;
