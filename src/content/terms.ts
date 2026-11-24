@@ -2,7 +2,7 @@
  * 약관 본문 — 명세: "약관 본문은 앱에서 관리한다" (/terms는 종류·제목·버전만 내려줌).
  * version은 서버 /terms의 version과 같아야 한다 (다르면 개정 안내가 뜸). 본문을 바꾸면 서버 version도 함께 올린다.
  *
- * 운영자 정보는 사업자등록증명(2026-10-14 발급) 기준. 바뀌면 여기와 공개 페이지(scripts/build-legal-site.mjs)를 함께 갱신.
+ * 운영자 정보는 사업자등록증명(2026-11-25 발급, 상호 테라 → 스테일메이트) 기준. 바뀌면 여기와 공개 페이지(scripts/build-legal-site.mjs)를 함께 갱신.
  *    (일반적인 국내 모바일 서비스 약관 구성을 참고해 PADO 기능·명세 기준으로 작성한 초안)
  *
  * 표시 규칙(TermsViewScreen): "제N조 …", "■ …", "부칙", "# …"(표시할 땐 # 제거)으로 시작하는 줄은 제목으로 굵게 보인다.
@@ -14,7 +14,7 @@ export interface TermDoc { title: string; version: string; body: string }
 /** 운영자 정보 — 한 곳에서 바꾸면 모든 약관에 반영된다 */
 export const OPERATOR = {
   service: 'PADO(파도)',
-  company: '테라',
+  company: '스테일메이트',
   representative: '서정현',
   address: '부산광역시 해운대구 대천로103번길 61',
   bizNo: '593-32-01797',
